@@ -1,33 +1,42 @@
-# bastto-viewer
+# IFC + Fragment Viewer (bim.tt)
 
-This template should help get you started developing with Vue 3 in Vite.
+This is a simple web app built with **Vue 3** that allows you to:
 
-## Recommended IDE Setup
+- Upload `.ifc` files and convert them to Fragments
+- Upload existing `.frag` files and display them instantly
+- Download `.frag` versions of loaded IFC models
 
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+Uses open-source tools from **ThatOpen Company**.
 
-## Type Support for `.vue` Imports in TS
+---
 
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
+## 🚀 Getting Started
 
-## Customize configuration
+### Requirements
 
-See [Vite Configuration Reference](https://vite.dev/config/).
+- Node.js ≥ 16
+- npm or yarn
 
-## Project Setup
+### Install dependencies
 
-```sh
+```bash
 npm install
-```
+````
 
-### Compile and Hot-Reload for Development
+### Run the app
 
-```sh
+```bash
 npm run dev
 ```
 
-### Type-Check, Compile and Minify for Production
+Then open [http://localhost:5173](http://localhost:5173) in your browser.
 
-```sh
-npm run build
-```
+---
+
+## 🛠 Powered by
+
+* [`@thatopen/components`](https://www.npmjs.com/package/@thatopen/components)
+* [`@thatopen/fragments`](https://www.npmjs.com/package/@thatopen/fragments)
+* [`@thatopen/ui`](https://www.npmjs.com/package/@thatopen/ui)
+
+---
