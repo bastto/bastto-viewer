@@ -18,6 +18,11 @@
             @change="convertIFC"
         ></input>
     </div>
+
+    <a href="https://github.com/bastto" target="_blank" class="corner-logo">
+        <img src="/src/assets/bastto-logo.svg" alt="Logo" class="app-logo" />
+        <img src="/src/assets/bastto-logo-name.svg" alt="Full Logo" class="logo-full" />
+    </a>
 </template>
 
 <script setup lang="ts">
@@ -37,9 +42,7 @@ const loadingFileName = ref('');
 let world: any;
 let serializer: any;
 let fragmentManager: OBC.FragmentsManager;
-let fragments: FRAGS.FragmentsModels;
 let fragmentBytes: ArrayBuffer | null = null;
-let onConversionFinish = () => {};
 
 onMounted(async () => {
     if (!containerRef.value) return;
@@ -245,5 +248,40 @@ const convertIFC = async (e:Event) => {
 .loading-text {
   font-size: 1rem;
   font-weight: 500;
+}
+
+.corner-logo {
+  position: fixed;
+  bottom: 32px;
+  left: 32px;
+  border-radius: 5px;
+  height: 64px;
+  width: 64px;
+  z-index: 1001;
+  opacity: 1;
+}
+
+.corner-logo img{
+    height: 100%;
+    border-radius: 5px;
+    transition: all 0.3s ease;
+    position: absolute;
+    width: auto;
+}
+
+.app-logo{
+    opacity: 1;
+}
+
+.logo-full{
+    opacity: 0;
+}
+
+.corner-logo:hover .app-logo{
+    opacity: 0;
+}
+
+.corner-logo:hover .logo-full{
+    opacity: 1;
 }
 </style>
