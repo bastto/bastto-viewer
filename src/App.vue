@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import Viewer from './components/_Viewer.vue';
+import Viewer from './components/Viewer.vue';
 import ViewerCo from './components/ViewerCo.vue';
 </script>
 

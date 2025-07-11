@@ -1,6 +1,22 @@
 <template>
+
+    <div v-if="isLoading" class="loading-overlay">
+        <div class="loading-box">
+            <div class="spinner"></div>
+            <p class="loading-text">Loading {{ loadingFileName }}</p>
+            <p class="loading-text">{{ loadingProgress }}%</p>
+        </div>
+    </div>
+
     <div ref="containerRef" class="full-screen">
         <bim-grid id="appGrid"></bim-grid>
+        <input
+            ref="ifcInput"
+            type="file"
+            accept=".ifc"
+            style="display: none"
+            @change="convertIFC"
+        ></input>
     </div>
 </template>
 
@@ -10,11 +26,20 @@ import * as OBC from "@thatopen/components";
 import * as FRAGS from "@thatopen/fragments";
 import * as BUI from "@thatopen/ui";
 import * as BUIC from "@thatopen/ui-obc";
+import * as OBCF from "@thatopen/components-front"
 
 const containerRef = ref<HTMLDivElement|null>(null);
+const ifcInput = ref<HTMLInputElement | null>(null);
+const isLoading = ref(false);
+const loadingProgress = ref(0);
+const loadingFileName = ref('');
 
 let world: any;
 let serializer: any;
+let fragmentManager: OBC.FragmentsManager;
+let fragments: FRAGS.FragmentsModels;
+let fragmentBytes: ArrayBuffer | null = null;
+let onConversionFinish = () => {};
 
 onMounted(async () => {
     if (!containerRef.value) return;
@@ -46,46 +71,93 @@ onMounted(async () => {
     serializer = new FRAGS.IfcImporter();
     serializer.wasm = {
         absolute: true,
-        path: "https://unpkg.com/web-ifc@0.0.68/",
+        path: "https://unpkg.com/web-ifc@0.0.69/",
     };
 
     const ifcLoader = components.get(OBC.IfcLoader);
-    await ifcLoader.setup({autoSetWasm: true});
+    await ifcLoader.setup({
+        autoSetWasm: false,
+        wasm: {
+            path: "https://unpkg.com/web-ifc@0.0.69/",
+            absolute: true,
+        },
+    });
+    console.log(ifcLoader);
 
-    const fragments = components.get(OBC.FragmentsManager);
-    fragments.init(
+    fragmentManager = components.get(OBC.FragmentsManager);
+    fragmentManager.init(
         "/worker.mjs",
     );
     
-
     world.camera.controls.addEventListener("rest", () =>
-        fragments.core.update(true),
+    fragmentManager.core.update(true),
     );
 
-    fragments.list.onItemSet.add(async ({ value: model }) => {
+    
+    
+    fragmentManager.list.onItemSet.add(async ({ value: model }) => {
         model.useCamera(world.camera.three);
         world.scene.three.add(model.object);
-        await fragments.core.update(true);
+        await fragmentManager.core.update(true);
     });
-
+    
     const [modelsList] = BUIC.tables.modelsList({
         components,
         metaDataTags: ["schema"],
         actions: { download: true },
     });
+    
+    const [spatialTree] = BUIC.tables.spatialTree({
+        components,
+        models: [],
+    });
+    
+    const [propertiesTable, updatePropertiesTable] = BUIC.tables.itemsData({
+        components,
+        modelIdMap: {},
+    });
+    
+    const highlighter = components.get(OBCF.Highlighter);
+    highlighter.setup({ world });
+    
+    highlighter.events.select.onHighlight.add((modelIdMap) => {
+        updatePropertiesTable({ modelIdMap });
+    });
+    
+    highlighter.events.select.onClear.add(() =>
+        updatePropertiesTable({ modelIdMap: {} }),
+    );
+
+    propertiesTable.preserveStructureOnFilter = true;
+    propertiesTable.indentationInText = false;
 
     const panel = BUI.Component.create(() => {
         const [loadFragBtn] = BUIC.buttons.loadFrag({ components });
-        const [loadIfcBtn] = BUIC.buttons.loadIfc({components});
+    
+        const onSearchSpatialTree = (e: Event) => {
+            const input = e.target as BUI.TextInput;
+            spatialTree.queryString = input.value;
+        };
+
+        const onTextInput = (e: Event)=> {
+            const input = e.target as BUI.TextInput;
+            propertiesTable.queryString = input.value !== "" ? input.value : null;
+        };
 
         return BUI.html`
             <bim-panel label="IFC Models">
                 <bim-panel-section label="Importing">
                     ${loadFragBtn}
-                    ${loadIfcBtn}
+                    <bim-button label="Load IFC" @click=${openIfcDialog}></bim-button>
+                    <bim-text-input @input=${onSearchSpatialTree} placeholder="Search..." debounce="200"></bim-text-input>
+                    ${spatialTree}
                 </bim-panel-section>
                 <bim-panel-section icon="mage:box-3d-fill" label="Loaded Models">
                     ${modelsList}
+                </bim-panel-section>
+                <bim-panel-section label="Properties">
+                    <bim-text-input @input=${onTextInput} placeholder="Search Property" debounce="200"></bim-text-input>
+                    ${propertiesTable}
                 </bim-panel-section>
             </bim-panel> 
             `;
@@ -98,11 +170,80 @@ onMounted(async () => {
         / 23rem 1fr
         `,
         elements: { panel, viewport },
-    },
+        },
     };
 
-    app.layout = "main";});
+    app.layout = "main";
+});
+
+const openIfcDialog = () => ifcInput.value?.click();
+
+const convertIFC = async (e:Event) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file ) return;
+
+    isLoading.value = true;
+    loadingProgress.value = 0;
+    loadingFileName.value = file.name;
+
+    try
+    {
+        const buffer = await file.arrayBuffer();
+        const ifcBytes = new Uint8Array(buffer);
+    
+        fragmentBytes = await serializer.process({
+            bytes: ifcBytes,
+            progressCallback: (progress) =>{
+                if (loadingProgress) loadingProgress.value = Math.round(progress*100);
+            },
+        });
+    
+        if (!fragmentBytes) return;
+        const model = await fragmentManager.core.load(fragmentBytes, {modelId: file.name});
+    } catch(err)
+    {
+        console.error("IFC conversion failed:", err);
+        alert("Failed to convert IFC file. Please try again.");
+    } finally
+    {
+        isLoading.value = false;
+    }
+
+
+}
+
 </script>
 
 <style scoped>
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 42, 58, 0.6); /* #002a3a @ 60% */
+  backdrop-filter: blur(6px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: all;
+}
+
+.loading-box {
+  text-align: center;
+  color: white;
+  font-family: sans-serif;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+}
+
+.loading-text {
+  font-size: 1rem;
+  font-weight: 500;
+}
 </style>
