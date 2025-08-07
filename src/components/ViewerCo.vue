@@ -8,6 +8,8 @@
         </div>
     </div>
 
+    <!-- <bim-button label="Menu" class="toggle-panel-button" @click="togglePanel"></bim-button> -->
+
     <div ref="containerRef" class="full-screen">
         <bim-grid id="appGrid"></bim-grid>
         <input
@@ -21,7 +23,6 @@
 
     <a href="https://github.com/bastto" target="_blank" class="corner-logo">
         <img src="/src/assets/bastto-logo.svg" alt="Logo" class="app-logo" />
-        <img src="/src/assets/bastto-logo-name.svg" alt="Full Logo" class="logo-full" />
     </a>
 </template>
 
@@ -38,7 +39,9 @@ const ifcInput = ref<HTMLInputElement | null>(null);
 const isLoading = ref(false);
 const loadingProgress = ref(0);
 const loadingFileName = ref('');
+const panelVisible = ref(true);
 
+let panel: any;
 let world: any;
 let serializer: any;
 let fragmentManager: OBC.FragmentsManager;
@@ -134,7 +137,35 @@ onMounted(async () => {
     propertiesTable.preserveStructureOnFilter = true;
     propertiesTable.indentationInText = false;
 
-    const panel = BUI.Component.create(() => {
+    const loadPreloadedModels = async () => {
+    const files = ["gaia.frag", "arq-demo.frag"]; // Add your .frag files here
+
+    for (const file of files) {
+            const url = `/models/${file}`;
+            try {
+                loadingFileName.value = file;
+                isLoading.value = true;
+
+                const response = await fetch(url);
+                const arrayBuffer = await response.arrayBuffer();
+
+                const model = await fragmentManager.core.load(arrayBuffer, {
+                    modelId: file,
+                });
+
+                model.useCamera(world.camera.three);
+                world.scene.three.add(model.object);
+                await fragmentManager.core.update(true);
+                console.log(`✅ Loaded: ${file}`);
+            } catch (error) {
+                console.error(`❌ Failed to load ${file}:`, error);
+            } finally {
+                isLoading.value = false;
+            }
+        }
+    };
+
+    panel = BUI.Component.create(() => {
         const [loadFragBtn] = BUIC.buttons.loadFrag({ components });
     
         const onSearchSpatialTree = (e: Event) => {
@@ -152,6 +183,7 @@ onMounted(async () => {
                 <bim-panel-section label="Importing">
                     ${loadFragBtn}
                     <bim-button label="Load IFC" @click=${openIfcDialog}></bim-button>
+                    <bim-button label="Preload Demo Models" @click=${loadPreloadedModels}></bim-button>
                     <bim-text-input @input=${onSearchSpatialTree} placeholder="Search..." debounce="200"></bim-text-input>
                     ${spatialTree}
                 </bim-panel-section>
@@ -185,6 +217,8 @@ const convertIFC = async (e:Event) => {
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file ) return;
 
+    //panel.hidden(true);
+
     isLoading.value = true;
     loadingProgress.value = 0;
     loadingFileName.value = file.name;
@@ -196,7 +230,7 @@ const convertIFC = async (e:Event) => {
     
         fragmentBytes = await serializer.process({
             bytes: ifcBytes,
-            progressCallback: (progress) =>{
+            progressCallback: (progress: number) =>{
                 if (loadingProgress) loadingProgress.value = Math.round(progress*100);
             },
         });
@@ -213,6 +247,12 @@ const convertIFC = async (e:Event) => {
     }
 
 
+}
+
+function togglePanel() {
+    panelVisible.value = !panelVisible.value;
+    panel.hidden = panelVisible.value;
+    console.log(panel.hidden);
 }
 
 </script>
@@ -253,7 +293,7 @@ const convertIFC = async (e:Event) => {
 .corner-logo {
   position: fixed;
   bottom: 32px;
-  left: 32px;
+  right: 32px;
   border-radius: 5px;
   height: 64px;
   width: 64px;
@@ -273,15 +313,28 @@ const convertIFC = async (e:Event) => {
     opacity: 1;
 }
 
-.logo-full{
-    opacity: 0;
+.toggle-panel-button {
+    position: fixed;
+    top: 32px;
+    left: 32px;
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 0 8px rgba(0,0,0,0.15);
+    z-index: 2000;
+    display: none;
 }
 
-.corner-logo:hover .app-logo{
-    opacity: 0;
-}
+@media (max-width: 768px) {
+  .toggle-panel-button {
+    display: block;
+  }
+/* 
+  .panel-hidden {
+    display: none !important;
+  }
 
-.corner-logo:hover .logo-full{
-    opacity: 1;
+  .panel-shown {
+    display: block !important;
+  } */
 }
 </style>

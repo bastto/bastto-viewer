@@ -11,7 +11,8 @@
     "type-check": "vue-tsc --build",
     "lint:oxlint": "oxlint . --fix -D correctness --ignore-path .gitignore",
     "lint:eslint": "eslint . --fix",
-    "lint": "run-s lint:*"
+    "lint": "run-s lint:*",
+    "deploy": "vite build && gh-pages -d dist"
   },
   "dependencies": {
     "@thatopen/components": "^3.1.0",
@@ -32,6 +33,7 @@
     "eslint": "^9.29.0",
     "eslint-plugin-oxlint": "~1.1.0",
     "eslint-plugin-vue": "~10.2.0",
+    "gh-pages": "^6.3.0",
     "jiti": "^2.4.2",
     "npm-run-all2": "^8.0.4",
     "oxlint": "~1.1.0",
