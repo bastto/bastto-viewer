@@ -1,1 +1,1 @@
-bastto.com
+echo "bastto.com" > public/CNAME
