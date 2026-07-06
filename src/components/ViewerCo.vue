@@ -89,6 +89,7 @@ type PipeParticle = {
   start: any;
   end: any;
   offset: number;
+  length: number;
 };
 
 const containerRef = ref<HTMLDivElement | null>(null);
@@ -534,7 +535,7 @@ function addPipeParticles(box: any, temperature: PipeTemperature) {
 
   const direction = end.clone().sub(start).normalize();
   
-const radius = THREE.MathUtils.clamp(length * 0.015, 0.03, 0.12);
+const radius = 0.04;
   
 const geometry = new THREE.ConeGeometry(
   radius * 1.2,
@@ -544,7 +545,10 @@ const geometry = new THREE.ConeGeometry(
 
   const material = temperature === "hot" ? hotMaterial : coldMaterial;
 
-  const particleCount = 8;
+const particleCount = Math.max(
+  1,
+  Math.round(length / 0.4)
+);
 
   for (let i = 0; i < particleCount; i++) {
     const mesh = new THREE.Mesh(geometry, material);
@@ -560,11 +564,12 @@ const geometry = new THREE.ConeGeometry(
     flowGroup.add(mesh);
 
     pipeParticles.push({
-      mesh,
-      start,
-      end,
-      offset: i / particleCount,
-    });
+  mesh,
+  start,
+  end,
+  offset: i / particleCount,
+  length,
+});
   }
 }
 
@@ -577,12 +582,26 @@ function getLongestAxis(size: any) {
 function animateFlow() {
   const clockStart = performance.now();
 
+  const FLOW_METERS_PER_SECOND = 1.0;
+
   const tick = () => {
     if (isFlowing.value && pipeParticles.length) {
-      const time = ((performance.now() - clockStart) / 1000) * flowSpeed.value;
+
+      const elapsed =
+        ((performance.now() - clockStart) / 1000) *
+        flowSpeed.value;
+
       for (const particle of pipeParticles) {
-        const progress = (time + particle.offset) % 1;
-        particle.mesh.position.lerpVectors(particle.start, particle.end, progress);
+
+        const progress =
+          ((elapsed * FLOW_METERS_PER_SECOND) / particle.length +
+            particle.offset) % 1;
+
+        particle.mesh.position.lerpVectors(
+          particle.start,
+          particle.end,
+          progress
+        );
       }
     }
 
@@ -605,9 +624,7 @@ function clearFlowVisuals() {
   for (const particle of pipeParticles) {
     flowGroup.remove(particle.mesh);
 
-    // importante: limpar geometria antiga
     particle.mesh.geometry.dispose();
-    particle.mesh.material.dispose();
   }
 
   pipeParticles.length = 0;
