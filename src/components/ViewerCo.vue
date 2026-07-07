@@ -29,6 +29,97 @@
       </div>
 
       <p class="selection-count">Selecionados: {{ selectedCount }}</p>
+      <p class="connection-note">Tipo de elemento</p>
+
+<div class="flow-actions flow-actions--secondary">
+  <button type="button" @click="defineSelectedElementsAs('pipe')">Tubo</button>
+  <button type="button" @click="defineSelectedElementsAs('heatPump')">Bomba calor</button>
+  <button type="button" @click="defineSelectedElementsAs('airDirtSeparator')">Sep. ar/suj.</button>
+</div>
+
+<div class="flow-actions flow-actions--secondary">
+  <button type="button" @click="defineSelectedElementsAs('isolationValve')">Válvula corte</button>
+  <button type="button" @click="defineSelectedElementsAs('pump')">Bomba</button>
+  <button type="button" @click="defineSelectedElementsAs('reservoir')">Reservatório</button>
+</div>
+
+<div class="flow-actions flow-actions--secondary">
+  <button type="button" @click="defineSelectedElementsAs('collector')">Coletor</button>
+  <button type="button" @click="defineSelectedElementsAs('expansionVessel')">Vaso expansão</button>
+  <button type="button" @click="defineSelectedElementsAs('enthalpyMeter')">Cont. entalpia</button>
+</div>
+
+<div class="flow-actions flow-actions--secondary">
+  <button type="button" @click="defineSelectedElementsAs('tank')">Depósito</button>
+  <button type="button" @click="defineSelectedElementsAs('heatExchanger')">Permutador</button>
+  <button type="button" @click="defineSelectedElementsAs('unknown')">Desconhecido</button>
+</div>
+
+<p class="connection-note">
+  Elementos definidos: {{ countDefinedMepElements() }}
+</p>
+
+<dl class="flow-stats">
+  <div>
+    <dt>Tubos</dt>
+    <dd>{{ countMepElementsByType('pipe') }}</dd>
+  </div>
+
+  <div>
+    <dt>B. calor</dt>
+    <dd>{{ countMepElementsByType('heatPump') }}</dd>
+  </div>
+
+  <div>
+    <dt>Sep.</dt>
+    <dd>{{ countMepElementsByType('airDirtSeparator') }}</dd>
+  </div>
+
+  <div>
+    <dt>Válvulas</dt>
+    <dd>{{ countMepElementsByType('isolationValve') }}</dd>
+  </div>
+
+  <div>
+    <dt>Bombas</dt>
+    <dd>{{ countMepElementsByType('pump') }}</dd>
+  </div>
+
+  <div>
+    <dt>Reserv.</dt>
+    <dd>{{ countMepElementsByType('reservoir') }}</dd>
+  </div>
+
+  <div>
+    <dt>Colet.</dt>
+    <dd>{{ countMepElementsByType('collector') }}</dd>
+  </div>
+
+  <div>
+    <dt>V. exp.</dt>
+    <dd>{{ countMepElementsByType('expansionVessel') }}</dd>
+  </div>
+
+  <div>
+    <dt>Entalp.</dt>
+    <dd>{{ countMepElementsByType('enthalpyMeter') }}</dd>
+  </div>
+
+  <div>
+    <dt>Depós.</dt>
+    <dd>{{ countMepElementsByType('tank') }}</dd>
+  </div>
+
+  <div>
+    <dt>Permut.</dt>
+    <dd>{{ countMepElementsByType('heatExchanger') }}</dd>
+  </div>
+
+  <div>
+    <dt>Desc.</dt>
+    <dd>{{ countMepElementsByType('unknown') }}</dd>
+  </div>
+</dl>
 
       <div class="flow-actions">
         <button type="button" @click="assignSelectedPipes('hot')">Marcar quente</button>
@@ -112,6 +203,41 @@ import * as OBCF from "@thatopen/components-front";
 
 type PipeTemperature = "hot" | "cold";
 type SelectionMap = Map<string, Set<number>>;
+type MepElementType =
+  | "pipe"
+  | "heatPump"
+  | "airDirtSeparator"
+  | "isolationValve"
+  | "pump"
+  | "reservoir"
+  | "collector"
+  | "expansionVessel"
+  | "enthalpyMeter"
+  | "tank"
+  | "heatExchanger"
+  | "unknown";
+
+type CircuitType =
+  | "hotWater"
+  | "coldWater"
+  | "heating"
+  | "cooling"
+  | "domesticHotWater"
+  | "domesticColdWater"
+  | "return"
+  | "unknown";
+
+type MepElement = {
+  modelId: string;
+  localId: number;
+  elementType: MepElementType;
+  circuitType: CircuitType;
+  name?: string;
+  category?: string;
+  objectType?: string;
+  tag?: string;
+  state?: "open" | "closed" | "on" | "off";
+};
 
 type PipeParticle = {
   mesh: any;
@@ -174,6 +300,7 @@ const staticFlowObjects: StaticFlowObject[] = [];
 const selectedItems: SelectionMap = new Map();
 const flowConnections = reactive<FlowConnection[]>([]);
 const routeWaypoints = reactive<FlowNode[]>([]);
+const mepElements = reactive<Record<string, MepElement>>({});
 let routeStart: FlowNode | null = null;
 let routeEnd: FlowNode | null = null;
 const blockedPipes: SelectionMap = new Map();
@@ -279,6 +406,12 @@ function createBimPanel(components: OBC.Components, viewport: HTMLElement) {
 
   const highlighter = components.get(OBCF.Highlighter);
   highlighter.setup({ world });
+  highlighter.styles.set("select", {
+  color: new THREE.Color(0x00ff66),
+  opacity: 0.85,
+  transparent: true,
+  renderedFaces: FRAGS.RenderedFaces.TWO,
+});
 
   highlighter.events.select.onHighlight.add((modelIdMap) => {
     replaceSelection(modelIdMap);
@@ -474,16 +607,23 @@ async function assignSelectedPipes(temperature: PipeTemperature) {
 async function rebuildManualFlowLayer() {
   clearFlowVisuals();
 
-  const hasAssignments = pipeStats.total > 0 || countAssignments() > 0;
-  if (!hasAssignments) {
+  const hasAssignments = countAssignments() > 0;
+  const hasConnections = flowConnections.length > 0;
+
+  if (!hasAssignments && !hasConnections) {
     flowMessage.value = "Ainda nao ha tubos marcados.";
     return;
   }
 
   await addAssignmentsToScene("cold");
   await addAssignmentsToScene("hot");
+
+  await addConnectionsToScene();
+
   updateManualStats();
-  isFlowing.value = pipeStats.total > 0;
+
+  isFlowing.value = pipeParticles.length > 0;
+
   await fragmentManager.core.update(true);
 }
 
@@ -858,6 +998,62 @@ function shortestPath(graph: Map<string, Map<string, number>>, start: string, en
 
 function nodeKey(node: FlowNode) {
   return `${node.modelId}:${node.localId}`;
+}
+
+function elementKey(modelId: string, localId: number) {
+  return `${modelId}:${localId}`;
+}
+
+function defineSelectedElementsAs(elementType: MepElementType) {
+  if (!selectedCount.value) {
+    flowMessage.value = "Seleciona primeiro um ou mais elementos no modelo.";
+    return;
+  }
+
+  for (const [modelId, ids] of selectedItems) {
+    for (const localId of ids) {
+      const key = elementKey(modelId, localId);
+
+      mepElements[key] = {
+        modelId,
+        localId,
+        elementType,
+        circuitType: mepElements[key]?.circuitType ?? "unknown",
+        state: mepElements[key]?.state,
+      };
+    }
+  }
+
+  flowMessage.value = `${selectedCount.value} elemento(s) definidos como ${getElementTypeLabel(elementType)}.`;
+}
+
+function getElementTypeLabel(elementType: MepElementType) {
+  const labels: Record<MepElementType, string> = {
+    pipe: "tubagem",
+    heatPump: "bomba de calor",
+    airDirtSeparator: "separador de ar e sujidade",
+    isolationValve: "válvula de corte",
+    pump: "bomba",
+    reservoir: "reservatório",
+    collector: "coletor",
+    expansionVessel: "vaso de expansão",
+    enthalpyMeter: "contador de entalpia",
+    tank: "depósito",
+    heatExchanger: "permutador de calor",
+    unknown: "desconhecido",
+  };
+
+  return labels[elementType];
+}
+
+function countMepElementsByType(elementType: MepElementType) {
+  return Object.values(mepElements).filter(
+    (element) => element.elementType === elementType,
+  ).length;
+}
+
+function countDefinedMepElements() {
+  return Object.keys(mepElements).length;
 }
 
 async function getPipeDirectionHints(node: FlowNode): Promise<PipeDirectionHints> {
@@ -1309,6 +1505,8 @@ function chunk<T>(items: T[], size: number) {
   top: 24px;
   z-index: 1000;
   width: min(340px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
   padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 8px;
