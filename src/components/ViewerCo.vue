@@ -17,7 +17,11 @@
       @change="convertIFC"
     />
 
-    <section class="flow-panel" aria-label="Water flow controls">
+    <section
+  :class="['flow-panel', isFlowPanelMinimized ? 'flow-panel--minimized' : '']"
+  aria-label="Water flow controls"
+>
+
       <div class="flow-panel__header">
         <div>
           <p class="flow-panel__eyebrow">Fluxo de agua</p>
@@ -26,6 +30,15 @@
         <span :class="['flow-status', isFlowing ? 'flow-status--on' : '']">
           {{ isFlowing ? 'ON' : 'OFF' }}
         </span>
+
+        <button
+  type="button"
+  class="flow-panel__toggle"
+  @click="toggleFlowPanelMinimized"
+>
+  {{ isFlowPanelMinimized ? '+' : '−' }}
+</button>
+
       </div>
 
       <p class="selection-count">Selecionados: {{ selectedCount }}</p>
@@ -282,6 +295,7 @@ const loadingFileName = ref("");
 const flowSpeed = ref(1);
 const flowMessage = ref("Seleciona tubos no modelo e marca-os como quente ou fria.");
 const selectedCount = ref(0);
+const isFlowPanelMinimized = ref(false);
 const routeStartLabel = ref("nenhum");
 const routeEndLabel = ref("nenhum");
 const blockedCount = ref(0);
@@ -1328,6 +1342,10 @@ function animateFlow() {
   tick();
 }
 
+function toggleFlowPanelMinimized() {
+  isFlowPanelMinimized.value = !isFlowPanelMinimized.value;
+}
+
 function toggleFlow() {
   if (!pipeParticles.length) {
     flowMessage.value = "Marca pelo menos um tubo antes de iniciar a animacao.";
@@ -1521,6 +1539,35 @@ function chunk<T>(items: T[], size: number) {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.flow-panel__toggle {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: #f7fbff;
+  color: #111820;
+  cursor: pointer;
+  font-size: 1.1rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.flow-panel__toggle:hover {
+  background: #d9f0ff;
+}
+
+.flow-panel--minimized {
+  width: min(300px, calc(100vw - 48px));
+  max-height: none;
+  overflow: hidden;
+}
+
+.flow-panel--minimized > :not(.flow-panel__header) {
+  display: none;
 }
 
 .flow-panel__eyebrow {
