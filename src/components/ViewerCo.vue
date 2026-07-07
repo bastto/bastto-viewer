@@ -133,7 +133,7 @@
       </div>
 
       <span :class="['flow-status', isFlowing ? 'flow-status--on' : '']">
-        {{ isFlowing ? 'ON' : 'OFF' }}
+        {{ isCentralSimulationRunning ? 'SIM' : isFlowing ? 'ON' : 'OFF' }}
       </span>
 
       <button
@@ -176,6 +176,12 @@
     {{ isFlowing ? 'Pausar' : 'Animar' }}
   </button>
   <button type="button" @click="rebuildManualFlowLayer">Atualizar</button>
+</div>
+
+<div class="flow-actions flow-actions--single">
+  <button type="button" @click="toggleCentralSimulation">
+    {{ isCentralSimulationRunning ? 'Parar simulação' : 'Simular central' }}
+  </button>
 </div>
 
       <p class="connection-note">Inicio: {{ routeStartLabel }}</p>
@@ -312,6 +318,7 @@ const containerRef = ref<HTMLDivElement | null>(null);
 const ifcInput = ref<HTMLInputElement | null>(null);
 const isLoading = ref(false);
 const isFlowing = ref(false);
+const isCentralSimulationRunning = ref(false);
 const loadingProgress = ref(0);
 const loadingFileName = ref("");
 const flowSpeed = ref(1);
@@ -1371,6 +1378,131 @@ function toggleFlowControlsPanelMinimized() {
   isFlowControlsPanelMinimized.value = !isFlowControlsPanelMinimized.value;
 }
 
+function isPipeBlocked(modelId: string, localId: number) {
+  return blockedPipes.get(modelId)?.has(localId) ?? false;
+}
+
+function getBlockedNodesInCurrentPath() {
+  const blockedNodes: FlowNode[] = [];
+
+  if (flowConnections.length) {
+    for (const connection of flowConnections) {
+      if (isPipeBlocked(connection.from.modelId, connection.from.localId)) {
+        blockedNodes.push(connection.from);
+      }
+
+      if (isPipeBlocked(connection.to.modelId, connection.to.localId)) {
+        blockedNodes.push(connection.to);
+      }
+    }
+  } else {
+    for (const [modelId, ids] of blockedPipes) {
+      for (const localId of ids) {
+        blockedNodes.push({ modelId, localId });
+      }
+    }
+  }
+
+  return blockedNodes;
+}
+
+function hasDefinedPumpOrHeatPump() {
+  return Object.values(mepElements).some(
+    (element) =>
+      element.elementType === "pump" || element.elementType === "heatPump",
+  );
+}
+
+async function startCentralSimulation() {
+  if (!countAssignments()) {
+    flowMessage.value =
+      "Não é possível simular: marca primeiro tubos como quente ou fria.";
+    return;
+  }
+
+  const blockedNodes = getBlockedNodesInCurrentPath();
+
+  if (blockedNodes.length) {
+    flowMessage.value =
+      "Não é possível simular: existe uma válvula/tubo bloqueado no caminho.";
+    isCentralSimulationRunning.value = false;
+    isFlowing.value = false;
+    return;
+  }
+
+  await rebuildManualFlowLayer();
+
+  if (!pipeParticles.length) {
+    flowMessage.value =
+      "Não é possível simular: não existem setas de fluxo criadas.";
+    isCentralSimulationRunning.value = false;
+    isFlowing.value = false;
+    return;
+  }
+
+  isCentralSimulationRunning.value = true;
+  isFlowing.value = true;
+
+  if (!hasDefinedPumpOrHeatPump()) {
+    flowMessage.value =
+      "Simulação iniciada. Aviso: ainda não foi definida nenhuma bomba ou bomba de calor.";
+    return;
+  }
+
+  flowMessage.value = "Simulação da central iniciada.";
+}
+
+function stopCentralSimulation() {
+  isCentralSimulationRunning.value = false;
+  isFlowing.value = false;
+  flowMessage.value = "Simulação da central parada.";
+}
+
+async function toggleCentralSimulation() {
+  if (isCentralSimulationRunning.value) {
+    stopCentralSimulation();
+    return;
+  }
+
+  await startCentralSimulation();
+}
+
+
+async function blockSelectedPipes() {
+  if (!selectedCount.value) {
+    flowMessage.value = "Seleciona primeiro um ou mais elementos para bloquear.";
+    return;
+  }
+
+  for (const [modelId, ids] of selectedItems) {
+    let blockedSet = blockedPipes.get(modelId);
+
+    if (!blockedSet) {
+      blockedSet = new Set<number>();
+      blockedPipes.set(modelId, blockedSet);
+    }
+
+    for (const localId of ids) {
+      blockedSet.add(localId);
+    }
+  }
+
+  blockedCount.value = [...blockedPipes.values()].reduce(
+    (total, ids) => total + ids.size,
+    0,
+  );
+
+  flowMessage.value = `${selectedCount.value} elemento(s) bloqueado(s).`;
+  await rebuildManualFlowLayer();
+}
+
+async function clearBlockedPipes() {
+  blockedPipes.clear();
+  blockedCount.value = 0;
+  flowMessage.value = "Bloqueios removidos.";
+  await rebuildManualFlowLayer();
+}
+
 function toggleFlow() {
   if (!pipeParticles.length) {
     flowMessage.value = "Marca pelo menos um tubo antes de iniciar a animacao.";
@@ -1641,6 +1773,10 @@ function chunk<T>(items: T[], size: number) {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin-top: 14px;
+}
+
+.flow-actions--single {
+  grid-template-columns: 1fr;
 }
 
 .flow-actions button {
