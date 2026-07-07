@@ -655,8 +655,6 @@ async function rebuildManualFlowLayer() {
   await addAssignmentsToScene("cold");
   await addAssignmentsToScene("hot");
 
-  await addConnectionsToScene();
-
   updateManualStats();
 
   isFlowing.value = pipeParticles.length > 0;
@@ -1485,6 +1483,10 @@ function chunk<T>(items: T[], size: number) {
 </script>
 
 <style scoped>
+* {
+  box-sizing: border-box;
+}
+
 .loading-overlay {
   position: fixed;
   top: 0;
@@ -1636,12 +1638,13 @@ function chunk<T>(items: T[], size: number) {
 
 .flow-actions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin-top: 14px;
 }
 
 .flow-actions button {
+  min-width: 0;
   min-height: 36px;
   border: 0;
   border-radius: 6px;
@@ -1649,6 +1652,8 @@ function chunk<T>(items: T[], size: number) {
   color: #111820;
   cursor: pointer;
   font-weight: 700;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .flow-actions button:hover {
