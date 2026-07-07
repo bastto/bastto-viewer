@@ -37,11 +37,32 @@
       </div>
 
       <div class="flow-actions flow-actions--secondary">
+        <button type="button" @click="blockSelectedPipes">Bloquear saida</button>
+        <button type="button" @click="clearBlockedPipes">Limpar bloqueios</button>
+      </div>
+
+      <div class="flow-actions flow-actions--secondary">
         <button type="button" @click="toggleFlow">
           {{ isFlowing ? 'Pausar' : 'Animar' }}
         </button>
         <button type="button" @click="rebuildManualFlowLayer">Atualizar</button>
       </div>
+
+      <div class="flow-actions flow-actions--secondary">
+        <button type="button" @click="setRouteStart">Definir inicio</button>
+        <button type="button" @click="addRouteWaypoint">Passar aqui</button>
+        <button type="button" @click="setRouteEnd">Definir fim</button>
+      </div>
+
+      <div class="flow-actions flow-actions--secondary">
+        <button type="button" @click="createAutoRoute('hot')">Caminho quente</button>
+        <button type="button" @click="createAutoRoute('cold')">Caminho fria</button>
+        <button type="button" @click="clearConnections">Limpar caminho</button>
+      </div>
+
+      <p class="connection-note">Inicio: {{ routeStartLabel }}</p>
+      <p class="connection-note">Passagens: {{ routeWaypoints.length }}</p>
+      <p class="connection-note">Fim: {{ routeEndLabel }}</p>
 
       <label class="flow-slider">
         <span>Velocidade</span>
@@ -60,6 +81,14 @@
         <div>
           <dt>Total</dt>
           <dd>{{ pipeStats.total }}</dd>
+        </div>
+        <div>
+          <dt>Ligacoes</dt>
+          <dd>{{ flowConnections.length }}</dd>
+        </div>
+        <div>
+          <dt>Bloqueados</dt>
+          <dd>{{ blockedCount }}</dd>
         </div>
       </dl>
 
@@ -92,6 +121,32 @@ type PipeParticle = {
   length: number;
 };
 
+type FlowNode = {
+  modelId: string;
+  localId: number;
+};
+
+type FlowConnection = {
+  from: FlowNode;
+  to: FlowNode;
+  temperature: PipeTemperature;
+};
+
+type StaticFlowObject = {
+  object: any;
+};
+
+type PipeDirectionHints = {
+  upstream?: any;
+  downstream?: any;
+};
+
+type PipeGraphItem = FlowNode & {
+  box: any;
+  center: any;
+  endpoints: any[];
+};
+
 const containerRef = ref<HTMLDivElement | null>(null);
 const ifcInput = ref<HTMLInputElement | null>(null);
 const isLoading = ref(false);
@@ -101,6 +156,9 @@ const loadingFileName = ref("");
 const flowSpeed = ref(1);
 const flowMessage = ref("Seleciona tubos no modelo e marca-os como quente ou fria.");
 const selectedCount = ref(0);
+const routeStartLabel = ref("nenhum");
+const routeEndLabel = ref("nenhum");
+const blockedCount = ref(0);
 const pipeStats = reactive({ hot: 0, cold: 0, total: 0 });
 
 let world: any;
@@ -112,7 +170,13 @@ let animationFrame = 0;
 const loadedModels = new Map<string, FRAGS.FragmentsModel>();
 const flowGroup = new THREE.Group();
 const pipeParticles: PipeParticle[] = [];
+const staticFlowObjects: StaticFlowObject[] = [];
 const selectedItems: SelectionMap = new Map();
+const flowConnections = reactive<FlowConnection[]>([]);
+const routeWaypoints = reactive<FlowNode[]>([]);
+let routeStart: FlowNode | null = null;
+let routeEnd: FlowNode | null = null;
+const blockedPipes: SelectionMap = new Map();
 const manualAssignments: Record<PipeTemperature, SelectionMap> = {
   hot: new Map(),
   cold: new Map(),
@@ -435,8 +499,13 @@ async function addAssignmentsToScene(temperature: PipeTemperature) {
     );
 
     const boxes = await model.getBoxes(ids);
-    for (const box of boxes) {
-      if (box) addPipeParticles(box, temperature);
+    for (let index = 0; index < boxes.length; index++) {
+      const box = boxes[index];
+      if (!box) continue;
+
+      const localId = ids[index];
+      const hints = await getPipeDirectionHints({ modelId, localId });
+      addPipeParticles(box, temperature, hints);
     }
   }
 }
@@ -454,6 +523,12 @@ async function clearManualAssignments() {
 
   manualAssignments.hot.clear();
   manualAssignments.cold.clear();
+  flowConnections.splice(0);
+  routeWaypoints.splice(0);
+  routeStart = null;
+  routeEnd = null;
+  routeStartLabel.value = "nenhum";
+  routeEndLabel.value = "nenhum";
   updateManualStats();
   flowMessage.value = "Marcacoes removidas. Seleciona novos tubos para definir quente/fria.";
   await fragmentManager.core.update(true);
@@ -462,6 +537,419 @@ async function clearManualAssignments() {
 function resetAssignmentMaps() {
   manualAssignments.hot.clear();
   manualAssignments.cold.clear();
+  flowConnections.splice(0);
+  routeWaypoints.splice(0);
+  routeStart = null;
+  routeEnd = null;
+  routeStartLabel.value = "nenhum";
+  routeEndLabel.value = "nenhum";
+}
+
+function setRouteStart() {
+  const node = getFirstSelectedNode();
+  if (!node) {
+    flowMessage.value = "Seleciona primeiro o tubo/ponto inicial.";
+    return;
+  }
+
+  routeStart = node;
+  routeStartLabel.value = formatNodeLabel(node);
+  flowMessage.value = "Inicio definido. Seleciona o ponto final e carrega em Definir fim.";
+}
+
+function setRouteEnd() {
+  const node = getFirstSelectedNode();
+  if (!node) {
+    flowMessage.value = "Seleciona primeiro o tubo/ponto final.";
+    return;
+  }
+
+  routeEnd = node;
+  routeEndLabel.value = formatNodeLabel(node);
+  flowMessage.value = "Fim definido. Agora calcula o caminho quente ou frio.";
+}
+
+function addRouteWaypoint() {
+  const node = getFirstSelectedNode();
+  if (!node) {
+    flowMessage.value = "Seleciona primeiro um tubo/ponto por onde o caminho deve passar.";
+    return;
+  }
+
+  const alreadyExists = routeWaypoints.some((waypoint) => isSameNode(waypoint, node));
+  if (!alreadyExists) routeWaypoints.push(node);
+
+  flowMessage.value = `Ponto de passagem adicionado. Total: ${routeWaypoints.length}.`;
+}
+
+async function createAutoRoute(temperature: PipeTemperature) {
+  if (!routeStart || !routeEnd) {
+    flowMessage.value = "Define primeiro o inicio e o fim do caminho.";
+    return;
+  }
+
+  if (
+    routeStart.modelId === routeEnd.modelId &&
+    routeStart.localId === routeEnd.localId
+  ) {
+    flowMessage.value = "O inicio e o fim precisam de ser pontos diferentes.";
+    return;
+  }
+
+  if (routeStart.modelId !== routeEnd.modelId) {
+    flowMessage.value = "O caminho automatico ainda so funciona dentro do mesmo modelo.";
+    return;
+  }
+
+  isLoading.value = true;
+  loadingFileName.value = "route calculation";
+  loadingProgress.value = 0;
+
+  try {
+    const checkpoints = [routeStart, ...routeWaypoints, routeEnd];
+    const path = await findRouteThroughCheckpoints(checkpoints);
+
+    if (!path.length) {
+      flowMessage.value = "Nao encontrei um caminho continuo entre o inicio e o fim.";
+      return;
+    }
+
+    flowConnections.splice(0);
+    for (let index = 0; index < path.length - 1; index++) {
+      flowConnections.push({
+        from: path[index],
+        to: path[index + 1],
+        temperature,
+      });
+    }
+
+    assignPathToTemperature(path, temperature);
+    updateManualStats();
+    await rebuildManualFlowLayer();
+    flowMessage.value = `Caminho ${temperature === "hot" ? "quente" : "frio"} criado com ${path.length} tubos.`;
+  } catch (error) {
+    console.error("Automatic route failed:", error);
+    flowMessage.value = "Nao foi possivel calcular o caminho automatico.";
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+function assignPathToTemperature(path: FlowNode[], temperature: PipeTemperature) {
+  const opposite = temperature === "hot" ? "cold" : "hot";
+
+  for (const node of path) {
+    getAssignmentSet(temperature, node.modelId).add(node.localId);
+    getAssignmentSet(opposite, node.modelId).delete(node.localId);
+  }
+}
+
+async function clearConnections() {
+  flowConnections.splice(0);
+  routeWaypoints.splice(0);
+  routeStart = null;
+  routeEnd = null;
+  routeStartLabel.value = "nenhum";
+  routeEndLabel.value = "nenhum";
+  await rebuildManualFlowLayer();
+  flowMessage.value = "Caminho automatico removido.";
+}
+
+async function addConnectionsToScene() {
+  for (const connection of flowConnections) {
+    const fromCenter = await getNodeCenter(connection.from);
+    const toCenter = await getNodeCenter(connection.to);
+    if (!fromCenter || !toCenter) continue;
+
+    addConnectionParticles(fromCenter, toCenter, connection.temperature);
+    addConnectionLine(fromCenter, toCenter, connection.temperature);
+  }
+}
+
+async function findRouteThroughCheckpoints(checkpoints: FlowNode[]) {
+  const route: FlowNode[] = [];
+
+  for (let index = 0; index < checkpoints.length - 1; index++) {
+    const segment = await findPipePath(checkpoints[index], checkpoints[index + 1]);
+    if (!segment.length) return [];
+
+    if (route.length) segment.shift();
+    route.push(...segment);
+  }
+
+  return route;
+}
+
+async function findPipePath(start: FlowNode, end: FlowNode): Promise<FlowNode[]> {
+  const model = loadedModels.get(start.modelId);
+  if (!model) return [];
+
+  const graphItems = await getPipeGraphItems(model);
+  const startKey = nodeKey(start);
+  const endKey = nodeKey(end);
+
+  if (!graphItems.has(startKey)) {
+    const startItem = await getGraphItemForNode(model, start);
+    if (startItem) graphItems.set(startKey, startItem);
+  }
+
+  if (!graphItems.has(endKey)) {
+    const endItem = await getGraphItemForNode(model, end);
+    if (endItem) graphItems.set(endKey, endItem);
+  }
+
+  if (!graphItems.has(startKey) || !graphItems.has(endKey)) return [];
+
+  const graph = buildPipeGraph(graphItems);
+  const pathKeys = shortestPath(graph, startKey, endKey);
+  return pathKeys.map((key) => {
+    const item = graphItems.get(key);
+    return { modelId: item?.modelId ?? start.modelId, localId: item?.localId ?? 0 };
+  });
+}
+
+async function getPipeGraphItems(model: FRAGS.FragmentsModel) {
+  const categories = await model.getItemsOfCategories([
+    /IFCFLOWSEGMENT/i,
+    /IFCPIPESEGMENT/i,
+    /IFCPIPEFITTING/i,
+    /IFCFLOWFITTING/i,
+    /IFCFLOWCONTROLLER/i,
+  ]);
+  const ids = [...new Set(Object.values(categories).flat())];
+  const boxes = await model.getBoxes(ids);
+  const items = new Map<string, PipeGraphItem>();
+
+  for (let index = 0; index < ids.length; index++) {
+    const item = graphItemFromBox(model.modelId, ids[index], boxes[index]);
+    if (item) items.set(nodeKey(item), item);
+  }
+
+  return items;
+}
+
+async function getGraphItemForNode(model: FRAGS.FragmentsModel, node: FlowNode) {
+  const [box] = await model.getBoxes([node.localId]);
+  return graphItemFromBox(node.modelId, node.localId, box);
+}
+
+function graphItemFromBox(modelId: string, localId: number, box: any): PipeGraphItem | null {
+  if (!box) return null;
+
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
+  box.getSize(size);
+  box.getCenter(center);
+
+  const axis = getLongestAxis(size);
+  const length = Math.max(size.getComponent(axis), 0.1);
+  const endpointA = center.clone();
+  const endpointB = center.clone();
+  endpointA.setComponent(axis, center.getComponent(axis) - length / 2);
+  endpointB.setComponent(axis, center.getComponent(axis) + length / 2);
+
+  return {
+    modelId,
+    localId,
+    box,
+    center,
+    endpoints: [endpointA, endpointB],
+  };
+}
+
+function buildPipeGraph(items: Map<string, PipeGraphItem>) {
+  const entries = [...items.entries()];
+  const graph = new Map<string, Map<string, number>>();
+
+  for (const [key] of entries) graph.set(key, new Map());
+
+  for (let i = 0; i < entries.length; i++) {
+    const [keyA, itemA] = entries[i];
+
+    for (let j = i + 1; j < entries.length; j++) {
+      const [keyB, itemB] = entries[j];
+      const distance = pipeConnectionDistance(itemA, itemB);
+
+      if (distance <= pipeConnectionTolerance(itemA, itemB)) {
+        graph.get(keyA)?.set(keyB, distance);
+        graph.get(keyB)?.set(keyA, distance);
+      }
+    }
+  }
+
+  return graph;
+}
+
+function pipeConnectionDistance(a: PipeGraphItem, b: PipeGraphItem) {
+  let min = Number.POSITIVE_INFINITY;
+
+  for (const endpointA of a.endpoints) {
+    for (const endpointB of b.endpoints) {
+      min = Math.min(min, endpointA.distanceTo(endpointB));
+    }
+  }
+
+  return min;
+}
+
+function pipeConnectionTolerance(a: PipeGraphItem, b: PipeGraphItem) {
+  const sizeA = new THREE.Vector3();
+  const sizeB = new THREE.Vector3();
+  a.box.getSize(sizeA);
+  b.box.getSize(sizeB);
+
+  const minA = Math.min(sizeA.x || 999, sizeA.y || 999, sizeA.z || 999);
+  const minB = Math.min(sizeB.x || 999, sizeB.y || 999, sizeB.z || 999);
+  const inferredDiameter = Math.min(minA, minB);
+
+  return THREE.MathUtils.clamp(inferredDiameter * 2.5, 0.25, 0.9);
+}
+
+function shortestPath(graph: Map<string, Map<string, number>>, start: string, end: string) {
+  const distances = new Map<string, number>();
+  const previous = new Map<string, string | null>();
+  const pending = new Set(graph.keys());
+
+  for (const key of graph.keys()) {
+    distances.set(key, key === start ? 0 : Number.POSITIVE_INFINITY);
+    previous.set(key, null);
+  }
+
+  while (pending.size) {
+    let current: string | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (const key of pending) {
+      const distance = distances.get(key) ?? Number.POSITIVE_INFINITY;
+      if (distance < bestDistance) {
+        current = key;
+        bestDistance = distance;
+      }
+    }
+
+    if (!current || bestDistance === Number.POSITIVE_INFINITY) break;
+    if (current === end) break;
+
+    pending.delete(current);
+
+    for (const [neighbor, weight] of graph.get(current) ?? []) {
+      if (!pending.has(neighbor)) continue;
+
+      const candidate = bestDistance + weight;
+      if (candidate < (distances.get(neighbor) ?? Number.POSITIVE_INFINITY)) {
+        distances.set(neighbor, candidate);
+        previous.set(neighbor, current);
+      }
+    }
+  }
+
+  if (!Number.isFinite(distances.get(end) ?? Number.POSITIVE_INFINITY)) return [];
+
+  const path: string[] = [];
+  let current: string | null = end;
+
+  while (current) {
+    path.unshift(current);
+    current = previous.get(current) ?? null;
+  }
+
+  return path[0] === start ? path : [];
+}
+
+function nodeKey(node: FlowNode) {
+  return `${node.modelId}:${node.localId}`;
+}
+
+async function getPipeDirectionHints(node: FlowNode): Promise<PipeDirectionHints> {
+  const hints: PipeDirectionHints = {};
+
+  for (const connection of flowConnections) {
+    if (isSameNode(connection.to, node)) {
+      hints.upstream = await getNodeCenter(connection.from);
+    }
+
+    if (isSameNode(connection.from, node)) {
+      hints.downstream = await getNodeCenter(connection.to);
+    }
+  }
+
+  return hints;
+}
+
+function isSameNode(a: FlowNode, b: FlowNode) {
+  return a.modelId === b.modelId && a.localId === b.localId;
+}
+
+function getFirstSelectedNode(): FlowNode | null {
+  for (const [modelId, ids] of selectedItems) {
+    const [localId] = ids;
+    if (Number.isFinite(localId)) return { modelId, localId };
+  }
+
+  return null;
+}
+
+function formatNodeLabel(node: FlowNode) {
+  return `${node.modelId} #${node.localId}`;
+}
+
+function getNodeTemperature(node: FlowNode): PipeTemperature | null {
+  if (getAssignmentSet("hot", node.modelId).has(node.localId)) return "hot";
+  if (getAssignmentSet("cold", node.modelId).has(node.localId)) return "cold";
+  return null;
+}
+
+async function getNodeCenter(node: FlowNode) {
+  const model = loadedModels.get(node.modelId);
+  if (!model) return null;
+
+  const [box] = await model.getBoxes([node.localId]);
+  if (!box) return null;
+
+  const center = new THREE.Vector3();
+  box.getCenter(center);
+  return center;
+}
+
+function addConnectionParticles(start: any, end: any, temperature: PipeTemperature) {
+  const direction = end.clone().sub(start);
+  const length = Math.max(direction.length(), 0.1);
+  direction.normalize();
+
+  const radius = 0.055;
+  const geometry = new THREE.ConeGeometry(radius * 1.3, radius * 2.8, 10);
+  const material = temperature === "hot" ? hotMaterial : coldMaterial;
+  const particleCount = Math.max(2, Math.round(length / 0.65));
+
+  for (let i = 0; i < particleCount; i++) {
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.renderOrder = 30;
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+    mesh.position.copy(start);
+    flowGroup.add(mesh);
+
+    pipeParticles.push({
+      mesh,
+      start,
+      end,
+      offset: i / particleCount,
+      length,
+    });
+  }
+}
+
+function addConnectionLine(start: any, end: any, temperature: PipeTemperature) {
+  const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+  const material = new THREE.LineBasicMaterial({
+    color: temperature === "hot" ? 0xff3b30 : 0x1e88ff,
+    transparent: true,
+    opacity: 0.35,
+    depthTest: false,
+  });
+  const line = new THREE.Line(geometry, material);
+  line.renderOrder = 15;
+  flowGroup.add(line);
+  staticFlowObjects.push({ object: line });
 }
 
 function classifyPipe(data: FRAGS.ItemData | undefined): PipeTemperature {
@@ -517,7 +1005,11 @@ function createHighlight(color: number, customId: string): FRAGS.MaterialDefinit
   };
 }
 
-function addPipeParticles(box: any, temperature: PipeTemperature) {
+function addPipeParticles(
+  box: any,
+  temperature: PipeTemperature,
+  hints: PipeDirectionHints = {},
+) {
   const size = new THREE.Vector3();
   const center = new THREE.Vector3();
 
@@ -527,28 +1019,22 @@ function addPipeParticles(box: any, temperature: PipeTemperature) {
   const axis = getLongestAxis(size);
   const length = Math.max(size.getComponent(axis), 0.1);
 
-  const start = center.clone();
-  const end = center.clone();
+  const endpointA = center.clone();
+  const endpointB = center.clone();
 
-  start.setComponent(axis, center.getComponent(axis) - length / 2);
-  end.setComponent(axis, center.getComponent(axis) + length / 2);
+  endpointA.setComponent(axis, center.getComponent(axis) - length / 2);
+  endpointB.setComponent(axis, center.getComponent(axis) + length / 2);
+
+  const { start, end } = choosePipeDirection(endpointA, endpointB, hints);
 
   const direction = end.clone().sub(start).normalize();
-  
-const radius = 0.04;
-  
-const geometry = new THREE.ConeGeometry(
-  radius * 1.2,
-  radius * 2.5,
-  8
-);
+
+  const radius = 0.04;
+  const geometry = new THREE.ConeGeometry(radius * 1.2, radius * 2.5, 8);
 
   const material = temperature === "hot" ? hotMaterial : coldMaterial;
 
-const particleCount = Math.max(
-  1,
-  Math.round(length / 0.4)
-);
+  const particleCount = Math.max(1, Math.round(length / 0.4));
 
   for (let i = 0; i < particleCount; i++) {
     const mesh = new THREE.Mesh(geometry, material);
@@ -564,13 +1050,48 @@ const particleCount = Math.max(
     flowGroup.add(mesh);
 
     pipeParticles.push({
-  mesh,
-  start,
-  end,
-  offset: i / particleCount,
-  length,
-});
+      mesh,
+      start,
+      end,
+      offset: i / particleCount,
+      length,
+    });
   }
+}
+
+function choosePipeDirection(endpointA: any, endpointB: any, hints: PipeDirectionHints) {
+  let start = endpointA;
+  let end = endpointB;
+
+  if (hints.upstream && hints.downstream) {
+    start = closestEndpoint(endpointA, endpointB, hints.upstream);
+    end = closestEndpoint(endpointA, endpointB, hints.downstream);
+
+    if (start.distanceTo(end) < 0.001) {
+      end = start === endpointA ? endpointB : endpointA;
+    }
+
+    return { start, end };
+  }
+
+  if (hints.upstream) {
+    start = closestEndpoint(endpointA, endpointB, hints.upstream);
+    end = start === endpointA ? endpointB : endpointA;
+    return { start, end };
+  }
+
+  if (hints.downstream) {
+    end = closestEndpoint(endpointA, endpointB, hints.downstream);
+    start = end === endpointA ? endpointB : endpointA;
+  }
+
+  return { start, end };
+}
+
+function closestEndpoint(endpointA: any, endpointB: any, point: any) {
+  return endpointA.distanceTo(point) <= endpointB.distanceTo(point)
+    ? endpointA
+    : endpointB;
 }
 
 function getLongestAxis(size: any) {
@@ -627,7 +1148,14 @@ function clearFlowVisuals() {
     particle.mesh.geometry.dispose();
   }
 
+  for (const visual of staticFlowObjects) {
+    flowGroup.remove(visual.object);
+    visual.object.geometry?.dispose?.();
+    visual.object.material?.dispose?.();
+  }
+
   pipeParticles.length = 0;
+  staticFlowObjects.length = 0;
   isFlowing.value = false;
 }
 
