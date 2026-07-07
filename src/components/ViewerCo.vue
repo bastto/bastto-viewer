@@ -16,123 +16,137 @@
       style="display: none"
       @change="convertIFC"
     />
-
-    <section
-  :class="['flow-panel', isFlowPanelMinimized ? 'flow-panel--minimized' : '']"
-  aria-label="Water flow controls"
->
-
-      <div class="flow-panel__header">
-        <div>
-          <p class="flow-panel__eyebrow">Fluxo de agua</p>
-          <h2>Tubos quente/frio</h2>
-        </div>
-        <span :class="['flow-status', isFlowing ? 'flow-status--on' : '']">
-          {{ isFlowing ? 'ON' : 'OFF' }}
-        </span>
-
-        <button
-  type="button"
-  class="flow-panel__toggle"
-  @click="toggleFlowPanelMinimized"
->
-  {{ isFlowPanelMinimized ? '+' : '−' }}
-</button>
-
+  
+<div class="control-panels">
+  <section
+    :class="['flow-panel', isElementPanelMinimized ? 'flow-panel--minimized' : '']"
+    aria-label="Element classification controls"
+  >
+    <div class="flow-panel__header">
+      <div>
+        <p class="flow-panel__eyebrow">Elementos da central</p>
+        <h2>Classificação</h2>
       </div>
 
+      <button
+        type="button"
+        class="flow-panel__toggle"
+        @click="toggleElementPanelMinimized"
+      >
+        {{ isElementPanelMinimized ? '+' : '−' }}
+      </button>
+    </div>
+
+    <div class="flow-panel__content">
       <p class="selection-count">Selecionados: {{ selectedCount }}</p>
       <p class="connection-note">Tipo de elemento</p>
 
-<div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="defineSelectedElementsAs('pipe')">Tubo</button>
-  <button type="button" @click="defineSelectedElementsAs('heatPump')">Bomba calor</button>
-  <button type="button" @click="defineSelectedElementsAs('airDirtSeparator')">Sep. ar/suj.</button>
-</div>
+      <div class="flow-actions flow-actions--secondary">
+        <button type="button" @click="defineSelectedElementsAs('pipe')">Tubo</button>
+        <button type="button" @click="defineSelectedElementsAs('heatPump')">Bomba calor</button>
+        <button type="button" @click="defineSelectedElementsAs('airDirtSeparator')">Sep. ar/suj.</button>
+      </div>
 
-<div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="defineSelectedElementsAs('isolationValve')">Válvula corte</button>
-  <button type="button" @click="defineSelectedElementsAs('pump')">Bomba</button>
-  <button type="button" @click="defineSelectedElementsAs('reservoir')">Reservatório</button>
-</div>
+      <div class="flow-actions flow-actions--secondary">
+        <button type="button" @click="defineSelectedElementsAs('isolationValve')">Válvula corte</button>
+        <button type="button" @click="defineSelectedElementsAs('pump')">Bomba</button>
+        <button type="button" @click="defineSelectedElementsAs('reservoir')">Reservatório</button>
+      </div>
 
-<div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="defineSelectedElementsAs('collector')">Coletor</button>
-  <button type="button" @click="defineSelectedElementsAs('expansionVessel')">Vaso expansão</button>
-  <button type="button" @click="defineSelectedElementsAs('enthalpyMeter')">Cont. entalpia</button>
-</div>
+      <div class="flow-actions flow-actions--secondary">
+        <button type="button" @click="defineSelectedElementsAs('collector')">Coletor</button>
+        <button type="button" @click="defineSelectedElementsAs('expansionVessel')">Vaso expansão</button>
+        <button type="button" @click="defineSelectedElementsAs('enthalpyMeter')">Cont. entalpia</button>
+      </div>
 
-<div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="defineSelectedElementsAs('tank')">Depósito</button>
-  <button type="button" @click="defineSelectedElementsAs('heatExchanger')">Permutador</button>
-  <button type="button" @click="defineSelectedElementsAs('unknown')">Desconhecido</button>
-</div>
+      <div class="flow-actions flow-actions--secondary">
+        <button type="button" @click="defineSelectedElementsAs('tank')">Depósito</button>
+        <button type="button" @click="defineSelectedElementsAs('heatExchanger')">Permutador</button>
+        <button type="button" @click="defineSelectedElementsAs('unknown')">Desconhecido</button>
+      </div>
 
-<p class="connection-note">
-  Elementos definidos: {{ countDefinedMepElements() }}
-</p>
+      <p class="connection-note">
+        Elementos definidos: {{ countDefinedMepElements() }}
+      </p>
 
-<dl class="flow-stats">
-  <div>
-    <dt>Tubos</dt>
-    <dd>{{ countMepElementsByType('pipe') }}</dd>
-  </div>
+      <dl class="flow-stats">
+        <div>
+          <dt>Tubos</dt>
+          <dd>{{ countMepElementsByType('pipe') }}</dd>
+        </div>
+        <div>
+          <dt>B. calor</dt>
+          <dd>{{ countMepElementsByType('heatPump') }}</dd>
+        </div>
+        <div>
+          <dt>Sep.</dt>
+          <dd>{{ countMepElementsByType('airDirtSeparator') }}</dd>
+        </div>
+        <div>
+          <dt>Válvulas</dt>
+          <dd>{{ countMepElementsByType('isolationValve') }}</dd>
+        </div>
+        <div>
+          <dt>Bombas</dt>
+          <dd>{{ countMepElementsByType('pump') }}</dd>
+        </div>
+        <div>
+          <dt>Reserv.</dt>
+          <dd>{{ countMepElementsByType('reservoir') }}</dd>
+        </div>
+        <div>
+          <dt>Colet.</dt>
+          <dd>{{ countMepElementsByType('collector') }}</dd>
+        </div>
+        <div>
+          <dt>V. exp.</dt>
+          <dd>{{ countMepElementsByType('expansionVessel') }}</dd>
+        </div>
+        <div>
+          <dt>Entalp.</dt>
+          <dd>{{ countMepElementsByType('enthalpyMeter') }}</dd>
+        </div>
+        <div>
+          <dt>Depós.</dt>
+          <dd>{{ countMepElementsByType('tank') }}</dd>
+        </div>
+        <div>
+          <dt>Permut.</dt>
+          <dd>{{ countMepElementsByType('heatExchanger') }}</dd>
+        </div>
+        <div>
+          <dt>Desc.</dt>
+          <dd>{{ countMepElementsByType('unknown') }}</dd>
+        </div>
+      </dl>
+    </div>
+  </section>
 
-  <div>
-    <dt>B. calor</dt>
-    <dd>{{ countMepElementsByType('heatPump') }}</dd>
-  </div>
+  <section
+    :class="['flow-panel', isFlowControlsPanelMinimized ? 'flow-panel--minimized' : '']"
+    aria-label="Water flow controls"
+  >
+    <div class="flow-panel__header">
+      <div>
+        <p class="flow-panel__eyebrow">Fluxo de agua</p>
+        <h2>Tubos quente/frio</h2>
+      </div>
 
-  <div>
-    <dt>Sep.</dt>
-    <dd>{{ countMepElementsByType('airDirtSeparator') }}</dd>
-  </div>
+      <span :class="['flow-status', isFlowing ? 'flow-status--on' : '']">
+        {{ isFlowing ? 'ON' : 'OFF' }}
+      </span>
 
-  <div>
-    <dt>Válvulas</dt>
-    <dd>{{ countMepElementsByType('isolationValve') }}</dd>
-  </div>
+      <button
+        type="button"
+        class="flow-panel__toggle"
+        @click="toggleFlowControlsPanelMinimized"
+      >
+        {{ isFlowControlsPanelMinimized ? '+' : '−' }}
+      </button>
+    </div>
 
-  <div>
-    <dt>Bombas</dt>
-    <dd>{{ countMepElementsByType('pump') }}</dd>
-  </div>
-
-  <div>
-    <dt>Reserv.</dt>
-    <dd>{{ countMepElementsByType('reservoir') }}</dd>
-  </div>
-
-  <div>
-    <dt>Colet.</dt>
-    <dd>{{ countMepElementsByType('collector') }}</dd>
-  </div>
-
-  <div>
-    <dt>V. exp.</dt>
-    <dd>{{ countMepElementsByType('expansionVessel') }}</dd>
-  </div>
-
-  <div>
-    <dt>Entalp.</dt>
-    <dd>{{ countMepElementsByType('enthalpyMeter') }}</dd>
-  </div>
-
-  <div>
-    <dt>Depós.</dt>
-    <dd>{{ countMepElementsByType('tank') }}</dd>
-  </div>
-
-  <div>
-    <dt>Permut.</dt>
-    <dd>{{ countMepElementsByType('heatExchanger') }}</dd>
-  </div>
-
-  <div>
-    <dt>Desc.</dt>
-    <dd>{{ countMepElementsByType('unknown') }}</dd>
-  </div>
-</dl>
+    <div class="flow-panel__content">
+      <p class="selection-count">Selecionados: {{ selectedCount }}</p>
 
       <div class="flow-actions">
         <button type="button" @click="assignSelectedPipes('hot')">Marcar quente</button>
@@ -197,12 +211,20 @@
       </dl>
 
       <p class="flow-note">{{ flowMessage }}</p>
-    </section>
+    </div>
+  </section>
+</div>
+
   </div>
 
-  <a href="https://github.com/bastto" target="_blank" class="corner-logo">
-    <img src="/src/assets/bastto-logo.svg" alt="Logo" class="app-logo" />
-  </a>
+  <a
+  href="https://github.com/bastto"
+  target="_blank"
+  rel="noopener noreferrer"
+  class="corner-logo"
+>
+  /src/assets/bastto-logo.svg
+</a>
 </template>
 
 <script setup lang="ts">
@@ -295,7 +317,8 @@ const loadingFileName = ref("");
 const flowSpeed = ref(1);
 const flowMessage = ref("Seleciona tubos no modelo e marca-os como quente ou fria.");
 const selectedCount = ref(0);
-const isFlowPanelMinimized = ref(false);
+const isElementPanelMinimized = ref(false);
+const isFlowControlsPanelMinimized = ref(false);
 const routeStartLabel = ref("nenhum");
 const routeEndLabel = ref("nenhum");
 const blockedCount = ref(0);
@@ -1342,8 +1365,12 @@ function animateFlow() {
   tick();
 }
 
-function toggleFlowPanelMinimized() {
-  isFlowPanelMinimized.value = !isFlowPanelMinimized.value;
+function toggleElementPanelMinimized() {
+  isElementPanelMinimized.value = !isElementPanelMinimized.value;
+}
+
+function toggleFlowControlsPanelMinimized() {
+  isFlowControlsPanelMinimized.value = !isFlowControlsPanelMinimized.value;
 }
 
 function toggleFlow() {
@@ -1517,14 +1544,20 @@ function chunk<T>(items: T[], size: number) {
   opacity: 1;
 }
 
-.flow-panel {
+.control-panels {
   position: fixed;
   right: 24px;
   top: 24px;
   z-index: 1000;
-  width: min(340px, calc(100vw - 48px));
+  width: min(390px, calc(100vw - 48px));
   max-height: calc(100vh - 48px);
   overflow-y: auto;
+  display: grid;
+  gap: 14px;
+}
+
+.flow-panel {
+  width: 100%;
   padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 8px;
@@ -1566,7 +1599,7 @@ function chunk<T>(items: T[], size: number) {
   overflow: hidden;
 }
 
-.flow-panel--minimized > :not(.flow-panel__header) {
+.flow-panel--minimized .flow-panel__content {
   display: none;
 }
 
@@ -1674,11 +1707,12 @@ function chunk<T>(items: T[], size: number) {
 }
 
 @media (max-width: 820px) {
-  .flow-panel {
+  .control-panels {
     top: auto;
     right: 12px;
     bottom: 12px;
     width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
   }
 
   .corner-logo {
