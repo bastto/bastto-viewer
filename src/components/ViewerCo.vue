@@ -149,34 +149,34 @@
       <p class="selection-count">Selecionados: {{ selectedCount }}</p>
 
       <div class="flow-actions">
-        <button type="button" @click="assignSelectedPipes('hot')">Marcar quente</button>
-        <button type="button" @click="assignSelectedPipes('cold')">Marcar fria</button>
-        <button type="button" @click="clearManualAssignments">Limpar marcas</button>
-      </div>
+  <button type="button" @click="assignSelectedPipes('hot')">Marcar quente</button>
+  <button type="button" @click="assignSelectedPipes('cold')">Marcar fria</button>
+  <button type="button" @click="clearManualAssignments">Limpar marcas</button>
+</div>
 
-      <div class="flow-actions flow-actions--secondary">
-        <button type="button" @click="blockSelectedPipes">Bloquear saida</button>
-        <button type="button" @click="clearBlockedPipes">Limpar bloqueios</button>
-      </div>
+<div class="flow-actions flow-actions--secondary">
+  <button type="button" @click="setRouteStart">Definir início</button>
+  <button type="button" @click="addRouteWaypoint">Passar aqui</button>
+  <button type="button" @click="setRouteEnd">Definir fim</button>
+</div>
 
-      <div class="flow-actions flow-actions--secondary">
-        <button type="button" @click="toggleFlow">
-          {{ isFlowing ? 'Pausar' : 'Animar' }}
-        </button>
-        <button type="button" @click="rebuildManualFlowLayer">Atualizar</button>
-      </div>
+<div class="flow-actions flow-actions--secondary">
+  <button type="button" @click="createAutoRoute('hot')">Caminho quente</button>
+  <button type="button" @click="createAutoRoute('cold')">Caminho fria</button>
+  <button type="button" @click="clearConnections">Limpar caminho</button>
+</div>
 
-      <div class="flow-actions flow-actions--secondary">
-        <button type="button" @click="setRouteStart">Definir inicio</button>
-        <button type="button" @click="addRouteWaypoint">Passar aqui</button>
-        <button type="button" @click="setRouteEnd">Definir fim</button>
-      </div>
+<div class="flow-actions flow-actions--secondary">
+  <button type="button" @click="blockSelectedPipes">Bloquear saída</button>
+  <button type="button" @click="clearBlockedPipes">Limpar bloqueios</button>
+</div>
 
-      <div class="flow-actions flow-actions--secondary">
-        <button type="button" @click="createAutoRoute('hot')">Caminho quente</button>
-        <button type="button" @click="createAutoRoute('cold')">Caminho fria</button>
-        <button type="button" @click="clearConnections">Limpar caminho</button>
-      </div>
+<div class="flow-actions flow-actions--secondary">
+  <button type="button" @click="toggleFlow">
+    {{ isFlowing ? 'Pausar' : 'Animar' }}
+  </button>
+  <button type="button" @click="rebuildManualFlowLayer">Atualizar</button>
+</div>
 
       <p class="connection-note">Inicio: {{ routeStartLabel }}</p>
       <p class="connection-note">Passagens: {{ routeWaypoints.length }}</p>
