@@ -167,9 +167,11 @@
 </div>
 
 <div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="blockSelectedPipes">Bloquear saída</button>
+  <button type="button" @click="closeSelectedValves">Fechar válvula</button>
+  <button type="button" @click="openSelectedValves">Abrir válvula</button>
   <button type="button" @click="clearBlockedPipes">Limpar bloqueios</button>
 </div>
+
 
 <div class="flow-actions flow-actions--secondary">
   <button type="button" @click="toggleFlow">
@@ -686,8 +688,13 @@ async function addAssignmentsToScene(temperature: PipeTemperature) {
       if (!box) continue;
 
       const localId = ids[index];
-      const hints = await getPipeDirectionHints({ modelId, localId });
-      addPipeParticles(box, temperature, hints);
+
+if (isPipeBlocked(modelId, localId)) {
+  continue;
+}
+
+const hints = await getPipeDirectionHints({ modelId, localId });
+addPipeParticles(box, temperature, hints);
     }
   }
 }
@@ -1098,6 +1105,113 @@ function countDefinedMepElements() {
   return Object.keys(mepElements).length;
 }
 
+function isIsolationValve(modelId: string, localId: number) {
+  const key = elementKey(modelId, localId);
+  return mepElements[key]?.elementType === "isolationValve";
+}
+
+function updateBlockedCount() {
+  blockedCount.value = [...blockedPipes.values()].reduce(
+    (total, ids) => total + ids.size,
+    0,
+  );
+}
+
+async function setSelectedValvesState(state: "open" | "closed") {
+  if (!selectedCount.value) {
+    flowMessage.value = "Seleciona primeiro uma ou mais válvulas.";
+    return;
+  }
+
+  let changedCount = 0;
+
+  for (const [modelId, ids] of selectedItems) {
+    let blockedSet = blockedPipes.get(modelId);
+
+    if (!blockedSet) {
+      blockedSet = new Set<number>();
+      blockedPipes.set(modelId, blockedSet);
+    }
+
+    for (const localId of ids) {
+      if (!isIsolationValve(modelId, localId)) {
+        continue;
+      }
+
+      const key = elementKey(modelId, localId);
+
+      mepElements[key] = {
+        ...mepElements[key],
+        modelId,
+        localId,
+        elementType: "isolationValve",
+        circuitType: mepElements[key]?.circuitType ?? "unknown",
+        state,
+      };
+
+      if (state === "closed") {
+        blockedSet.add(localId);
+      } else {
+        blockedSet.delete(localId);
+      }
+
+      changedCount++;
+    }
+
+    if (blockedSet.size === 0) {
+      blockedPipes.delete(modelId);
+    }
+  }
+
+  updateBlockedCount();
+
+  if (!changedCount) {
+    flowMessage.value =
+      "Nenhuma válvula de corte selecionada. Define primeiro o elemento como Válvula corte.";
+    return;
+  }
+
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  }
+
+  flowMessage.value =
+    state === "closed"
+      ? `${changedCount} válvula(s) fechada(s).`
+      : `${changedCount} válvula(s) aberta(s).`;
+}
+
+async function closeSelectedValves() {
+  await setSelectedValvesState("closed");
+}
+
+async function openSelectedValves() {
+  await setSelectedValvesState("open");
+}
+
+async function clearBlockedPipes() {
+  blockedPipes.clear();
+
+  for (const key of Object.keys(mepElements)) {
+    const element = mepElements[key];
+
+    if (element.elementType === "isolationValve") {
+      mepElements[key] = {
+        ...element,
+        state: "open",
+      };
+    }
+  }
+
+  updateBlockedCount();
+
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  }
+
+  flowMessage.value = "Bloqueios removidos e válvulas abertas.";
+}
+
 async function getPipeDirectionHints(node: FlowNode): Promise<PipeDirectionHints> {
   const hints: PipeDirectionHints = {};
 
@@ -1422,13 +1536,10 @@ async function startCentralSimulation() {
 
   const blockedNodes = getBlockedNodesInCurrentPath();
 
-  if (blockedNodes.length) {
-    flowMessage.value =
-      "Não é possível simular: existe uma válvula/tubo bloqueado no caminho.";
-    isCentralSimulationRunning.value = false;
-    isFlowing.value = false;
-    return;
-  }
+if (blockedNodes.length) {
+  flowMessage.value =
+    "Simulação iniciada com válvula(s)/tubo(s) bloqueado(s). O fluxo não passa nesses elementos.";
+}
 
   await rebuildManualFlowLayer();
 
@@ -1493,13 +1604,6 @@ async function blockSelectedPipes() {
   );
 
   flowMessage.value = `${selectedCount.value} elemento(s) bloqueado(s).`;
-  await rebuildManualFlowLayer();
-}
-
-async function clearBlockedPipes() {
-  blockedPipes.clear();
-  blockedCount.value = 0;
-  flowMessage.value = "Bloqueios removidos.";
   await rebuildManualFlowLayer();
 }
 
