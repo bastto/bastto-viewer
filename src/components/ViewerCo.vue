@@ -151,15 +151,38 @@
   <button type="button" @click="setRouteEnd">Definir fim</button>
 </div>
 
-<div class="flow-actions flow-actions--secondary">
+<div class="flow-actions">
   <button type="button" @click="createAutoRoute('supply1')">
-  Caminho avanço
-</button>
+    Caminho avanço 1
+  </button>
 
-<button type="button" @click="createAutoRoute('return1')">
-  Caminho retorno
-</button>
-  <button type="button" @click="clearConnections">Limpar caminho</button>
+  <button type="button" @click="createAutoRoute('supply2')">
+    Caminho avanço 2
+  </button>
+
+  <button type="button" @click="createAutoRoute('supply3')">
+    Caminho avanço 3
+  </button>
+</div>
+
+<div class="flow-actions flow-actions--secondary">
+  <button type="button" @click="createAutoRoute('return1')">
+    Caminho retorno 1
+  </button>
+
+  <button type="button" @click="createAutoRoute('return2')">
+    Caminho retorno 2
+  </button>
+
+  <button type="button" @click="createAutoRoute('return3')">
+    Caminho retorno 3
+  </button>
+</div>
+
+<div class="flow-actions flow-actions--single">
+  <button type="button" @click="clearConnections">
+    Limpar caminho
+  </button>
 </div>
 
 <div class="flow-actions flow-actions--secondary">
@@ -481,9 +504,13 @@ onMounted(async () => {
   fragmentManager = components.get(OBC.FragmentsManager);
   fragmentManager.init("/worker.mjs");
 
-  world.camera.controls.addEventListener("rest", () =>
-    fragmentManager.core.update(true),
-  );
+  world.camera.controls.addEventListener("rest", async () => {
+  await fragmentManager.core.update(true);
+
+  if (countAssignments() > 0) {
+    await rebuildManualFlowLayer();
+  }
+});
 
   fragmentManager.list.onItemSet.add(async ({ value: model }) => {
     model.useCamera(world?.camera.three as any);
@@ -530,16 +557,27 @@ function createBimPanel(components: OBC.Components, viewport: HTMLElement) {
   renderedFaces: FRAGS.RenderedFaces.TWO,
 });
 
-  highlighter.events.select.onHighlight.add((modelIdMap) => {
-    replaceSelection(modelIdMap);
-    updatePropertiesTable({ modelIdMap });
+  highlighter.events.select.onHighlight.add(async (modelIdMap) => {
+  replaceSelection(modelIdMap);
+  updatePropertiesTable({ modelIdMap });
+
+  if (countAssignments() > 0) {
+    await rebuildManualFlowLayer();
+  }
+});
+
+  highlighter.events.select.onClear.add(async () => {
+  selectedItems.clear();
+  selectedCount.value = 0;
+
+  updatePropertiesTable({
+    modelIdMap: {},
   });
 
-  highlighter.events.select.onClear.add(() => {
-    selectedItems.clear();
-    selectedCount.value = 0;
-    updatePropertiesTable({ modelIdMap: {} });
-  });
+  if (countAssignments() > 0) {
+    await rebuildManualFlowLayer();
+  }
+});
 
   propertiesTable.preserveStructureOnFilter = true;
   propertiesTable.indentationInText = false;
@@ -760,6 +798,7 @@ await addAssignmentsToScene("return3");
   isFlowing.value = pipeParticles.length > 0;
 
   await fragmentManager.core.update(true);
+
 }
 
 async function addAssignmentsToScene(temperature: PipeCircuit) {
