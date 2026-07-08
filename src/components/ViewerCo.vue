@@ -179,7 +179,11 @@
   </button>
 </div>
 
-<div class="flow-actions flow-actions--single">
+<div class="flow-actions flow-actions--secondary">
+  <button type="button" @click="saveCurrentRoute">
+    Guardar caminho
+  </button>
+
   <button type="button" @click="clearConnections">
     Limpar caminho
   </button>
@@ -261,6 +265,36 @@
   </div>
 </dl>
 
+<div v-if="savedRoutes.length" class="saved-routes">
+  <p class="connection-note">
+    Caminhos guardados: {{ savedRoutes.length }}
+  </p>
+
+  <div
+  v-for="route in savedRoutes"
+  :key="route.id"
+  class="saved-route-item"
+>
+  <span>{{ route.name }}</span>
+
+  <div>
+    <button
+      type="button"
+      @click="applySavedRoute(route)"
+    >
+      Aplicar
+    </button>
+
+    <button
+      type="button"
+      @click="deleteSavedRoute(route.id)"
+    >
+      Apagar
+    </button>
+  </div>
+</div>
+</div>
+
       <p class="flow-note">{{ flowMessage }}</p>
     </div>
   </section>
@@ -338,6 +372,13 @@ type FlowNode = {
   localId: number;
 };
 
+type SavedRoute = {
+  id: string;
+  name: string;
+  temperature: PipeCircuit;
+  path: FlowNode[];
+};
+
 type FlowConnection = {
   from: FlowNode;
   to: FlowNode;
@@ -390,6 +431,7 @@ const pipeStats = reactive({
 });
 
 const MEP_ELEMENTS_STORAGE_KEY = "bastto-viewer-mep-elements";
+const ROUTES_STORAGE_KEY = "bastto-viewer-routes";
 
 let world: any;
 let serializer: FRAGS.IfcImporter;
@@ -405,6 +447,7 @@ const selectedItems: SelectionMap = new Map();
 const flowConnections = reactive<FlowConnection[]>([]);
 const routeWaypoints = reactive<FlowNode[]>([]);
 const mepElements = reactive<Record<string, MepElement>>({});
+const savedRoutes = reactive<SavedRoute[]>([]);
 let routeStart: FlowNode | null = null;
 let routeEnd: FlowNode | null = null;
 const blockedPipes: SelectionMap = new Map();
@@ -513,14 +556,23 @@ onMounted(async () => {
 });
 
   fragmentManager.list.onItemSet.add(async ({ value: model }) => {
-    model.useCamera(world?.camera.three as any);
-    world?.scene.three.add(model.object);
-    loadedModels.set(model.modelId, model);
-    await fragmentManager.core.update(true);
-    flowMessage.value = `Modelo carregado: ${model.modelId}. Seleciona tubos e marca-os.`;
-  });
+  model.useCamera(world?.camera.three as any);
+  world?.scene.three.add(model.object);
+  loadedModels.set(model.modelId, model);
+
+  await fragmentManager.core.update(true);
+
+  if (savedRoutes.length) {
+    await applyAllSavedRoutes();
+  } else {
+    flowMessage.value =
+      `Modelo carregado: ${model.modelId}. Seleciona tubos e atribui os circuitos.`;
+  }
+});
+
 
   loadMepElementsFromStorage();
+  loadRoutesFromStorage();
 
   createBimPanel(components, viewport);
   animateFlow();
@@ -997,6 +1049,148 @@ function assignPathToTemperature(
   }
 }
 
+function saveCurrentRoute() {
+  if (!flowConnections.length) {
+    flowMessage.value = "Cria primeiro um caminho antes de o guardar.";
+    return;
+  }
+
+  const temperature = flowConnections[0].temperature;
+
+  const path: FlowNode[] = [
+    flowConnections[0].from,
+    ...flowConnections.map((connection) => connection.to),
+  ];
+
+  const routeNumber = savedRoutes.length + 1;
+
+  savedRoutes.push({
+    id: crypto.randomUUID(),
+    name: `Caminho ${temperature} ${routeNumber}`,
+    temperature,
+    path,
+  });
+
+  saveRoutesToStorage();
+
+  flowMessage.value = "Caminho guardado com sucesso.";
+}
+
+async function deleteSavedRoute(routeId: string) {
+  const index = savedRoutes.findIndex(
+    (route) => route.id === routeId,
+  );
+
+  if (index === -1) return;
+
+  const route = savedRoutes[index];
+
+  savedRoutes.splice(index, 1);
+
+  const idsByModel = new Map<string, number[]>();
+
+  for (const node of route.path) {
+    getAssignmentSet("supply1", node.modelId).delete(node.localId);
+    getAssignmentSet("supply2", node.modelId).delete(node.localId);
+    getAssignmentSet("supply3", node.modelId).delete(node.localId);
+
+    getAssignmentSet("return1", node.modelId).delete(node.localId);
+    getAssignmentSet("return2", node.modelId).delete(node.localId);
+    getAssignmentSet("return3", node.modelId).delete(node.localId);
+
+    if (!idsByModel.has(node.modelId)) {
+      idsByModel.set(node.modelId, []);
+    }
+
+    idsByModel.get(node.modelId)?.push(node.localId);
+  }
+
+  for (const [modelId, ids] of idsByModel) {
+    const model = loadedModels.get(modelId);
+
+    if (model && ids.length) {
+      await model.resetHighlight(ids);
+    }
+  }
+
+  flowConnections.splice(0);
+
+  saveRoutesToStorage();
+
+  updateManualStats();
+
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  } else {
+    clearFlowVisuals();
+    await fragmentManager.core.update(true);
+  }
+
+  flowMessage.value = "Caminho apagado.";
+}
+
+async function applySavedRoute(route: SavedRoute) {
+  assignPathToTemperature(
+    route.path,
+    route.temperature,
+  );
+
+  flowConnections.splice(0);
+
+  for (let index = 0; index < route.path.length - 1; index++) {
+    flowConnections.push({
+      from: route.path[index],
+      to: route.path[index + 1],
+      temperature: route.temperature,
+    });
+  }
+
+  updateManualStats();
+
+  await rebuildManualFlowLayer();
+
+  flowMessage.value =
+    `Caminho ${route.name} aplicado.`;
+}
+
+async function applyAllSavedRoutes() {
+  if (!savedRoutes.length) {
+    return;
+  }
+
+  const routesToApply = savedRoutes.filter((route) =>
+    route.path.every((node) => loadedModels.has(node.modelId)),
+  );
+
+  if (!routesToApply.length) {
+    return;
+  }
+
+  flowConnections.splice(0);
+
+  for (const route of routesToApply) {
+    assignPathToTemperature(
+      route.path,
+      route.temperature,
+    );
+
+    for (let index = 0; index < route.path.length - 1; index++) {
+      flowConnections.push({
+        from: route.path[index],
+        to: route.path[index + 1],
+        temperature: route.temperature,
+      });
+    }
+  }
+
+  updateManualStats();
+
+  await rebuildManualFlowLayer();
+
+  flowMessage.value =
+    `${routesToApply.length} caminho(s) guardado(s) aplicado(s).`;
+}
+
 async function clearConnections() {
   flowConnections.splice(0);
   routeWaypoints.splice(0);
@@ -1222,6 +1416,28 @@ function saveMepElementsToStorage() {
     MEP_ELEMENTS_STORAGE_KEY,
     JSON.stringify(mepElements),
   );
+}
+
+function saveRoutesToStorage() {
+  localStorage.setItem(
+    ROUTES_STORAGE_KEY,
+    JSON.stringify(savedRoutes),
+  );
+}
+
+function loadRoutesFromStorage() {
+  const saved = localStorage.getItem(ROUTES_STORAGE_KEY);
+
+  if (!saved) return;
+
+  try {
+    const parsed = JSON.parse(saved) as SavedRoute[];
+
+    savedRoutes.splice(0);
+    savedRoutes.push(...parsed);
+  } catch (error) {
+    console.error("Erro ao carregar caminhos guardados:", error);
+  }
 }
 
 function loadMepElementsFromStorage() {
@@ -2238,6 +2454,31 @@ function chunk<T>(items: T[], size: number) {
   to {
     transform: rotate(360deg);
   }
+}
+
+.saved-routes {
+  margin-top: 14px;
+}
+
+.saved-route-item {
+  margin-top: 6px;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+
+  font-size: 0.8rem;
+}
+
+.saved-route-item button {
+  border: 0;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
 }
 
 @media (max-width: 820px) {
