@@ -202,12 +202,88 @@
     Caminhos guardados: {{ savedRoutes.length }}
   </p>
 
+  <div class="flow-actions flow-actions--single">
+  <button
+    type="button"
+    @click="createRouteGroupFromSelection"
+  >
+    Criar grupo com selecionados
+  </button>
+</div>
+
+<div v-if="hasLoadedModel && savedRouteGroups.length" class="saved-routes">
+  <p class="connection-note">
+    Grupos de caminhos: {{ savedRouteGroups.length }}
+  </p>
+
+  <div
+  v-for="group in savedRouteGroups"
+  :key="group.id"
+  class="saved-route-item saved-route-item--group"
+>
+  <div class="saved-route-group-info">
+    <strong>{{ group.name }}</strong>
+
+    <p class="saved-route-group-count">
+      {{ getRoutesFromGroup(group).length }} caminho(s)
+    </p>
+
+    <ul class="saved-route-group-list">
+      <li
+        v-for="routeName in getRouteNamesFromGroup(group)"
+        :key="routeName"
+      >
+        {{ routeName }}
+      </li>
+    </ul>
+  </div>
+
+  <div>
+    <button
+      type="button"
+      @click="applyRouteGroup(group)"
+    >
+      Aplicar
+    </button>
+
+    <button
+      type="button"
+      @click="reverseRouteGroup(group.id)"
+    >
+      Inverter
+    </button>
+
+    <button
+      type="button"
+      @click="renameRouteGroup(group.id)"
+    >
+      Renomear
+    </button>
+
+    <button
+      type="button"
+      @click="deleteRouteGroup(group.id)"
+    >
+      Apagar
+    </button>
+  </div>
+</div>
+</div>
+
   <div
   v-for="route in savedRoutes"
   :key="route.id"
   class="saved-route-item"
 >
+  <label class="saved-route-select">
+  <input
+    v-model="selectedRouteIds"
+    type="checkbox"
+    :value="route.id"
+  />
+
   <span>{{ route.name }}</span>
+</label>
 
   <div>
   <button
@@ -411,6 +487,13 @@ type SavedRoute = {
   path: FlowNode[];
 };
 
+type SavedRouteGroup = {
+  id: string;
+  name: string;
+  temperature: PipeCircuit;
+  routeIds: string[];
+};
+
 type SavedReversedDirection = {
   modelId: string;
   localIds: number[];
@@ -472,6 +555,8 @@ const MEP_ELEMENTS_STORAGE_KEY = "bastto-viewer-mep-elements";
 const ROUTES_STORAGE_KEY = "bastto-viewer-routes";
 const REVERSED_DIRECTIONS_STORAGE_KEY =
   "bastto-viewer-reversed-directions";
+const ROUTE_GROUPS_STORAGE_KEY =
+  "bastto-viewer-route-groups";
 
 let world: any;
 let serializer: FRAGS.IfcImporter;
@@ -488,6 +573,8 @@ const flowConnections = reactive<FlowConnection[]>([]);
 const routeWaypoints = reactive<FlowNode[]>([]);
 const mepElements = reactive<Record<string, MepElement>>({});
 const savedRoutes = reactive<SavedRoute[]>([]);
+const savedRouteGroups = reactive<SavedRouteGroup[]>([]);
+const selectedRouteIds = ref<string[]>([]);
 let routeStart: FlowNode | null = null;
 let routeEnd: FlowNode | null = null;
 const blockedPipes: SelectionMap = new Map();
@@ -615,6 +702,7 @@ onMounted(async () => {
 
   loadMepElementsFromStorage();
 loadRoutesFromStorage();
+loadRouteGroupsFromStorage();
 loadReversedDirectionsFromStorage();
 
   createBimPanel(components, viewport);
@@ -1235,6 +1323,136 @@ async function applySavedRoute(route: SavedRoute) {
     `Caminho ${route.name} aplicado.`;
 }
 
+async function applyRouteGroup(group: SavedRouteGroup) {
+  const routes = getRoutesFromGroup(group);
+
+  if (!routes.length) {
+    flowMessage.value = "Este grupo não tem caminhos válidos.";
+    return;
+  }
+
+  const loadedModelIds = [...loadedModels.keys()];
+
+  if (!loadedModelIds.length) {
+    flowMessage.value = "Carrega primeiro o IFC antes de aplicar o grupo.";
+    return;
+  }
+
+  const fallbackModelId = loadedModelIds[0];
+
+  flowConnections.splice(0);
+
+  for (const route of routes) {
+    const adaptedPath = route.path.map((node) => {
+      if (loadedModels.has(node.modelId)) {
+        return node;
+      }
+
+      return {
+        modelId: fallbackModelId,
+        localId: node.localId,
+      };
+    });
+
+    assignPathToTemperature(
+      adaptedPath,
+      route.temperature,
+    );
+
+    for (let index = 0; index < adaptedPath.length - 1; index++) {
+      flowConnections.push({
+        from: adaptedPath[index],
+        to: adaptedPath[index + 1],
+        temperature: route.temperature,
+      });
+    }
+  }
+
+  updateManualStats();
+
+  await rebuildManualFlowLayer();
+
+  flowMessage.value =
+    `Grupo "${group.name}" aplicado com ${routes.length} caminho(s).`;
+}
+
+async function reverseRouteGroup(groupId: string) {
+  const group = savedRouteGroups.find(
+    (savedGroup) => savedGroup.id === groupId,
+  );
+
+  if (!group) return;
+
+  const routes = getRoutesFromGroup(group);
+
+  if (!routes.length) {
+    flowMessage.value = "Este grupo não tem caminhos válidos.";
+    return;
+  }
+
+  for (const route of routes) {
+    const reversedPath = [...route.path].reverse();
+
+    route.path.splice(
+      0,
+      route.path.length,
+      ...reversedPath,
+    );
+  }
+
+  saveRoutesToStorage();
+
+  if (loadedModels.size) {
+    await applyRouteGroup(group);
+  }
+
+  flowMessage.value =
+    `Sentido do grupo "${group.name}" invertido.`;
+}
+
+function deleteRouteGroup(groupId: string) {
+  const index = savedRouteGroups.findIndex(
+    (group) => group.id === groupId,
+  );
+
+  if (index === -1) return;
+
+  const groupName = savedRouteGroups[index].name;
+
+  savedRouteGroups.splice(index, 1);
+
+  saveRouteGroupsToStorage();
+
+  flowMessage.value =
+    `Grupo "${groupName}" apagado.`;
+}
+
+function renameRouteGroup(groupId: string) {
+  const group = savedRouteGroups.find(
+    (savedGroup) => savedGroup.id === groupId,
+  );
+
+  if (!group) return;
+
+  const newName = prompt(
+    "Novo nome do grupo:",
+    group.name,
+  );
+
+  if (!newName) return;
+
+  const trimmedName = newName.trim();
+
+  if (!trimmedName) return;
+
+  group.name = trimmedName;
+
+  saveRouteGroupsToStorage();
+
+  flowMessage.value =
+    `Grupo renomeado para "${trimmedName}".`;
+}
+
 async function reverseSavedRoute(routeId: string) {
   const route = savedRoutes.find(
     (savedRoute) => savedRoute.id === routeId,
@@ -1258,6 +1476,62 @@ async function reverseSavedRoute(routeId: string) {
 
   flowMessage.value =
     `Sentido do caminho ${route.name} invertido.`;
+}
+
+function createRouteGroupFromSelection() {
+  if (selectedRouteIds.value.length < 2) {
+    flowMessage.value =
+      "Seleciona pelo menos dois caminhos para criar um grupo.";
+    return;
+  }
+
+  const routes = savedRoutes.filter((route) =>
+    selectedRouteIds.value.includes(route.id),
+  );
+
+  if (!routes.length) {
+    flowMessage.value = "Nenhum caminho válido selecionado.";
+    return;
+  }
+
+  const temperature = routes[0].temperature;
+
+  const allSameCircuit = routes.every(
+    (route) => route.temperature === temperature,
+  );
+
+  if (!allSameCircuit) {
+    flowMessage.value =
+      "Só podes agrupar caminhos do mesmo circuito.";
+    return;
+  }
+
+  const circuitLabel = getCircuitLabel(temperature);
+
+  const groupName = prompt(
+    "Nome do grupo de caminhos:",
+    `Grupo ${circuitLabel}`,
+  );
+
+  if (!groupName) return;
+
+  const trimmedName = groupName.trim();
+
+  if (!trimmedName) return;
+
+  savedRouteGroups.push({
+    id: crypto.randomUUID(),
+    name: trimmedName,
+    temperature,
+    routeIds: [...selectedRouteIds.value],
+  });
+
+  selectedRouteIds.value = [];
+
+  saveRouteGroupsToStorage();
+
+  flowMessage.value =
+    `Grupo "${trimmedName}" criado com ${routes.length} caminho(s).`;
 }
 
 function renameSavedRoute(routeId: string) {
@@ -1585,6 +1859,28 @@ function loadRoutesFromStorage() {
     savedRoutes.push(...parsed);
   } catch (error) {
     console.error("Erro ao carregar caminhos guardados:", error);
+  }
+}
+
+function saveRouteGroupsToStorage() {
+  localStorage.setItem(
+    ROUTE_GROUPS_STORAGE_KEY,
+    JSON.stringify(savedRouteGroups),
+  );
+}
+
+function loadRouteGroupsFromStorage() {
+  const saved = localStorage.getItem(ROUTE_GROUPS_STORAGE_KEY);
+
+  if (!saved) return;
+
+  try {
+    const parsed = JSON.parse(saved) as SavedRouteGroup[];
+
+    savedRouteGroups.splice(0);
+    savedRouteGroups.push(...parsed);
+  } catch (error) {
+    console.error("Erro ao carregar grupos de caminhos:", error);
   }
 }
 
@@ -1940,6 +2236,16 @@ function getCircuitLabel(circuit: PipeCircuit) {
   };
 
   return labels[circuit];
+}
+
+function getRoutesFromGroup(group: SavedRouteGroup) {
+  return savedRoutes.filter((route) =>
+    group.routeIds.includes(route.id),
+  );
+}
+
+function getRouteNamesFromGroup(group: SavedRouteGroup) {
+  return getRoutesFromGroup(group).map((route) => route.name);
 }
 
 function getNextRouteNumberForCircuit(circuit: PipeCircuit) {
@@ -2776,7 +3082,41 @@ function chunk<T>(items: T[], size: number) {
   font-size: 0.72rem;
 }
 
-.saved-route-item > div {
+.saved-route-item--group {
+  align-items: flex-start;
+}
+
+.saved-route-group-info {
+  display: grid;
+  gap: 4px;
+}
+
+.saved-route-group-count {
+  margin: 0;
+  color: #b8c9d3;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.saved-route-group-list {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  color: #dbe9f1;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.saved-route-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.saved-route-select input {
+  cursor: pointer;
+}
+
+.saved-route-item > div:last-child {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
