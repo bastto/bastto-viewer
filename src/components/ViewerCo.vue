@@ -284,20 +284,27 @@
   <span>{{ route.name }}</span>
 
   <div>
-    <button
-      type="button"
-      @click="applySavedRoute(route)"
-    >
-      Aplicar
-    </button>
+  <button
+    type="button"
+    @click="applySavedRoute(route)"
+  >
+    Aplicar
+  </button>
 
-    <button
-      type="button"
-      @click="deleteSavedRoute(route.id)"
-    >
-      Apagar
-    </button>
-  </div>
+  <button
+    type="button"
+    @click="reverseSavedRoute(route.id)"
+  >
+    Inverter
+  </button>
+
+  <button
+    type="button"
+    @click="deleteSavedRoute(route.id)"
+  >
+    Apagar
+  </button>
+</div>
 </div>
 </div>
 
@@ -1203,6 +1210,31 @@ async function applySavedRoute(route: SavedRoute) {
 
   flowMessage.value =
     `Caminho ${route.name} aplicado.`;
+}
+
+async function reverseSavedRoute(routeId: string) {
+  const route = savedRoutes.find(
+    (savedRoute) => savedRoute.id === routeId,
+  );
+
+  if (!route) return;
+
+  const reversedPath = [...route.path].reverse();
+
+  route.path.splice(
+    0,
+    route.path.length,
+    ...reversedPath,
+  );
+
+  saveRoutesToStorage();
+
+  if (loadedModels.size) {
+    await applySavedRoute(route);
+  }
+
+  flowMessage.value =
+    `Sentido do caminho ${route.name} invertido.`;
 }
 
 async function applyAllSavedRoutes() {
