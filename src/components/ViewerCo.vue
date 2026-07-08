@@ -108,7 +108,7 @@
     <div class="flow-panel__header">
       <div>
         <p class="flow-panel__eyebrow">Fluxo de agua</p>
-        <h2>Tubos quente/frio</h2>
+        <h2>Circuitos hidráulicos</h2>
       </div>
 
       <span :class="['flow-status', isFlowing ? 'flow-status--on' : '']">
@@ -128,9 +128,21 @@
       <p class="selection-count">Selecionados: {{ selectedCount }}</p>
 
       <div class="flow-actions">
-  <button type="button" @click="assignSelectedPipes('hot')">Marcar quente</button>
-  <button type="button" @click="assignSelectedPipes('cold')">Marcar fria</button>
-  <button type="button" @click="clearManualAssignments">Limpar marcas</button>
+  <button type="button" @click="assignSelectedPipes('supply1')">Avanço 1</button>
+  <button type="button" @click="assignSelectedPipes('supply2')">Avanço 2</button>
+  <button type="button" @click="assignSelectedPipes('supply3')">Avanço 3</button>
+</div>
+
+<div class="flow-actions flow-actions--secondary">
+  <button type="button" @click="assignSelectedPipes('return1')">Retorno 1</button>
+  <button type="button" @click="assignSelectedPipes('return2')">Retorno 2</button>
+  <button type="button" @click="assignSelectedPipes('return3')">Retorno 3</button>
+</div>
+
+<div class="flow-actions flow-actions--single">
+  <button type="button" @click="clearManualAssignments">
+    Limpar marcas
+  </button>
 </div>
 
 <div class="flow-actions flow-actions--secondary">
@@ -140,8 +152,13 @@
 </div>
 
 <div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="createAutoRoute('hot')">Caminho quente</button>
-  <button type="button" @click="createAutoRoute('cold')">Caminho fria</button>
+  <button type="button" @click="createAutoRoute('supply1')">
+  Caminho avanço
+</button>
+
+<button type="button" @click="createAutoRoute('return1')">
+  Caminho retorno
+</button>
   <button type="button" @click="clearConnections">Limpar caminho</button>
 </div>
 
@@ -175,27 +192,51 @@
       </label>
 
       <dl class="flow-stats">
-        <div>
-          <dt>Quente</dt>
-          <dd>{{ pipeStats.hot }}</dd>
-        </div>
-        <div>
-          <dt>Fria</dt>
-          <dd>{{ pipeStats.cold }}</dd>
-        </div>
-        <div>
-          <dt>Total</dt>
-          <dd>{{ pipeStats.total }}</dd>
-        </div>
-        <div>
-          <dt>Ligacoes</dt>
-          <dd>{{ flowConnections.length }}</dd>
-        </div>
-        <div>
-          <dt>Bloqueados</dt>
-          <dd>{{ blockedCount }}</dd>
-        </div>
-      </dl>
+  <div>
+    <dt>Av. 1</dt>
+    <dd>{{ pipeStats.supply1 }}</dd>
+  </div>
+
+  <div>
+    <dt>Av. 2</dt>
+    <dd>{{ pipeStats.supply2 }}</dd>
+  </div>
+
+  <div>
+    <dt>Av. 3</dt>
+    <dd>{{ pipeStats.supply3 }}</dd>
+  </div>
+
+  <div>
+    <dt>Ret. 1</dt>
+    <dd>{{ pipeStats.return1 }}</dd>
+  </div>
+
+  <div>
+    <dt>Ret. 2</dt>
+    <dd>{{ pipeStats.return2 }}</dd>
+  </div>
+
+  <div>
+    <dt>Ret. 3</dt>
+    <dd>{{ pipeStats.return3 }}</dd>
+  </div>
+
+  <div>
+    <dt>Total</dt>
+    <dd>{{ pipeStats.total }}</dd>
+  </div>
+
+  <div>
+    <dt>Lig.</dt>
+    <dd>{{ flowConnections.length }}</dd>
+  </div>
+
+  <div>
+    <dt>Bloq.</dt>
+    <dd>{{ blockedCount }}</dd>
+  </div>
+</dl>
 
       <p class="flow-note">{{ flowMessage }}</p>
     </div>
@@ -223,7 +264,13 @@ import * as BUI from "@thatopen/ui";
 import * as BUIC from "@thatopen/ui-obc";
 import * as OBCF from "@thatopen/components-front";
 
-type PipeTemperature = "hot" | "cold";
+type PipeCircuit =
+  | "supply1"
+  | "supply2"
+  | "supply3"
+  | "return1"
+  | "return2"
+  | "return3";
 type SelectionMap = Map<string, Set<number>>;
 type MepElementType =
   | "pipe"
@@ -271,7 +318,7 @@ type FlowNode = {
 type FlowConnection = {
   from: FlowNode;
   to: FlowNode;
-  temperature: PipeTemperature;
+  temperature: PipeCircuit;
 };
 
 type StaticFlowObject = {
@@ -297,14 +344,28 @@ const isCentralSimulationRunning = ref(false);
 const loadingProgress = ref(0);
 const loadingFileName = ref("");
 const flowSpeed = ref(1);
-const flowMessage = ref("Seleciona tubos no modelo e marca-os como quente ou fria.");
+const flowMessage = ref("Seleciona tubos no modelo e atribui um circuito.");
 const selectedCount = ref(0);
 const isElementPanelMinimized = ref(true);
 const isFlowControlsPanelMinimized = ref(true);
 const routeStartLabel = ref("nenhum");
 const routeEndLabel = ref("nenhum");
 const blockedCount = ref(0);
-const pipeStats = reactive({ hot: 0, cold: 0, total: 0 });
+const pipeStats = reactive({
+  supply: 0,
+  return: 0,
+
+  supply1: 0,
+  supply2: 0,
+  supply3: 0,
+
+  return1: 0,
+  return2: 0,
+  return3: 0,
+
+  total: 0,
+});
+
 const MEP_ELEMENTS_STORAGE_KEY = "bastto-viewer-mep-elements";
 
 let world: any;
@@ -324,24 +385,58 @@ const mepElements = reactive<Record<string, MepElement>>({});
 let routeStart: FlowNode | null = null;
 let routeEnd: FlowNode | null = null;
 const blockedPipes: SelectionMap = new Map();
-const manualAssignments: Record<PipeTemperature, SelectionMap> = {
-  hot: new Map(),
-  cold: new Map(),
+const manualAssignments: Record<PipeCircuit, SelectionMap> = {
+  supply1: new Map(),
+  supply2: new Map(),
+  supply3: new Map(),
+  return1: new Map(),
+  return2: new Map(),
+  return3: new Map(),
 };
 
-const hotMaterial = new THREE.MeshBasicMaterial({
-  color: 0xff3b30,
-  transparent: true,
-  opacity: 0.9,
-  depthTest: false,
-});
+const circuitMaterials = {
+  supply1: new THREE.MeshBasicMaterial({
+    color: 0xff0000,
+    transparent: true,
+    opacity: 0.9,
+    depthTest: false,
+  }),
 
-const coldMaterial = new THREE.MeshBasicMaterial({
-  color: 0x1e88ff,
-  transparent: true,
-  opacity: 0.9,
-  depthTest: false,
-});
+  supply2: new THREE.MeshBasicMaterial({
+    color: 0xff5252,
+    transparent: true,
+    opacity: 0.9,
+    depthTest: false,
+  }),
+
+  supply3: new THREE.MeshBasicMaterial({
+    color: 0xff8a80,
+    transparent: true,
+    opacity: 0.9,
+    depthTest: false,
+  }),
+
+  return1: new THREE.MeshBasicMaterial({
+    color: 0xff8c00,
+    transparent: true,
+    opacity: 0.9,
+    depthTest: false,
+  }),
+
+  return2: new THREE.MeshBasicMaterial({
+    color: 0xffa726,
+    transparent: true,
+    opacity: 0.9,
+    depthTest: false,
+  }),
+
+  return3: new THREE.MeshBasicMaterial({
+    color: 0xffc107,
+    transparent: true,
+    opacity: 0.9,
+    depthTest: false,
+  }),
+};
 
 onMounted(async () => {
   if (!containerRef.value) return;
@@ -544,10 +639,9 @@ async function analyseLoadedModels() {
       await analyseModelPipes(model);
     }
 
-    isFlowing.value = pipeStats.total > 0;
-    flowMessage.value = pipeStats.total
-      ? `Animacao pronta: ${pipeStats.total} tubos encontrados.`
-      : "Nao encontrei tubos neste modelo.";
+    isFlowing.value = false;
+    flowMessage.value =
+  "Modelo carregado. Define manualmente os circuitos de avanço e retorno.";
     await fragmentManager.core.update(true);
   } catch (error) {
     console.error("Pipe analysis failed:", error);
@@ -578,52 +672,68 @@ async function analyseModelPipes(model: FRAGS.FragmentsModel) {
     });
     const boxes = await model.getBoxes(ids);
 
-    const hotIds: number[] = [];
-    const coldIds: number[] = [];
+    const supplyIds: number[] = [];
+const returnIds: number[] = [];
 
-    ids.forEach((id, itemIndex) => {
-      const temperature = classifyPipe(data[itemIndex]);
-      if (temperature === "hot") hotIds.push(id);
-      else coldIds.push(id);
+ids.forEach((id, itemIndex) => {
+  const temperature = classifyPipe(data[itemIndex]);
 
-      const box = boxes[itemIndex];
-      if (box) addPipeParticles(box, temperature);
-    });
+  if (temperature === "supply1") {
+    supplyIds.push(id);
+  } else {
+    returnIds.push(id);
+  }
 
-    if (hotIds.length) await model.highlight(hotIds, createHighlight(0xff3b30, "hot-water"));
-    if (coldIds.length) await model.highlight(coldIds, createHighlight(0x1e88ff, "cold-water"));
+  const box = boxes[itemIndex];
 
-    pipeStats.hot += hotIds.length;
-    pipeStats.cold += coldIds.length;
+  if (box) {
+    addPipeParticles(box, temperature);
+  }
+});
+
+    if (supplyIds.length)
+  await model.highlight(
+    supplyIds,
+    createHighlight(0xff3b30, "supply1")
+  );
+
+if (returnIds.length)
+  await model.highlight(
+    returnIds,
+    createHighlight(0xffc107, "return1")
+  );
+
+    pipeStats.supply += supplyIds.length;
+pipeStats.return += returnIds.length;
     pipeStats.total += ids.length;
     loadingProgress.value = Math.round(((index + 1) / chunks.length) * 100);
   }
 }
 
-async function assignSelectedPipes(temperature: PipeTemperature) {
+async function assignSelectedPipes(circuit: PipeCircuit) {
   if (!selectedCount.value) {
     flowMessage.value = "Seleciona primeiro um ou mais tubos no modelo.";
     return;
   }
 
-  const opposite = temperature === "hot" ? "cold" : "hot";
-
   for (const [modelId, ids] of selectedItems) {
-    const targetSet = getAssignmentSet(temperature, modelId);
-    const oppositeSet = getAssignmentSet(opposite, modelId);
+  const targetSet = getAssignmentSet(circuit, modelId);
 
-    for (const id of ids) {
-      targetSet.add(id);
-      oppositeSet.delete(id);
-    }
+  for (const id of ids) {
+
+    // remove o tubo de todos os outros circuitos
+    Object.values(manualAssignments).forEach((setMap) => {
+      setMap.get(modelId)?.delete(id);
+    });
+
+    targetSet.add(id);
   }
+}
 
   updateManualStats();
   await rebuildManualFlowLayer();
   flowMessage.value =
-    temperature === "hot"
-      ? `${selectedCount.value} elemento(s) marcados como agua quente.`
-      : `${selectedCount.value} elemento(s) marcados como agua fria.`;
+  `${selectedCount.value} elemento(s) marcados como ${circuit}.`;
 }
 
 async function rebuildManualFlowLayer() {
@@ -637,8 +747,13 @@ async function rebuildManualFlowLayer() {
     return;
   }
 
-  await addAssignmentsToScene("cold");
-  await addAssignmentsToScene("hot");
+  await addAssignmentsToScene("supply1");
+await addAssignmentsToScene("supply2");
+await addAssignmentsToScene("supply3");
+
+await addAssignmentsToScene("return1");
+await addAssignmentsToScene("return2");
+await addAssignmentsToScene("return3");
 
   updateManualStats();
 
@@ -647,16 +762,28 @@ async function rebuildManualFlowLayer() {
   await fragmentManager.core.update(true);
 }
 
-async function addAssignmentsToScene(temperature: PipeTemperature) {
+async function addAssignmentsToScene(temperature: PipeCircuit) {
   for (const [modelId, idsSet] of manualAssignments[temperature]) {
     const model = loadedModels.get(modelId);
     const ids = [...idsSet];
     if (!model || !ids.length) continue;
 
-    await model.highlight(
-      ids,
-      createHighlight(temperature === "hot" ? 0xff3b30 : 0x1e88ff, `${temperature}-water`),
-    );
+    const circuitColors = {
+  supply1: 0xff0000,
+  supply2: 0xff5252,
+  supply3: 0xff8a80,
+  return1: 0xff8c00,
+  return2: 0xffa726,
+  return3: 0xffc107,
+};
+
+await model.highlight(
+  ids,
+  createHighlight(
+    circuitColors[temperature],
+    temperature,
+  ),
+);
 
     const boxes = await model.getBoxes(ids);
     for (let index = 0; index < boxes.length; index++) {
@@ -680,14 +807,23 @@ async function clearManualAssignments() {
 
   for (const [modelId, model] of loadedModels) {
     const ids = [
-      ...getAssignmentSet("hot", modelId),
-      ...getAssignmentSet("cold", modelId),
-    ];
+  ...getAssignmentSet("supply1", modelId),
+  ...getAssignmentSet("supply2", modelId),
+  ...getAssignmentSet("supply3", modelId),
+  ...getAssignmentSet("return1", modelId),
+  ...getAssignmentSet("return2", modelId),
+  ...getAssignmentSet("return3", modelId),
+];
     if (ids.length) await model.resetHighlight(ids);
   }
 
-  manualAssignments.hot.clear();
-  manualAssignments.cold.clear();
+  manualAssignments.supply1.clear();
+manualAssignments.supply2.clear();
+manualAssignments.supply3.clear();
+
+manualAssignments.return1.clear();
+manualAssignments.return2.clear();
+manualAssignments.return3.clear();
   flowConnections.splice(0);
   routeWaypoints.splice(0);
   routeStart = null;
@@ -695,13 +831,19 @@ async function clearManualAssignments() {
   routeStartLabel.value = "nenhum";
   routeEndLabel.value = "nenhum";
   updateManualStats();
-  flowMessage.value = "Marcacoes removidas. Seleciona novos tubos para definir quente/fria.";
+  flowMessage.value =
+  "Marcações removidas. Seleciona novos tubos para definir um circuito.";
   await fragmentManager.core.update(true);
 }
 
 function resetAssignmentMaps() {
-  manualAssignments.hot.clear();
-  manualAssignments.cold.clear();
+  manualAssignments.supply1.clear();
+manualAssignments.supply2.clear();
+manualAssignments.supply3.clear();
+
+manualAssignments.return1.clear();
+manualAssignments.return2.clear();
+manualAssignments.return3.clear();
   flowConnections.splice(0);
   routeWaypoints.splice(0);
   routeStart = null;
@@ -731,7 +873,8 @@ function setRouteEnd() {
 
   routeEnd = node;
   routeEndLabel.value = formatNodeLabel(node);
-  flowMessage.value = "Fim definido. Agora calcula o caminho quente ou frio.";
+  flowMessage.value =
+  "Fim definido. Agora calcula o caminho de avanço ou retorno.";
 }
 
 function addRouteWaypoint() {
@@ -747,7 +890,7 @@ function addRouteWaypoint() {
   flowMessage.value = `Ponto de passagem adicionado. Total: ${routeWaypoints.length}.`;
 }
 
-async function createAutoRoute(temperature: PipeTemperature) {
+async function createAutoRoute(temperature: PipeCircuit) {
   if (!routeStart || !routeEnd) {
     flowMessage.value = "Define primeiro o inicio e o fim do caminho.";
     return;
@@ -791,7 +934,8 @@ async function createAutoRoute(temperature: PipeTemperature) {
     assignPathToTemperature(path, temperature);
     updateManualStats();
     await rebuildManualFlowLayer();
-    flowMessage.value = `Caminho ${temperature === "hot" ? "quente" : "frio"} criado com ${path.length} tubos.`;
+    flowMessage.value =
+  `Caminho ${temperature} criado com ${path.length} tubos.`;
   } catch (error) {
     console.error("Automatic route failed:", error);
     flowMessage.value = "Nao foi possivel calcular o caminho automatico.";
@@ -800,12 +944,17 @@ async function createAutoRoute(temperature: PipeTemperature) {
   }
 }
 
-function assignPathToTemperature(path: FlowNode[], temperature: PipeTemperature) {
-  const opposite = temperature === "hot" ? "cold" : "hot";
-
+function assignPathToTemperature(
+  path: FlowNode[],
+  temperature: PipeCircuit,
+) {
   for (const node of path) {
+
+    Object.values(manualAssignments).forEach((setMap) => {
+      setMap.get(node.modelId)?.delete(node.localId);
+    });
+
     getAssignmentSet(temperature, node.modelId).add(node.localId);
-    getAssignmentSet(opposite, node.modelId).delete(node.localId);
   }
 }
 
@@ -1101,8 +1250,13 @@ async function deleteSelectedElementDefinitions() {
         blockedSet.delete(localId);
       }
 
-      getAssignmentSet("hot", modelId).delete(localId);
-      getAssignmentSet("cold", modelId).delete(localId);
+      getAssignmentSet("supply1", modelId).delete(localId);
+getAssignmentSet("supply2", modelId).delete(localId);
+getAssignmentSet("supply3", modelId).delete(localId);
+
+getAssignmentSet("return1", modelId).delete(localId);
+getAssignmentSet("return2", modelId).delete(localId);
+getAssignmentSet("return3", modelId).delete(localId);
 
       deletedCount++;
     }
@@ -1292,9 +1446,22 @@ function formatNodeLabel(node: FlowNode) {
   return `${node.modelId} #${node.localId}`;
 }
 
-function getNodeTemperature(node: FlowNode): PipeTemperature | null {
-  if (getAssignmentSet("hot", node.modelId).has(node.localId)) return "hot";
-  if (getAssignmentSet("cold", node.modelId).has(node.localId)) return "cold";
+function getNodeTemperature(node: FlowNode): PipeCircuit | null {
+  const circuits: PipeCircuit[] = [
+    "supply1",
+    "supply2",
+    "supply3",
+    "return1",
+    "return2",
+    "return3",
+  ];
+
+  for (const circuit of circuits) {
+    if (getAssignmentSet(circuit, node.modelId).has(node.localId)) {
+      return circuit;
+    }
+  }
+
   return null;
 }
 
@@ -1310,14 +1477,14 @@ async function getNodeCenter(node: FlowNode) {
   return center;
 }
 
-function addConnectionParticles(start: any, end: any, temperature: PipeTemperature) {
+function addConnectionParticles(start: any, end: any, temperature: PipeCircuit) {
   const direction = end.clone().sub(start);
   const length = Math.max(direction.length(), 0.1);
   direction.normalize();
 
   const radius = 0.055;
   const geometry = new THREE.ConeGeometry(radius * 1.3, radius * 2.8, 10);
-  const material = temperature === "hot" ? hotMaterial : coldMaterial;
+  const material = circuitMaterials[temperature];
   const particleCount = Math.max(2, Math.round(length / 0.65));
 
   for (let i = 0; i < particleCount; i++) {
@@ -1337,10 +1504,17 @@ function addConnectionParticles(start: any, end: any, temperature: PipeTemperatu
   }
 }
 
-function addConnectionLine(start: any, end: any, temperature: PipeTemperature) {
+function addConnectionLine(start: any, end: any, temperature: PipeCircuit) {
   const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
   const material = new THREE.LineBasicMaterial({
-    color: temperature === "hot" ? 0xff3b30 : 0x1e88ff,
+  color: {
+    supply1: 0xff0000,
+    supply2: 0xff5252,
+    supply3: 0xff8a80,
+    return1: 0xff8c00,
+    return2: 0xffa726,
+    return3: 0xffc107,
+  }[temperature],
     transparent: true,
     opacity: 0.35,
     depthTest: false,
@@ -1351,7 +1525,7 @@ function addConnectionLine(start: any, end: any, temperature: PipeTemperature) {
   staticFlowObjects.push({ object: line });
 }
 
-function classifyPipe(data: FRAGS.ItemData | undefined): PipeTemperature {
+function classifyPipe(data: FRAGS.ItemData | undefined): PipeCircuit {
   const text = flattenItemText(data).toLowerCase();
 
   const hotTerms = [
@@ -1360,27 +1534,12 @@ function classifyPipe(data: FRAGS.ItemData | undefined): PipeTemperature {
     "aqs",
     "acs",
     "dhw",
-    "domestic hot",
-    "heating water",
-    "heat",
-  ];
-
-  const coldTerms = [
-    "fria",
-    "frio",
-    "cold",
-    "afs",
-    "cws",
-    "chw",
-    "domestic cold",
-    "chilled water",
+    "heating",
   ];
 
   const hasHot = hotTerms.some((term) => text.includes(term));
-  const hasCold = coldTerms.some((term) => text.includes(term));
 
-  if (hasHot && !hasCold) return "hot";
-  return "cold";
+  return hasHot ? "supply1" : "return1";
 }
 
 function flattenItemText(value: unknown): string {
@@ -1403,12 +1562,13 @@ function createHighlight(color: number, customId: string): FRAGS.MaterialDefinit
     customId,
   };
 }
-
 function addPipeParticles(
   box: any,
-  temperature: PipeTemperature,
+  temperature: PipeCircuit,
   hints: PipeDirectionHints = {},
-) {
+)
+
+ {
   const size = new THREE.Vector3();
   const center = new THREE.Vector3();
 
@@ -1431,7 +1591,7 @@ function addPipeParticles(
   const radius = 0.04;
   const geometry = new THREE.ConeGeometry(radius * 1.2, radius * 2.5, 8);
 
-  const material = temperature === "hot" ? hotMaterial : coldMaterial;
+  const material = circuitMaterials[temperature];
 
   const particleCount = Math.max(1, Math.round(length / 0.4));
 
@@ -1576,7 +1736,7 @@ function hasDefinedPumpOrHeatPump() {
 async function startCentralSimulation() {
   if (!countAssignments()) {
     flowMessage.value =
-      "Não é possível simular: marca primeiro tubos como quente ou fria.";
+  "Não é possível simular: marca primeiro tubos num circuito.";
     return;
   }
 
@@ -1682,8 +1842,18 @@ function clearFlowVisuals() {
 
 function clearFlowLayer() {
   clearFlowVisuals();
-  pipeStats.hot = 0;
-  pipeStats.cold = 0;
+
+  pipeStats.supply = 0;
+  pipeStats.return = 0;
+
+  pipeStats.supply1 = 0;
+  pipeStats.supply2 = 0;
+  pipeStats.supply3 = 0;
+
+  pipeStats.return1 = 0;
+  pipeStats.return2 = 0;
+  pipeStats.return3 = 0;
+
   pipeStats.total = 0;
 }
 
@@ -1729,30 +1899,55 @@ function toNumberArray(value: unknown): number[] {
   return Number.isFinite(number) ? [number] : [];
 }
 
-function getAssignmentSet(temperature: PipeTemperature, modelId: string) {
-  let ids = manualAssignments[temperature].get(modelId);
+function getAssignmentSet(circuit: PipeCircuit, modelId: string) {
+  let ids = manualAssignments[circuit].get(modelId);
   if (!ids) {
     ids = new Set<number>();
-    manualAssignments[temperature].set(modelId, ids);
+    manualAssignments[circuit].set(modelId, ids);
   }
   return ids;
 }
 
 function updateManualStats() {
-  pipeStats.hot = countAssignmentType("hot");
-  pipeStats.cold = countAssignmentType("cold");
-  pipeStats.total = pipeStats.hot + pipeStats.cold;
+  pipeStats.supply1 = countAssignmentType("supply1");
+  pipeStats.supply2 = countAssignmentType("supply2");
+  pipeStats.supply3 = countAssignmentType("supply3");
+
+  pipeStats.return1 = countAssignmentType("return1");
+  pipeStats.return2 = countAssignmentType("return2");
+  pipeStats.return3 = countAssignmentType("return3");
+
+  pipeStats.supply =
+    pipeStats.supply1 +
+    pipeStats.supply2 +
+    pipeStats.supply3;
+
+  pipeStats.return =
+    pipeStats.return1 +
+    pipeStats.return2 +
+    pipeStats.return3;
+
+  pipeStats.total =
+    pipeStats.supply +
+    pipeStats.return;
 }
 
-function countAssignmentType(temperature: PipeTemperature) {
-  return [...manualAssignments[temperature].values()].reduce(
+function countAssignmentType(circuit: PipeCircuit) {
+  return [...manualAssignments[circuit].values()].reduce(
     (total, ids) => total + ids.size,
     0,
   );
 }
 
 function countAssignments() {
-  return countAssignmentType("hot") + countAssignmentType("cold");
+  return (
+    countAssignmentType("supply1") +
+    countAssignmentType("supply2") +
+    countAssignmentType("supply3") +
+    countAssignmentType("return1") +
+    countAssignmentType("return2") +
+    countAssignmentType("return3")
+  );
 }
 
 function chunk<T>(items: T[], size: number) {
