@@ -126,7 +126,11 @@
 
     <div class="flow-panel__content">
       <p class="selection-count">Selecionados: {{ selectedCount }}</p>
-
+      
+      <div class="flow-section-title">
+  Circuitos
+</div>
+      
       <div class="flow-actions">
   <button type="button" @click="assignSelectedPipes('supply1')">Avanço 1</button>
   <button type="button" @click="assignSelectedPipes('supply2')">Avanço 2</button>
@@ -143,6 +147,10 @@
   <button type="button" @click="clearManualAssignments">
     Limpar marcas
   </button>
+</div>
+
+<div class="flow-section-title">
+  Caminhos
 </div>
 
 <div class="flow-actions flow-actions--secondary">
@@ -187,6 +195,54 @@
   <button type="button" @click="clearConnections">
     Limpar caminho
   </button>
+</div>
+
+<div v-if="hasLoadedModel && savedRoutes.length" class="saved-routes">
+  <p class="connection-note">
+    Caminhos guardados: {{ savedRoutes.length }}
+  </p>
+
+  <div
+  v-for="route in savedRoutes"
+  :key="route.id"
+  class="saved-route-item"
+>
+  <span>{{ route.name }}</span>
+
+  <div>
+  <button
+    type="button"
+    @click="applySavedRoute(route)"
+  >
+    Aplicar
+  </button>
+
+  <button
+    type="button"
+    @click="reverseSavedRoute(route.id)"
+  >
+    Inverter
+  </button>
+
+  <button
+    type="button"
+    @click="renameSavedRoute(route.id)"
+  >
+    Renomear
+  </button>
+
+  <button
+    type="button"
+    @click="deleteSavedRoute(route.id)"
+  >
+    Apagar
+  </button>
+</div>
+</div>
+</div>
+
+<div class="flow-section-title">
+  Controlo
 </div>
 
 <div class="flow-actions flow-actions--secondary">
@@ -270,43 +326,6 @@
     <dd>{{ blockedCount }}</dd>
   </div>
 </dl>
-
-<div v-if="savedRoutes.length" class="saved-routes">
-  <p class="connection-note">
-    Caminhos guardados: {{ savedRoutes.length }}
-  </p>
-
-  <div
-  v-for="route in savedRoutes"
-  :key="route.id"
-  class="saved-route-item"
->
-  <span>{{ route.name }}</span>
-
-  <div>
-  <button
-    type="button"
-    @click="applySavedRoute(route)"
-  >
-    Aplicar
-  </button>
-
-  <button
-    type="button"
-    @click="reverseSavedRoute(route.id)"
-  >
-    Inverter
-  </button>
-
-  <button
-    type="button"
-    @click="deleteSavedRoute(route.id)"
-  >
-    Apagar
-  </button>
-</div>
-</div>
-</div>
 
       <p class="flow-note">{{ flowMessage }}</p>
     </div>
@@ -428,6 +447,7 @@ const loadingFileName = ref("");
 const flowSpeed = ref(1);
 const flowMessage = ref("Seleciona tubos no modelo e atribui um circuito.");
 const selectedCount = ref(0);
+const hasLoadedModel = ref(false);
 const isElementPanelMinimized = ref(true);
 const isFlowControlsPanelMinimized = ref(true);
 const routeStartLabel = ref("nenhum");
@@ -580,6 +600,8 @@ onMounted(async () => {
   model.useCamera(world?.camera.three as any);
   world?.scene.three.add(model.object);
   loadedModels.set(model.modelId, model);
+
+  hasLoadedModel.value = true;
 
   await fragmentManager.core.update(true);
 
@@ -1236,6 +1258,32 @@ async function reverseSavedRoute(routeId: string) {
 
   flowMessage.value =
     `Sentido do caminho ${route.name} invertido.`;
+}
+
+function renameSavedRoute(routeId: string) {
+  const route = savedRoutes.find(
+    (savedRoute) => savedRoute.id === routeId,
+  );
+
+  if (!route) return;
+
+  const newName = prompt(
+    "Novo nome do caminho:",
+    route.name,
+  );
+
+  if (!newName) return;
+
+  const trimmedName = newName.trim();
+
+  if (!trimmedName) return;
+
+  route.name = trimmedName;
+
+  saveRoutesToStorage();
+
+  flowMessage.value =
+    `Caminho renomeado para "${trimmedName}".`;
 }
 
 async function applyAllSavedRoutes() {
@@ -2603,6 +2651,17 @@ function chunk<T>(items: T[], size: number) {
   color: white;
 }
 
+.flow-section-title {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  color: #8fd3ff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .flow-actions {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2712,8 +2771,16 @@ function chunk<T>(items: T[], size: number) {
 .saved-route-item button {
   border: 0;
   border-radius: 4px;
-  padding: 4px 8px;
+  padding: 4px 6px;
   cursor: pointer;
+  font-size: 0.72rem;
+}
+
+.saved-route-item > div {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 @media (max-width: 820px) {
