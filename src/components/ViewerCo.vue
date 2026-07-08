@@ -195,12 +195,18 @@
   <button type="button" @click="clearBlockedPipes">Limpar bloqueios</button>
 </div>
 
-
 <div class="flow-actions flow-actions--secondary">
   <button type="button" @click="toggleFlow">
     {{ isFlowing ? 'Pausar' : 'Animar' }}
   </button>
-  <button type="button" @click="rebuildManualFlowLayer">Atualizar</button>
+
+  <button type="button" @click="rebuildManualFlowLayer">
+    Atualizar
+  </button>
+
+  <button type="button" @click="reverseSelectedPipesDirection">
+    Inverter sentido
+  </button>
 </div>
 
 <div class="flow-actions flow-actions--single">
@@ -379,6 +385,11 @@ type SavedRoute = {
   path: FlowNode[];
 };
 
+type SavedReversedDirection = {
+  modelId: string;
+  localIds: number[];
+};
+
 type FlowConnection = {
   from: FlowNode;
   to: FlowNode;
@@ -432,6 +443,8 @@ const pipeStats = reactive({
 
 const MEP_ELEMENTS_STORAGE_KEY = "bastto-viewer-mep-elements";
 const ROUTES_STORAGE_KEY = "bastto-viewer-routes";
+const REVERSED_DIRECTIONS_STORAGE_KEY =
+  "bastto-viewer-reversed-directions";
 
 let world: any;
 let serializer: FRAGS.IfcImporter;
@@ -459,6 +472,7 @@ const manualAssignments: Record<PipeCircuit, SelectionMap> = {
   return2: new Map(),
   return3: new Map(),
 };
+const reversedPipeDirections: SelectionMap = new Map();
 
 const circuitMaterials = {
   supply1: new THREE.MeshBasicMaterial({
@@ -570,9 +584,9 @@ onMounted(async () => {
   }
 });
 
-
   loadMepElementsFromStorage();
-  loadRoutesFromStorage();
+loadRoutesFromStorage();
+loadReversedDirectionsFromStorage();
 
   createBimPanel(components, viewport);
   animateFlow();
@@ -888,7 +902,13 @@ if (isPipeBlocked(modelId, localId)) {
 }
 
 const hints = await getPipeDirectionHints({ modelId, localId });
-addPipeParticles(box, temperature, hints);
+
+addPipeParticles(
+  box,
+  temperature,
+  hints,
+  { modelId, localId },
+);
     }
   }
 }
@@ -915,6 +935,10 @@ manualAssignments.supply3.clear();
 manualAssignments.return1.clear();
 manualAssignments.return2.clear();
 manualAssignments.return3.clear();
+
+reversedPipeDirections.clear();
+saveReversedDirectionsToStorage();
+
   flowConnections.splice(0);
   routeWaypoints.splice(0);
   routeStart = null;
@@ -1098,6 +1122,12 @@ async function deleteSavedRoute(routeId: string) {
     getAssignmentSet("return2", node.modelId).delete(node.localId);
     getAssignmentSet("return3", node.modelId).delete(node.localId);
 
+    reversedPipeDirections.get(node.modelId)?.delete(node.localId);
+
+if (reversedPipeDirections.get(node.modelId)?.size === 0) {
+  reversedPipeDirections.delete(node.modelId);
+}
+
     if (!idsByModel.has(node.modelId)) {
       idsByModel.set(node.modelId, []);
     }
@@ -1116,6 +1146,8 @@ async function deleteSavedRoute(routeId: string) {
   flowConnections.splice(0);
 
   saveRoutesToStorage();
+
+  saveReversedDirectionsToStorage();
 
   updateManualStats();
 
@@ -1456,6 +1488,43 @@ function loadMepElementsFromStorage() {
   }
 }
 
+function saveReversedDirectionsToStorage() {
+  const data: SavedReversedDirection[] = [];
+
+  for (const [modelId, ids] of reversedPipeDirections) {
+    data.push({
+      modelId,
+      localIds: [...ids],
+    });
+  }
+
+  localStorage.setItem(
+    REVERSED_DIRECTIONS_STORAGE_KEY,
+    JSON.stringify(data),
+  );
+}
+
+function loadReversedDirectionsFromStorage() {
+  const saved = localStorage.getItem(REVERSED_DIRECTIONS_STORAGE_KEY);
+
+  if (!saved) return;
+
+  try {
+    const parsed = JSON.parse(saved) as SavedReversedDirection[];
+
+    reversedPipeDirections.clear();
+
+    for (const item of parsed) {
+      reversedPipeDirections.set(
+        item.modelId,
+        new Set(item.localIds),
+      );
+    }
+  } catch (error) {
+    console.error("Erro ao carregar sentidos invertidos:", error);
+  }
+}
+
 function defineSelectedElementsAs(elementType: MepElementType) {
   if (!selectedCount.value) {
     flowMessage.value = "Seleciona primeiro um ou mais elementos no modelo.";
@@ -1505,13 +1574,11 @@ async function deleteSelectedElementDefinitions() {
         blockedSet.delete(localId);
       }
 
-      getAssignmentSet("supply1", modelId).delete(localId);
-getAssignmentSet("supply2", modelId).delete(localId);
-getAssignmentSet("supply3", modelId).delete(localId);
+      reversedPipeDirections.get(modelId)?.delete(localId);
 
-getAssignmentSet("return1", modelId).delete(localId);
-getAssignmentSet("return2", modelId).delete(localId);
-getAssignmentSet("return3", modelId).delete(localId);
+if (reversedPipeDirections.get(modelId)?.size === 0) {
+  reversedPipeDirections.delete(modelId);
+}
 
       deletedCount++;
     }
@@ -1524,6 +1591,7 @@ getAssignmentSet("return3", modelId).delete(localId);
   updateBlockedCount();
   updateManualStats();
   saveMepElementsToStorage();
+  saveReversedDirectionsToStorage();
 
   if (countAssignments() > 0 || flowConnections.length > 0) {
     await rebuildManualFlowLayer();
@@ -1643,6 +1711,42 @@ async function openSelectedValves() {
   await setSelectedValvesState("open");
 }
 
+async function reverseSelectedPipesDirection() {
+  if (!selectedCount.value) {
+    flowMessage.value = "Seleciona primeiro um ou mais tubos para inverter o sentido.";
+    return;
+  }
+
+  let changedCount = 0;
+
+  for (const [modelId, ids] of selectedItems) {
+    const reversedSet = getReversedDirectionSet(modelId);
+
+    for (const localId of ids) {
+      if (reversedSet.has(localId)) {
+        reversedSet.delete(localId);
+      } else {
+        reversedSet.add(localId);
+      }
+
+      changedCount++;
+    }
+
+    if (reversedSet.size === 0) {
+      reversedPipeDirections.delete(modelId);
+    }
+  }
+
+  saveReversedDirectionsToStorage();
+
+if (countAssignments() > 0 || flowConnections.length > 0) {
+  await rebuildManualFlowLayer();
+}
+
+flowMessage.value =
+  `${changedCount} tubo(s) com sentido invertido.`;
+}
+
 async function clearBlockedPipes() {
   blockedPipes.clear();
 
@@ -1733,6 +1837,7 @@ async function getNodeCenter(node: FlowNode) {
 }
 
 function addConnectionParticles(start: any, end: any, temperature: PipeCircuit) {
+
   const direction = end.clone().sub(start);
   const length = Math.max(direction.length(), 0.1);
   direction.normalize();
@@ -1761,6 +1866,7 @@ function addConnectionParticles(start: any, end: any, temperature: PipeCircuit) 
 
 function addConnectionLine(start: any, end: any, temperature: PipeCircuit) {
   const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+
   const material = new THREE.LineBasicMaterial({
   color: {
     supply1: 0xff0000,
@@ -1821,6 +1927,7 @@ function addPipeParticles(
   box: any,
   temperature: PipeCircuit,
   hints: PipeDirectionHints = {},
+  node?: FlowNode,
 )
 
  {
@@ -1839,9 +1946,15 @@ function addPipeParticles(
   endpointA.setComponent(axis, center.getComponent(axis) - length / 2);
   endpointB.setComponent(axis, center.getComponent(axis) + length / 2);
 
-  const { start, end } = choosePipeDirection(endpointA, endpointB, hints);
+  let { start, end } = choosePipeDirection(endpointA, endpointB, hints);
 
-  const direction = end.clone().sub(start).normalize();
+if (node && isPipeDirectionReversed(node.modelId, node.localId)) {
+  const originalStart = start;
+  start = end;
+  end = originalStart;
+}
+
+const direction = end.clone().sub(start).normalize();
 
   const radius = 0.04;
   const geometry = new THREE.ConeGeometry(radius * 1.2, radius * 2.5, 8);
@@ -2152,6 +2265,21 @@ function toNumberArray(value: unknown): number[] {
   }
   const number = Number(value);
   return Number.isFinite(number) ? [number] : [];
+}
+
+function getReversedDirectionSet(modelId: string) {
+  let ids = reversedPipeDirections.get(modelId);
+
+  if (!ids) {
+    ids = new Set<number>();
+    reversedPipeDirections.set(modelId, ids);
+  }
+
+  return ids;
+}
+
+function isPipeDirectionReversed(modelId: string, localId: number) {
+  return reversedPipeDirections.get(modelId)?.has(localId) ?? false;
 }
 
 function getAssignmentSet(circuit: PipeCircuit, modelId: string) {
