@@ -1093,14 +1093,15 @@ function saveCurrentRoute() {
     ...flowConnections.map((connection) => connection.to),
   ];
 
-  const routeNumber = savedRoutes.length + 1;
+  const circuitLabel = getCircuitLabel(temperature);
+const routeNumber = getNextRouteNumberForCircuit(temperature);
 
-  savedRoutes.push({
-    id: crypto.randomUUID(),
-    name: `Caminho ${temperature} ${routeNumber}`,
-    temperature,
-    path,
-  });
+savedRoutes.push({
+  id: crypto.randomUUID(),
+  name: `Caminho ${circuitLabel} - ${routeNumber}`,
+  temperature,
+  path,
+});
 
   saveRoutesToStorage();
 
@@ -1878,6 +1879,27 @@ function getFirstSelectedNode(): FlowNode | null {
 
 function formatNodeLabel(node: FlowNode) {
   return `${node.modelId} #${node.localId}`;
+}
+
+function getCircuitLabel(circuit: PipeCircuit) {
+  const labels: Record<PipeCircuit, string> = {
+    supply1: "avanço 1",
+    supply2: "avanço 2",
+    supply3: "avanço 3",
+    return1: "retorno 1",
+    return2: "retorno 2",
+    return3: "retorno 3",
+  };
+
+  return labels[circuit];
+}
+
+function getNextRouteNumberForCircuit(circuit: PipeCircuit) {
+  return (
+    savedRoutes.filter(
+      (route) => route.temperature === circuit,
+    ).length + 1
+  );
 }
 
 function getNodeTemperature(node: FlowNode): PipeCircuit | null {
