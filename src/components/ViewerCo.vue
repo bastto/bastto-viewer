@@ -1162,17 +1162,37 @@ if (reversedPipeDirections.get(node.modelId)?.size === 0) {
 }
 
 async function applySavedRoute(route: SavedRoute) {
+  const loadedModelIds = [...loadedModels.keys()];
+
+  if (!loadedModelIds.length) {
+    flowMessage.value = "Carrega primeiro o IFC antes de aplicar o caminho.";
+    return;
+  }
+
+  const fallbackModelId = loadedModelIds[0];
+
+  const adaptedPath = route.path.map((node) => {
+    if (loadedModels.has(node.modelId)) {
+      return node;
+    }
+
+    return {
+      modelId: fallbackModelId,
+      localId: node.localId,
+    };
+  });
+
   assignPathToTemperature(
-    route.path,
+    adaptedPath,
     route.temperature,
   );
 
   flowConnections.splice(0);
 
-  for (let index = 0; index < route.path.length - 1; index++) {
+  for (let index = 0; index < adaptedPath.length - 1; index++) {
     flowConnections.push({
-      from: route.path[index],
-      to: route.path[index + 1],
+      from: adaptedPath[index],
+      to: adaptedPath[index + 1],
       temperature: route.temperature,
     });
   }
@@ -1190,29 +1210,44 @@ async function applyAllSavedRoutes() {
     return;
   }
 
-  const routesToApply = savedRoutes.filter((route) =>
-    route.path.every((node) => loadedModels.has(node.modelId)),
-  );
+  const loadedModelIds = [...loadedModels.keys()];
 
-  if (!routesToApply.length) {
+  if (!loadedModelIds.length) {
     return;
   }
 
+  const fallbackModelId = loadedModelIds[0];
+
   flowConnections.splice(0);
 
-  for (const route of routesToApply) {
+  let appliedCount = 0;
+
+  for (const route of savedRoutes) {
+    const adaptedPath = route.path.map((node) => {
+      if (loadedModels.has(node.modelId)) {
+        return node;
+      }
+
+      return {
+        modelId: fallbackModelId,
+        localId: node.localId,
+      };
+    });
+
     assignPathToTemperature(
-      route.path,
+      adaptedPath,
       route.temperature,
     );
 
-    for (let index = 0; index < route.path.length - 1; index++) {
+    for (let index = 0; index < adaptedPath.length - 1; index++) {
       flowConnections.push({
-        from: route.path[index],
-        to: route.path[index + 1],
+        from: adaptedPath[index],
+        to: adaptedPath[index + 1],
         temperature: route.temperature,
       });
     }
+
+    appliedCount++;
   }
 
   updateManualStats();
@@ -1220,7 +1255,7 @@ async function applyAllSavedRoutes() {
   await rebuildManualFlowLayer();
 
   flowMessage.value =
-    `${routesToApply.length} caminho(s) guardado(s) aplicado(s).`;
+    `${appliedCount} caminho(s) guardado(s) aplicado(s).`;
 }
 
 async function clearConnections() {
@@ -1573,6 +1608,14 @@ async function deleteSelectedElementDefinitions() {
       if (blockedSet?.has(localId)) {
         blockedSet.delete(localId);
       }
+
+      getAssignmentSet("supply1", modelId).delete(localId);
+getAssignmentSet("supply2", modelId).delete(localId);
+getAssignmentSet("supply3", modelId).delete(localId);
+
+getAssignmentSet("return1", modelId).delete(localId);
+getAssignmentSet("return2", modelId).delete(localId);
+getAssignmentSet("return3", modelId).delete(localId);
 
       reversedPipeDirections.get(modelId)?.delete(localId);
 
@@ -2279,7 +2322,17 @@ function getReversedDirectionSet(modelId: string) {
 }
 
 function isPipeDirectionReversed(modelId: string, localId: number) {
-  return reversedPipeDirections.get(modelId)?.has(localId) ?? false;
+  if (reversedPipeDirections.get(modelId)?.has(localId)) {
+    return true;
+  }
+
+  for (const ids of reversedPipeDirections.values()) {
+    if (ids.has(localId)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function getAssignmentSet(circuit: PipeCircuit, modelId: string) {
