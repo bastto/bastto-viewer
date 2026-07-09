@@ -20,9 +20,10 @@
 
     <div class="control-panels">
       <section
-        :class="['flow-panel', isElementPanelMinimized ? 'flow-panel--minimized' : '']"
-        aria-label="Element classification controls"
-      >
+  class="flow-panel"
+  :class="{ 'flow-panel--minimized': isElementPanelMinimized }"
+  aria-label="Element classification controls"
+>
         <div class="flow-panel__header">
           <div>
             <p class="flow-panel__eyebrow">Elementos da central</p>
@@ -115,6 +116,59 @@
               <dd>{{ countMepElementsByType('reservoirWithoutResistance') }}</dd>
             </div>
           </dl>
+          <div class="flow-section-title">
+  Realçar elementos
+</div>
+
+<div class="element-highlight-list">
+  <div class="element-highlight-item">
+    <span>Tubos</span>
+
+    <button type="button" @click="highlightMepElementsByType('pipe')">
+      Mostrar
+    </button>
+  </div>
+
+  <div class="element-highlight-item">
+    <span>Válvulas</span>
+
+    <button type="button" @click="highlightMepElementsByType('isolationValve')">
+      Mostrar
+    </button>
+  </div>
+
+  <div class="element-highlight-item">
+    <span>Coletores</span>
+
+    <button type="button" @click="highlightMepElementsByType('collector')">
+      Mostrar
+    </button>
+  </div>
+
+  <div class="element-highlight-item">
+    <span>Boosters</span>
+
+    <button type="button" @click="highlightMepElementsByType('booster')">
+      Mostrar
+    </button>
+  </div>
+
+  <div class="element-highlight-item">
+    <span>Reserv. c/ resistência</span>
+
+    <button type="button" @click="highlightMepElementsByType('reservoirWithResistance')">
+      Mostrar
+    </button>
+  </div>
+
+  <div class="element-highlight-item">
+    <span>Reserv. s/ resistência</span>
+
+    <button type="button" @click="highlightMepElementsByType('reservoirWithoutResistance')">
+      Mostrar
+    </button>
+  </div>
+</div>
         </div>
       </section>
 
@@ -507,7 +561,7 @@
   >
     /src/assets/bastto-logo.svg
   </a>
-</template>
+  </template>
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, reactive, ref } from "vue";
@@ -614,6 +668,7 @@ const ifcInput = ref<HTMLInputElement | null>(null);
 const isLoading = ref(false);
 const isFlowing = ref(false);
 const isCentralSimulationRunning = ref(false);
+const isFlowManuallyPaused = ref(false);
 const loadingProgress = ref(0);
 const loadingFileName = ref("");
 const flowSpeed = ref(1);
@@ -668,6 +723,7 @@ const selectedRouteIds = ref<string[]>([]);
 let routeStart: FlowNode | null = null;
 let routeEnd: FlowNode | null = null;
 const blockedPipes: SelectionMap = new Map();
+const valveBlockedPipeLinks = new Map<string, FlowNode[]>();
 const manualAssignments: Record<PipeCircuit, SelectionMap> = {
   supply1: new Map(),
   supply2: new Map(),
@@ -677,6 +733,15 @@ const manualAssignments: Record<PipeCircuit, SelectionMap> = {
   return3: new Map(),
 };
 const reversedPipeDirections: SelectionMap = new Map();
+
+const mepElementHighlightColors: Record<MepElementType, number> = {
+  pipe: 0x00ffff,
+  isolationValve: 0x0000ff,
+  collector: 0xff00ff,
+  booster: 0x00ff00,
+  reservoirWithResistance: 0xffff00,
+  reservoirWithoutResistance: 0xff6600,
+};
 
 const circuitMaterials = {
   supply1: new THREE.MeshBasicMaterial({
@@ -1068,7 +1133,9 @@ await addAssignmentsToScene("return3");
 
   updateManualStats();
 
+  if (!isFlowManuallyPaused.value && isCentralSimulationRunning.value) {
   isFlowing.value = pipeParticles.length > 0;
+}
 
   await fragmentManager.core.update(true);
 
@@ -1716,8 +1783,12 @@ async function clearConnections() {
 
 async function addConnectionsToScene() {
   for (const connection of flowConnections) {
-    const fromCenter = await getNodeCenter(connection.from);
-    const toCenter = await getNodeCenter(connection.to);
+  if (isConnectionBlocked(connection)) {
+    continue;
+  }
+
+  const fromCenter = await getNodeCenter(connection.from);
+  const toCenter = await getNodeCenter(connection.to);
     if (!fromCenter || !toCenter) continue;
 
     addConnectionParticles(fromCenter, toCenter, connection.temperature);
@@ -2135,6 +2206,82 @@ function countDefinedMepElements() {
   return Object.keys(mepElements).length;
 }
 
+function getMepElementIdsByType(elementType: MepElementType) {
+  const idsByModel = new Map<string, number[]>();
+
+  for (const element of Object.values(mepElements)) {
+    if (element.elementType !== elementType) {
+      continue;
+    }
+
+    if (!idsByModel.has(element.modelId)) {
+      idsByModel.set(element.modelId, []);
+    }
+
+    idsByModel.get(element.modelId)?.push(element.localId);
+  }
+
+  return idsByModel;
+}
+
+async function highlightMepElementsByType(elementType: MepElementType) {
+  const idsByModel = getMepElementIdsByType(elementType);
+
+  let highlightedCount = 0;
+
+  for (const [modelId, ids] of idsByModel) {
+    const model = loadedModels.get(modelId);
+
+    if (!model || !ids.length) {
+      continue;
+    }
+
+    await model.highlight(
+      ids,
+      createHighlight(
+        mepElementHighlightColors[elementType],
+        `mep-${elementType}`,
+      ),
+    );
+
+    highlightedCount += ids.length;
+  }
+
+  await fragmentManager.core.update(true);
+
+  flowMessage.value = highlightedCount
+    ? `${highlightedCount} elemento(s) realçado(s) como ${getElementTypeLabel(elementType)}.`
+    : `Não existem elementos definidos como ${getElementTypeLabel(elementType)}.`;
+}
+
+async function clearMepElementsHighlightByType(elementType: MepElementType) {
+  const idsByModel = getMepElementIdsByType(elementType);
+
+  let clearedCount = 0;
+
+  for (const [modelId, ids] of idsByModel) {
+    const model = loadedModels.get(modelId);
+
+    if (!model || !ids.length) {
+      continue;
+    }
+
+    await model.resetHighlight(ids);
+
+    clearedCount += ids.length;
+  }
+
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  } else {
+    await fragmentManager.core.update(true);
+  }
+
+  flowMessage.value = clearedCount
+    ? `Realce removido de ${clearedCount} elemento(s) ${getElementTypeLabel(elementType)}.`
+    : `Não havia elementos para limpar em ${getElementTypeLabel(elementType)}.`;
+}
+
 function isIsolationValve(modelId: string, localId: number) {
   const key = elementKey(modelId, localId);
   return mepElements[key]?.elementType === "isolationValve";
@@ -2179,12 +2326,47 @@ async function setSelectedValvesState(state: "open" | "closed") {
         state,
       };
 
-      if (state === "closed") {
-        blockedSet.add(localId);
-      } else {
-        blockedSet.delete(localId);
-      }
+      const valveNode: FlowNode = {
+  modelId,
+  localId,
+};
 
+const valveKey = nodeKey(valveNode);
+
+if (state === "closed") {
+  blockedSet.add(localId);
+
+  const downstreamPipes = await findDownstreamPipesAfterValve(valveNode);
+
+  for (const pipeNode of downstreamPipes) {
+    let pipeBlockedSet = blockedPipes.get(pipeNode.modelId);
+
+    if (!pipeBlockedSet) {
+      pipeBlockedSet = new Set<number>();
+      blockedPipes.set(pipeNode.modelId, pipeBlockedSet);
+    }
+
+    pipeBlockedSet.add(pipeNode.localId);
+  }
+
+  valveBlockedPipeLinks.set(valveKey, downstreamPipes);
+} else {
+  blockedSet.delete(localId);
+
+  const linkedPipes = valveBlockedPipeLinks.get(valveKey) ?? [];
+
+  for (const pipeNode of linkedPipes) {
+    const linkedBlockedSet = blockedPipes.get(pipeNode.modelId);
+
+    linkedBlockedSet?.delete(pipeNode.localId);
+
+    if (linkedBlockedSet && linkedBlockedSet.size === 0) {
+      blockedPipes.delete(pipeNode.modelId);
+    }
+  }
+
+  valveBlockedPipeLinks.delete(valveKey);
+}
       changedCount++;
     }
 
@@ -2259,6 +2441,7 @@ flowMessage.value =
 
 async function clearBlockedPipes() {
   blockedPipes.clear();
+  valveBlockedPipeLinks.clear();
 
   for (const key of Object.keys(mepElements)) {
     const element = mepElements[key];
@@ -2286,6 +2469,10 @@ async function getPipeDirectionHints(node: FlowNode): Promise<PipeDirectionHints
   const hints: PipeDirectionHints = {};
 
   for (const connection of flowConnections) {
+    if (isConnectionBlocked(connection)) {
+      continue;
+    }
+
     if (isSameNode(connection.to, node)) {
       hints.upstream = await getNodeCenter(connection.from);
     }
@@ -2459,11 +2646,12 @@ function createHighlight(color: number, customId: string): FRAGS.MaterialDefinit
   return {
     color: new THREE.Color(color),
     renderedFaces: FRAGS.RenderedFaces.TWO,
-    opacity: 0.55,
+    opacity: 0.9,
     transparent: true,
     customId,
   };
 }
+
 function addPipeParticles(
   box: any,
   temperature: PipeCircuit,
@@ -2613,8 +2801,122 @@ function toggleSimulationControlPanelMinimized() {
     !isSimulationControlPanelMinimized.value;
 }
 
+function getAllAssignedPipeNodes() {
+  const nodes: FlowNode[] = [];
+
+  for (const assignmentMap of Object.values(manualAssignments)) {
+    for (const [modelId, ids] of assignmentMap) {
+      for (const localId of ids) {
+        nodes.push({
+          modelId,
+          localId,
+        });
+      }
+    }
+  }
+
+  return nodes;
+}
+
+async function findClosestAssignedPipeToNode(node: FlowNode) {
+  const nodeCenter = await getNodeCenter(node);
+
+  if (!nodeCenter) {
+    return null;
+  }
+
+  let closestNode: FlowNode | null = null;
+  let closestDistance = Number.POSITIVE_INFINITY;
+
+  for (const candidate of getAllAssignedPipeNodes()) {
+    if (isSameNode(candidate, node)) {
+      continue;
+    }
+
+    const candidateCenter = await getNodeCenter(candidate);
+
+    if (!candidateCenter) {
+      continue;
+    }
+
+    const distance = nodeCenter.distanceTo(candidateCenter);
+
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestNode = candidate;
+    }
+  }
+
+  return closestNode;
+}
+
+async function findDownstreamPipesAfterValve(valveNode: FlowNode) {
+  const valveCenter = await getNodeCenter(valveNode);
+
+  if (!valveCenter || !flowConnections.length) {
+    return [];
+  }
+
+  let closestConnectionIndex = -1;
+  let closestDistance = Number.POSITIVE_INFINITY;
+
+  for (let index = 0; index < flowConnections.length; index++) {
+    const connection = flowConnections[index];
+
+    const fromCenter = await getNodeCenter(connection.from);
+    const toCenter = await getNodeCenter(connection.to);
+
+    if (!fromCenter || !toCenter) {
+      continue;
+    }
+
+    const middlePoint = fromCenter.clone().add(toCenter).multiplyScalar(0.5);
+    const distance = valveCenter.distanceTo(middlePoint);
+
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestConnectionIndex = index;
+    }
+  }
+
+  if (closestConnectionIndex === -1) {
+    return [];
+  }
+
+  const downstreamNodes: FlowNode[] = [];
+  const firstConnection = flowConnections[closestConnectionIndex];
+
+  downstreamNodes.push(firstConnection.to);
+
+  let expectedFrom = firstConnection.to;
+
+  for (
+    let index = closestConnectionIndex + 1;
+    index < flowConnections.length;
+    index++
+  ) {
+    const connection = flowConnections[index];
+
+    if (!isSameNode(connection.from, expectedFrom)) {
+      break;
+    }
+
+    downstreamNodes.push(connection.to);
+    expectedFrom = connection.to;
+  }
+
+  return downstreamNodes;
+}
+
 function isPipeBlocked(modelId: string, localId: number) {
   return blockedPipes.get(modelId)?.has(localId) ?? false;
+}
+
+function isConnectionBlocked(connection: FlowConnection) {
+  return (
+    isPipeBlocked(connection.from.modelId, connection.from.localId) ||
+    isPipeBlocked(connection.to.modelId, connection.to.localId)
+  );
 }
 
 function getBlockedNodesInCurrentPath() {
@@ -2671,8 +2973,9 @@ if (blockedNodes.length) {
     return;
   }
 
-  isCentralSimulationRunning.value = true;
-  isFlowing.value = true;
+  isFlowManuallyPaused.value = false;
+isCentralSimulationRunning.value = true;
+isFlowing.value = true;
 
   if (!hasDefinedPumpOrHeatPump()) {
     flowMessage.value =
@@ -2686,6 +2989,7 @@ if (blockedNodes.length) {
 function stopCentralSimulation() {
   isCentralSimulationRunning.value = false;
   isFlowing.value = false;
+  isFlowManuallyPaused.value = true;
   flowMessage.value = "Simulação da central parada.";
 }
 
@@ -2733,7 +3037,16 @@ function toggleFlow() {
     return;
   }
 
-  isFlowing.value = !isFlowing.value;
+  if (isFlowing.value) {
+    isFlowing.value = false;
+    isFlowManuallyPaused.value = true;
+    flowMessage.value = "Animação pausada.";
+    return;
+  }
+
+  isFlowManuallyPaused.value = false;
+  isFlowing.value = true;
+  flowMessage.value = "Animação iniciada.";
 }
 
 function clearFlowVisuals() {
@@ -2751,7 +3064,9 @@ function clearFlowVisuals() {
 
   pipeParticles.length = 0;
   staticFlowObjects.length = 0;
+  if (!isCentralSimulationRunning.value) {
   isFlowing.value = false;
+}
 }
 
 function clearFlowLayer() {
@@ -3143,6 +3458,39 @@ function chunk<T>(items: T[], size: number) {
   margin: 2px 0 0;
   font-size: 1.2rem;
   font-weight: 800;
+}
+
+.element-highlight-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.element-highlight-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.element-highlight-item button {
+  border: 0;
+  border-radius: 4px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 800;
+  background: #f7fbff;
+  color: #111820;
+}
+
+.element-highlight-item button:hover {
+  background: #d9f0ff;
 }
 
 .flow-note {
