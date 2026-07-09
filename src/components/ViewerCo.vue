@@ -41,6 +41,11 @@
 
         <div class="flow-panel__content">
           <p class="selection-count">Selecionados: {{ selectedCount }}</p>
+
+          <div class="selected-mep-info">
+  {{ selectedMepElementInfo }}
+</div>
+
           <p class="connection-note">Tipo de elemento</p>
 
           <div class="flow-actions flow-actions--secondary">
@@ -678,6 +683,7 @@ const loadingFileName = ref("");
 const flowSpeed = ref(1);
 const flowMessage = ref("Seleciona tubos no modelo e atribui um circuito.");
 const selectedCount = ref(0);
+const selectedMepElementInfo = ref("Nenhum elemento classificado selecionado.");
 const hasLoadedModel = ref(false);
 const isElementPanelMinimized = ref(true);
 const isFlowControlsPanelMinimized = ref(true);
@@ -903,6 +909,8 @@ function createBimPanel(components: OBC.Components, viewport: HTMLElement) {
   replaceSelection(modelIdMap);
   updatePropertiesTable({ modelIdMap });
 
+  await showSelectedMepElementInfo();
+
   if (countAssignments() > 0) {
     await rebuildManualFlowLayer();
   }
@@ -911,6 +919,7 @@ function createBimPanel(components: OBC.Components, viewport: HTMLElement) {
   highlighter.events.select.onClear.add(async () => {
   selectedItems.clear();
   selectedCount.value = 0;
+  selectedMepElementInfo.value = "Nenhum elemento classificado selecionado.";
 
   updatePropertiesTable({
     modelIdMap: {},
@@ -2246,6 +2255,102 @@ if (reversedPipeDirections.get(modelId)?.size === 0) {
     : "Os elementos selecionados não tinham definição guardada.";
 }
 
+function getAttributeValueText(value: any): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value);
+  }
+
+  if (typeof value === "object") {
+    if ("value" in value) {
+      return getAttributeValueText(value.value);
+    }
+
+    if ("Value" in value) {
+      return getAttributeValueText(value.Value);
+    }
+
+    if ("name" in value) {
+      return getAttributeValueText(value.name);
+    }
+
+    if ("Name" in value) {
+      return getAttributeValueText(value.Name);
+    }
+  }
+
+  return "";
+}
+
+function getItemNameFromData(data: any) {
+  const possibleNames = [
+    data?.Name,
+    data?.name,
+    data?.ObjectType,
+    data?.objectType,
+    data?.Tag,
+    data?.tag,
+    data?.LongName,
+    data?.longName,
+    data?.GlobalId,
+    data?.globalId,
+  ];
+
+  for (const possibleName of possibleNames) {
+    const text = getAttributeValueText(possibleName).trim();
+
+    if (text) {
+      return text;
+    }
+  }
+
+  return "";
+}
+
+async function showSelectedMepElementInfo() {
+  const selectedNode = getFirstSelectedNode();
+
+  if (!selectedNode) {
+    selectedMepElementInfo.value = "Nenhum elemento classificado selecionado.";
+    return;
+  }
+
+  const key = elementKey(selectedNode.modelId, selectedNode.localId);
+  const definedElement = mepElements[key];
+
+  if (!definedElement) {
+    selectedMepElementInfo.value = "Elemento selecionado ainda sem classificação.";
+    return;
+  }
+
+  const model = loadedModels.get(selectedNode.modelId);
+
+  let elementName = "";
+
+  if (model) {
+    const [itemData] = await model.getItemsData([selectedNode.localId], {
+      attributesDefault: true,
+      relationsDefault: {
+        attributes: true,
+        relations: false,
+      },
+    });
+
+    elementName = getItemNameFromData(itemData);
+  }
+
+  const typeLabel = getElementTypeLabel(definedElement.elementType);
+
+  if (elementName) {
+    selectedMepElementInfo.value = `${typeLabel}: ${elementName}`;
+  } else {
+    selectedMepElementInfo.value = `${typeLabel}: elemento #${selectedNode.localId}`;
+  }
+}
+
 function getElementTypeLabel(elementType: MepElementType) {
   const labels: Record<MepElementType, string> = {
     pipe: "tubagem",
@@ -3517,10 +3622,15 @@ function chunk<T>(items: T[], size: number) {
   font-weight: 700;
 }
 
-.flow-stats dd {
-  margin: 2px 0 0;
-  font-size: 1.2rem;
+.selected-mep-info {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 6px;
+  background: rgba(143, 211, 255, 0.14);
+  color: #f7fbff;
+  font-size: 0.82rem;
   font-weight: 800;
+  line-height: 1.35;
 }
 
 .element-highlight-list {
