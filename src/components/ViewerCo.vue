@@ -187,13 +187,13 @@
   </button>
 </div>
 
-<div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="saveCurrentRoute">
+<div class="flow-actions flow-actions--single">
+  <button
+    type="button"
+    class="flow-button--primary"
+    @click="saveCurrentRoute"
+  >
     Guardar caminho
-  </button>
-
-  <button type="button" @click="clearConnections">
-    Limpar caminho
   </button>
 </div>
 
@@ -2999,6 +2999,12 @@ function chunk<T>(items: T[], size: number) {
 .flow-button--danger {
   background: #ffe3e3 !important;
   color: #7a1010 !important;
+}
+
+.flow-button--primary {
+  min-height: 44px !important;
+  font-size: 0.9rem;
+  font-weight: 800;
 }
 
 .flow-button--danger:hover {
