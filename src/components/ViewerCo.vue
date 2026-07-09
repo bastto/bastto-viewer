@@ -9,6 +9,7 @@
 
   <div ref="containerRef" class="full-screen">
     <bim-grid id="appGrid"></bim-grid>
+
     <input
       ref="ifcInput"
       type="file"
@@ -16,408 +17,496 @@
       style="display: none"
       @change="convertIFC"
     />
-  
-<div class="control-panels">
-  <section
-    :class="['flow-panel', isElementPanelMinimized ? 'flow-panel--minimized' : '']"
-    aria-label="Element classification controls"
-  >
-    <div class="flow-panel__header">
-      <div>
-        <p class="flow-panel__eyebrow">Elementos da central</p>
-        <h2>Classificação</h2>
-      </div>
 
-      <button
-        type="button"
-        class="flow-panel__toggle"
-        @click="toggleElementPanelMinimized"
+    <div class="control-panels">
+      <section
+        :class="['flow-panel', isElementPanelMinimized ? 'flow-panel--minimized' : '']"
+        aria-label="Element classification controls"
       >
-        {{ isElementPanelMinimized ? '+' : '−' }}
-      </button>
-    </div>
+        <div class="flow-panel__header">
+          <div>
+            <p class="flow-panel__eyebrow">Elementos da central</p>
+            <h2>Classificação</h2>
+          </div>
 
-    <div class="flow-panel__content">
-      <p class="selection-count">Selecionados: {{ selectedCount }}</p>
-      <p class="connection-note">Tipo de elemento</p>
+          <button
+            type="button"
+            class="flow-panel__toggle"
+            @click="toggleElementPanelMinimized"
+          >
+            {{ isElementPanelMinimized ? '+' : '−' }}
+          </button>
+        </div>
 
-      <div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="defineSelectedElementsAs('pipe')">Tubo</button>
-  <button type="button" @click="defineSelectedElementsAs('isolationValve')">Válvula corte</button>
-  <button type="button" @click="defineSelectedElementsAs('collector')">Coletor</button>
-</div>
+        <div class="flow-panel__content">
+          <p class="selection-count">Selecionados: {{ selectedCount }}</p>
+          <p class="connection-note">Tipo de elemento</p>
 
-<div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="defineSelectedElementsAs('booster')">Booster</button>
-  <button type="button" @click="defineSelectedElementsAs('reservoirWithResistance')">Reserv. c/ resistência</button>
-  <button type="button" @click="defineSelectedElementsAs('reservoirWithoutResistance')">Reserv. s/ resistência</button>
-</div>
+          <div class="flow-actions flow-actions--secondary">
+            <button type="button" @click="defineSelectedElementsAs('pipe')">
+              Tubo
+            </button>
 
-<div class="flow-actions flow-actions--single">
-  <button
-    type="button"
-    class="flow-button--danger"
-    @click="deleteSelectedElementDefinitions"
-  >
-    Apagar definição
-  </button>
-</div>
+            <button type="button" @click="defineSelectedElementsAs('isolationValve')">
+              Válvula corte
+            </button>
 
-      <p class="connection-note">
-        Elementos definidos: {{ countDefinedMepElements() }}
-      </p>
+            <button type="button" @click="defineSelectedElementsAs('collector')">
+              Coletor
+            </button>
+          </div>
 
-      <dl class="flow-stats">
-  <div>
-    <dt>Tubos</dt>
-    <dd>{{ countMepElementsByType('pipe') }}</dd>
-  </div>
+          <div class="flow-actions flow-actions--secondary">
+            <button type="button" @click="defineSelectedElementsAs('booster')">
+              Booster
+            </button>
 
-  <div>
-    <dt>Válvulas</dt>
-    <dd>{{ countMepElementsByType('isolationValve') }}</dd>
-  </div>
+            <button type="button" @click="defineSelectedElementsAs('reservoirWithResistance')">
+              Reserv. c/ resistência
+            </button>
 
-  <div>
-    <dt>Colet.</dt>
-    <dd>{{ countMepElementsByType('collector') }}</dd>
-  </div>
+            <button type="button" @click="defineSelectedElementsAs('reservoirWithoutResistance')">
+              Reserv. s/ resistência
+            </button>
+          </div>
 
-  <div>
-    <dt>Booster</dt>
-    <dd>{{ countMepElementsByType('booster') }}</dd>
-  </div>
+          <div class="flow-actions flow-actions--single">
+            <button
+              type="button"
+              class="flow-button--danger"
+              @click="deleteSelectedElementDefinitions"
+            >
+              Apagar definição
+            </button>
+          </div>
 
-  <div>
-    <dt>Res. c/ R.</dt>
-    <dd>{{ countMepElementsByType('reservoirWithResistance') }}</dd>
-  </div>
+          <p class="connection-note">
+            Elementos definidos: {{ countDefinedMepElements() }}
+          </p>
 
-  <div>
-    <dt>Res. s/ R.</dt>
-    <dd>{{ countMepElementsByType('reservoirWithoutResistance') }}</dd>
-  </div>
-</dl>
-    </div>
-  </section>
+          <dl class="flow-stats">
+            <div>
+              <dt>Tubos</dt>
+              <dd>{{ countMepElementsByType('pipe') }}</dd>
+            </div>
 
-  <section
-    :class="['flow-panel', isFlowControlsPanelMinimized ? 'flow-panel--minimized' : '']"
-    aria-label="Water flow controls"
-  >
-    <div class="flow-panel__header">
-      <div>
-        <p class="flow-panel__eyebrow">Fluxo de agua</p>
-        <h2>Circuitos hidráulicos</h2>
-      </div>
+            <div>
+              <dt>Válvulas</dt>
+              <dd>{{ countMepElementsByType('isolationValve') }}</dd>
+            </div>
 
-      <span :class="['flow-status', isFlowing ? 'flow-status--on' : '']">
-        {{ isCentralSimulationRunning ? 'SIM' : isFlowing ? 'ON' : 'OFF' }}
-      </span>
+            <div>
+              <dt>Colet.</dt>
+              <dd>{{ countMepElementsByType('collector') }}</dd>
+            </div>
 
-      <button
-        type="button"
-        class="flow-panel__toggle"
-        @click="toggleFlowControlsPanelMinimized"
+            <div>
+              <dt>Booster</dt>
+              <dd>{{ countMepElementsByType('booster') }}</dd>
+            </div>
+
+            <div>
+              <dt>Res. c/ R.</dt>
+              <dd>{{ countMepElementsByType('reservoirWithResistance') }}</dd>
+            </div>
+
+            <div>
+              <dt>Res. s/ R.</dt>
+              <dd>{{ countMepElementsByType('reservoirWithoutResistance') }}</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <section
+        :class="['flow-panel', isFlowControlsPanelMinimized ? 'flow-panel--minimized' : '']"
+        aria-label="Water flow controls"
       >
-        {{ isFlowControlsPanelMinimized ? '+' : '−' }}
-      </button>
-    </div>
+        <div class="flow-panel__header">
+          <div>
+            <p class="flow-panel__eyebrow">Fluxo de água</p>
+            <h2>Circuitos hidráulicos</h2>
+          </div>
 
-    <div class="flow-panel__content">
-      <p class="selection-count">Selecionados: {{ selectedCount }}</p>
-      
-      <div class="flow-section-title">
-  Circuitos
-</div>
-      
-      <div class="flow-actions">
-  <button type="button" @click="assignSelectedPipes('supply1')">Avanço 1</button>
-  <button type="button" @click="assignSelectedPipes('supply2')">Avanço 2</button>
-  <button type="button" @click="assignSelectedPipes('supply3')">Avanço 3</button>
-</div>
+          <button
+            type="button"
+            class="flow-panel__toggle"
+            @click="toggleFlowControlsPanelMinimized"
+          >
+            {{ isFlowControlsPanelMinimized ? '+' : '−' }}
+          </button>
+        </div>
 
-<div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="assignSelectedPipes('return1')">Retorno 1</button>
-  <button type="button" @click="assignSelectedPipes('return2')">Retorno 2</button>
-  <button type="button" @click="assignSelectedPipes('return3')">Retorno 3</button>
-</div>
+        <div class="flow-panel__content">
+          <p class="selection-count">Selecionados: {{ selectedCount }}</p>
 
-<div class="flow-actions flow-actions--single">
-  <button type="button" @click="clearManualAssignments">
-    Limpar marcas
-  </button>
-</div>
+          <div class="flow-section-title">
+            Circuitos
+          </div>
 
-<div class="flow-section-title">
-  Caminhos
-</div>
+          <div class="flow-actions">
+            <button type="button" @click="assignSelectedPipes('supply1')">
+              Avanço 1
+            </button>
 
-<div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="setRouteStart">Definir início</button>
-  <button type="button" @click="addRouteWaypoint">Passar aqui</button>
-  <button type="button" @click="setRouteEnd">Definir fim</button>
-</div>
+            <button type="button" @click="assignSelectedPipes('supply2')">
+              Avanço 2
+            </button>
 
-<div class="flow-actions">
-  <button type="button" @click="createAutoRoute('supply1')">
-    Caminho avanço 1
-  </button>
+            <button type="button" @click="assignSelectedPipes('supply3')">
+              Avanço 3
+            </button>
+          </div>
 
-  <button type="button" @click="createAutoRoute('supply2')">
-    Caminho avanço 2
-  </button>
+          <div class="flow-actions flow-actions--secondary">
+            <button type="button" @click="assignSelectedPipes('return1')">
+              Retorno 1
+            </button>
 
-  <button type="button" @click="createAutoRoute('supply3')">
-    Caminho avanço 3
-  </button>
-</div>
+            <button type="button" @click="assignSelectedPipes('return2')">
+              Retorno 2
+            </button>
 
-<div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="createAutoRoute('return1')">
-    Caminho retorno 1
-  </button>
+            <button type="button" @click="assignSelectedPipes('return3')">
+              Retorno 3
+            </button>
+          </div>
 
-  <button type="button" @click="createAutoRoute('return2')">
-    Caminho retorno 2
-  </button>
+          <div class="flow-actions flow-actions--single">
+            <button type="button" @click="clearManualAssignments">
+              Limpar marcas
+            </button>
+          </div>
 
-  <button type="button" @click="createAutoRoute('return3')">
-    Caminho retorno 3
-  </button>
-</div>
+          <div class="flow-section-title">
+            Caminhos
+          </div>
 
-<div class="flow-actions flow-actions--single">
-  <button
-    type="button"
-    class="flow-button--primary"
-    @click="saveCurrentRoute"
-  >
-    Guardar caminho
-  </button>
-</div>
+          <div class="flow-actions flow-actions--secondary">
+            <button type="button" @click="setRouteStart">
+              Definir início
+            </button>
 
-<div v-if="hasLoadedModel && savedRoutes.length" class="saved-routes">
-  <p class="connection-note">
-    Caminhos guardados: {{ savedRoutes.length }}
-  </p>
+            <button type="button" @click="addRouteWaypoint">
+              Passar aqui
+            </button>
 
-  <div class="flow-actions flow-actions--single">
-  <button
-    type="button"
-    @click="createRouteGroupFromSelection"
-  >
-    Criar grupo com selecionados
-  </button>
-</div>
+            <button type="button" @click="setRouteEnd">
+              Definir fim
+            </button>
+          </div>
 
-<div v-if="hasLoadedModel && savedRouteGroups.length" class="saved-routes">
-  <p class="connection-note">
-    Grupos de caminhos: {{ savedRouteGroups.length }}
-  </p>
+          <div class="flow-actions">
+            <button type="button" @click="createAutoRoute('supply1')">
+              Caminho avanço 1
+            </button>
 
-  <div
-  v-for="group in savedRouteGroups"
-  :key="group.id"
-  class="saved-route-item saved-route-item--group"
->
-  <div class="saved-route-group-info">
-    <strong>{{ group.name }}</strong>
+            <button type="button" @click="createAutoRoute('supply2')">
+              Caminho avanço 2
+            </button>
 
-    <p class="saved-route-group-count">
-      {{ getRoutesFromGroup(group).length }} caminho(s)
-    </p>
+            <button type="button" @click="createAutoRoute('supply3')">
+              Caminho avanço 3
+            </button>
+          </div>
 
-    <ul class="saved-route-group-list">
-      <li
-        v-for="routeName in getRouteNamesFromGroup(group)"
-        :key="routeName"
+          <div class="flow-actions flow-actions--secondary">
+            <button type="button" @click="createAutoRoute('return1')">
+              Caminho retorno 1
+            </button>
+
+            <button type="button" @click="createAutoRoute('return2')">
+              Caminho retorno 2
+            </button>
+
+            <button type="button" @click="createAutoRoute('return3')">
+              Caminho retorno 3
+            </button>
+          </div>
+
+          <div class="flow-actions flow-actions--single">
+            <button
+              type="button"
+              class="flow-button--primary"
+              @click="saveCurrentRoute"
+            >
+              Guardar caminho
+            </button>
+          </div>
+
+          <div v-if="hasLoadedModel && savedRoutes.length" class="saved-routes">
+            <p class="connection-note">
+              Caminhos guardados: {{ savedRoutes.length }}
+            </p>
+
+            <div class="flow-actions flow-actions--single">
+              <button
+                type="button"
+                @click="createRouteGroupFromSelection"
+              >
+                Criar grupo com selecionados
+              </button>
+            </div>
+
+            <div
+              v-for="route in savedRoutes"
+              :key="route.id"
+              class="saved-route-item"
+            >
+              <label class="saved-route-select">
+                <input
+                  v-model="selectedRouteIds"
+                  type="checkbox"
+                  :value="route.id"
+                />
+
+                <span>{{ route.name }}</span>
+              </label>
+
+              <div>
+                <button
+                  type="button"
+                  @click="applySavedRoute(route)"
+                >
+                  Aplicar
+                </button>
+
+                <button
+                  type="button"
+                  @click="reverseSavedRoute(route.id)"
+                >
+                  Inverter
+                </button>
+
+                <button
+                  type="button"
+                  @click="renameSavedRoute(route.id)"
+                >
+                  Renomear
+                </button>
+
+                <button
+                  type="button"
+                  @click="deleteSavedRoute(route.id)"
+                >
+                  Apagar
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="hasLoadedModel && savedRouteGroups.length" class="saved-routes">
+            <p class="connection-note">
+              Grupos de caminhos: {{ savedRouteGroups.length }}
+            </p>
+
+            <div
+              v-for="group in savedRouteGroups"
+              :key="group.id"
+              class="saved-route-item saved-route-item--group"
+            >
+              <div class="saved-route-group-info">
+                <strong>{{ group.name }}</strong>
+
+                <p class="saved-route-group-count">
+                  {{ getRoutesFromGroup(group).length }} caminho(s)
+                </p>
+
+                <ul class="saved-route-group-list">
+                  <li
+                    v-for="routeName in getRouteNamesFromGroup(group)"
+                    :key="routeName"
+                  >
+                    {{ routeName }}
+                  </li>
+                </ul>
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  @click="applyRouteGroup(group)"
+                >
+                  Aplicar
+                </button>
+
+                <button
+                  type="button"
+                  @click="reverseRouteGroup(group.id)"
+                >
+                  Inverter
+                </button>
+
+                <button
+                  type="button"
+                  @click="renameRouteGroup(group.id)"
+                >
+                  Renomear
+                </button>
+
+                <button
+                  type="button"
+                  @click="deleteRouteGroup(group.id)"
+                >
+                  Apagar
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <p class="connection-note">Inicio: {{ routeStartLabel }}</p>
+          <p class="connection-note">Passagens: {{ routeWaypoints.length }}</p>
+          <p class="connection-note">Fim: {{ routeEndLabel }}</p>
+
+          <dl class="flow-stats">
+            <div>
+              <dt>Av. 1</dt>
+              <dd>{{ pipeStats.supply1 }}</dd>
+            </div>
+
+            <div>
+              <dt>Av. 2</dt>
+              <dd>{{ pipeStats.supply2 }}</dd>
+            </div>
+
+            <div>
+              <dt>Av. 3</dt>
+              <dd>{{ pipeStats.supply3 }}</dd>
+            </div>
+
+            <div>
+              <dt>Ret. 1</dt>
+              <dd>{{ pipeStats.return1 }}</dd>
+            </div>
+
+            <div>
+              <dt>Ret. 2</dt>
+              <dd>{{ pipeStats.return2 }}</dd>
+            </div>
+
+            <div>
+              <dt>Ret. 3</dt>
+              <dd>{{ pipeStats.return3 }}</dd>
+            </div>
+
+            <div>
+              <dt>Total</dt>
+              <dd>{{ pipeStats.total }}</dd>
+            </div>
+
+            <div>
+              <dt>Lig.</dt>
+              <dd>{{ flowConnections.length }}</dd>
+            </div>
+
+            <div>
+              <dt>Bloq.</dt>
+              <dd>{{ blockedCount }}</dd>
+            </div>
+          </dl>
+
+          <p class="flow-note">{{ flowMessage }}</p>
+        </div>
+      </section>
+
+      <section
+        :class="[
+          'flow-panel',
+          isSimulationControlPanelMinimized ? 'flow-panel--minimized' : ''
+        ]"
+        aria-label="Simulation control"
       >
-        {{ routeName }}
-      </li>
-    </ul>
-  </div>
+        <div class="flow-panel__header">
+          <div>
+            <p class="flow-panel__eyebrow">Simulação</p>
+            <h2>Controlo</h2>
+          </div>
 
-  <div>
-    <button
-      type="button"
-      @click="applyRouteGroup(group)"
-    >
-      Aplicar
-    </button>
+          <span :class="['flow-status', isFlowing ? 'flow-status--on' : '']">
+            {{ isCentralSimulationRunning ? 'SIM' : isFlowing ? 'ON' : 'OFF' }}
+          </span>
 
-    <button
-      type="button"
-      @click="reverseRouteGroup(group.id)"
-    >
-      Inverter
-    </button>
+          <button
+            type="button"
+            class="flow-panel__toggle"
+            @click="toggleSimulationControlPanelMinimized"
+          >
+            {{ isSimulationControlPanelMinimized ? '+' : '−' }}
+          </button>
+        </div>
 
-    <button
-      type="button"
-      @click="renameRouteGroup(group.id)"
-    >
-      Renomear
-    </button>
+        <div class="flow-panel__content">
+          <p class="selection-count">Selecionados: {{ selectedCount }}</p>
 
-    <button
-      type="button"
-      @click="deleteRouteGroup(group.id)"
-    >
-      Apagar
-    </button>
-  </div>
-</div>
-</div>
+          <div class="flow-section-title">
+            Válvulas e bloqueios
+          </div>
 
-  <div
-  v-for="route in savedRoutes"
-  :key="route.id"
-  class="saved-route-item"
->
-  <label class="saved-route-select">
-  <input
-    v-model="selectedRouteIds"
-    type="checkbox"
-    :value="route.id"
-  />
+          <div class="flow-actions flow-actions--secondary">
+            <button type="button" @click="closeSelectedValves">
+              Fechar válvula
+            </button>
 
-  <span>{{ route.name }}</span>
-</label>
+            <button type="button" @click="openSelectedValves">
+              Abrir válvula
+            </button>
 
-  <div>
-  <button
-    type="button"
-    @click="applySavedRoute(route)"
-  >
-    Aplicar
-  </button>
+            <button type="button" @click="clearBlockedPipes">
+              Limpar bloqueios
+            </button>
+          </div>
 
-  <button
-    type="button"
-    @click="reverseSavedRoute(route.id)"
-  >
-    Inverter
-  </button>
+          <div class="flow-section-title">
+            Animação
+          </div>
 
-  <button
-    type="button"
-    @click="renameSavedRoute(route.id)"
-  >
-    Renomear
-  </button>
+          <div class="flow-actions flow-actions--secondary">
+            <button type="button" @click="toggleFlow">
+              {{ isFlowing ? 'Pausar' : 'Animar' }}
+            </button>
 
-  <button
-    type="button"
-    @click="deleteSavedRoute(route.id)"
-  >
-    Apagar
-  </button>
-</div>
-</div>
-</div>
+            <button type="button" @click="rebuildManualFlowLayer">
+              Atualizar
+            </button>
 
-<div class="flow-section-title">
-  Controlo
-</div>
+            <button type="button" @click="reverseSelectedPipesDirection">
+              Inverter sentido
+            </button>
+          </div>
 
-<div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="closeSelectedValves">Fechar válvula</button>
-  <button type="button" @click="openSelectedValves">Abrir válvula</button>
-  <button type="button" @click="clearBlockedPipes">Limpar bloqueios</button>
-</div>
+          <label class="flow-slider">
+            <span>Velocidade</span>
+            <input
+              v-model.number="flowSpeed"
+              type="range"
+              min="0.2"
+              max="3"
+              step="0.1"
+            />
+          </label>
 
-<div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="toggleFlow">
-    {{ isFlowing ? 'Pausar' : 'Animar' }}
-  </button>
+          <div class="flow-actions flow-actions--single">
+            <button type="button" @click="toggleCentralSimulation">
+              {{ isCentralSimulationRunning ? 'Parar simulação' : 'Simular central' }}
+            </button>
+          </div>
 
-  <button type="button" @click="rebuildManualFlowLayer">
-    Atualizar
-  </button>
-
-  <button type="button" @click="reverseSelectedPipesDirection">
-    Inverter sentido
-  </button>
-</div>
-
-<div class="flow-actions flow-actions--single">
-  <button type="button" @click="toggleCentralSimulation">
-    {{ isCentralSimulationRunning ? 'Parar simulação' : 'Simular central' }}
-  </button>
-</div>
-
-      <p class="connection-note">Inicio: {{ routeStartLabel }}</p>
-      <p class="connection-note">Passagens: {{ routeWaypoints.length }}</p>
-      <p class="connection-note">Fim: {{ routeEndLabel }}</p>
-
-      <label class="flow-slider">
-        <span>Velocidade</span>
-        <input v-model.number="flowSpeed" type="range" min="0.2" max="3" step="0.1" />
-      </label>
-
-      <dl class="flow-stats">
-  <div>
-    <dt>Av. 1</dt>
-    <dd>{{ pipeStats.supply1 }}</dd>
-  </div>
-
-  <div>
-    <dt>Av. 2</dt>
-    <dd>{{ pipeStats.supply2 }}</dd>
-  </div>
-
-  <div>
-    <dt>Av. 3</dt>
-    <dd>{{ pipeStats.supply3 }}</dd>
-  </div>
-
-  <div>
-    <dt>Ret. 1</dt>
-    <dd>{{ pipeStats.return1 }}</dd>
-  </div>
-
-  <div>
-    <dt>Ret. 2</dt>
-    <dd>{{ pipeStats.return2 }}</dd>
-  </div>
-
-  <div>
-    <dt>Ret. 3</dt>
-    <dd>{{ pipeStats.return3 }}</dd>
-  </div>
-
-  <div>
-    <dt>Total</dt>
-    <dd>{{ pipeStats.total }}</dd>
-  </div>
-
-  <div>
-    <dt>Lig.</dt>
-    <dd>{{ flowConnections.length }}</dd>
-  </div>
-
-  <div>
-    <dt>Bloq.</dt>
-    <dd>{{ blockedCount }}</dd>
-  </div>
-</dl>
-
-      <p class="flow-note">{{ flowMessage }}</p>
+          <p class="connection-note">
+            Bloqueios ativos: {{ blockedCount }}
+          </p>
+        </div>
+      </section>
     </div>
-  </section>
-</div>
-
   </div>
 
   <a
-  href="https://github.com/bastto"
-  target="_blank"
-  rel="noopener noreferrer"
-  class="corner-logo"
->
-  /src/assets/bastto-logo.svg
-</a>
+    href="https://github.com/bastto"
+    target="_blank"
+    rel="noopener noreferrer"
+    class="corner-logo"
+  >
+    /src/assets/bastto-logo.svg
+  </a>
 </template>
 
 <script setup lang="ts">
@@ -533,6 +622,7 @@ const selectedCount = ref(0);
 const hasLoadedModel = ref(false);
 const isElementPanelMinimized = ref(true);
 const isFlowControlsPanelMinimized = ref(true);
+const isSimulationControlPanelMinimized = ref(true);
 const routeStartLabel = ref("nenhum");
 const routeEndLabel = ref("nenhum");
 const blockedCount = ref(0);
@@ -2518,6 +2608,11 @@ function toggleFlowControlsPanelMinimized() {
   isFlowControlsPanelMinimized.value = !isFlowControlsPanelMinimized.value;
 }
 
+function toggleSimulationControlPanelMinimized() {
+  isSimulationControlPanelMinimized.value =
+    !isSimulationControlPanelMinimized.value;
+}
+
 function isPipeBlocked(modelId: string, localId: number) {
   return blockedPipes.get(modelId)?.has(localId) ?? false;
 }
@@ -2956,6 +3051,7 @@ function chunk<T>(items: T[], size: number) {
   background: #e53935;
   color: white;
 }
+
 
 .flow-section-title {
   margin-top: 16px;
