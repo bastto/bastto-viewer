@@ -707,6 +707,7 @@ const ifcInput = ref<HTMLInputElement | null>(null);
 const isLoading = ref(false);
 const isFlowing = ref(false);
 const isCentralSimulationRunning = ref(false);
+const isManualFlowAnimationRunning = ref(false);
 const isFlowManuallyPaused = ref(false);
 const loadingProgress = ref(0);
 const loadingFileName = ref("");
@@ -1162,7 +1163,9 @@ async function assignSelectedPipes(circuit: PipeCircuit) {
 }
 
 async function rebuildManualFlowLayer() {
-  clearFlowVisuals();
+  const wasFlowingBeforeRebuild = isFlowing.value;
+
+clearFlowVisuals(true);
 
   const hasAssignments = countAssignments() > 0;
   const hasConnections = flowConnections.length > 0;
@@ -1182,9 +1185,11 @@ await addAssignmentsToScene("return3");
 
   updateManualStats();
 
-  if (!isFlowManuallyPaused.value && isCentralSimulationRunning.value) {
-  isFlowing.value = pipeParticles.length > 0;
-}
+  const shouldKeepAnimating =
+  !isFlowManuallyPaused.value &&
+  (isManualFlowAnimationRunning.value || isCentralSimulationRunning.value);
+
+isFlowing.value = shouldKeepAnimating && pipeParticles.length > 0;
 
   await fragmentManager.core.update(true);
 
@@ -3379,23 +3384,25 @@ async function blockSelectedPipes() {
 
 function toggleFlow() {
   if (!pipeParticles.length) {
-    flowMessage.value = "Marca pelo menos um tubo antes de iniciar a animacao.";
+    flowMessage.value = "Marca pelo menos um tubo antes de iniciar a animação.";
     return;
   }
 
   if (isFlowing.value) {
     isFlowing.value = false;
+    isManualFlowAnimationRunning.value = false;
     isFlowManuallyPaused.value = true;
     flowMessage.value = "Animação pausada.";
     return;
   }
 
+  isManualFlowAnimationRunning.value = true;
   isFlowManuallyPaused.value = false;
   isFlowing.value = true;
   flowMessage.value = "Animação iniciada.";
 }
 
-function clearFlowVisuals() {
+function clearFlowVisuals(keepFlowState = false) {
   for (const particle of pipeParticles) {
     flowGroup.remove(particle.mesh);
 
@@ -3410,9 +3417,10 @@ function clearFlowVisuals() {
 
   pipeParticles.length = 0;
   staticFlowObjects.length = 0;
-  if (!isCentralSimulationRunning.value) {
-  isFlowing.value = false;
-}
+
+  if (!keepFlowState) {
+    isFlowing.value = false;
+  }
 }
 
 function clearFlowLayer() {
