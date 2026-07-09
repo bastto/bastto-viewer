@@ -797,6 +797,7 @@ const mepElements = reactive<Record<string, MepElement>>({});
 const savedRoutes = reactive<SavedRoute[]>([]);
 const savedRouteGroups = reactive<SavedRouteGroup[]>([]);
 const selectedRouteIds = ref<string[]>([]);
+const activeRouteGroupId = ref<string | null>(null);
 let routeStart: FlowNode | null = null;
 let routeEnd: FlowNode | null = null;
 const blockedPipes: SelectionMap = new Map();
@@ -1645,6 +1646,7 @@ async function setSavedRouteVisibility(routeId: string, shouldShow: boolean) {
 }
 
 async function applySavedRoute(route: SavedRoute) {
+  activeRouteGroupId.value = null;
   const loadedModelIds = [...loadedModels.keys()];
 
   if (!loadedModelIds.length) {
@@ -1720,6 +1722,7 @@ async function setSavedRouteGroupVisibility(
 }
 
 async function applyRouteGroup(group: SavedRouteGroup) {
+  activeRouteGroupId.value = group.id;
   const routes = getRoutesFromGroup(group);
 
   if (!routes.length) {
@@ -1866,12 +1869,19 @@ async function reverseSavedRoute(routeId: string) {
 
   saveRoutesToStorage();
 
+  const group = getGroupForRoute(routeId);
+
   if (loadedModels.size) {
-    await applySavedRoute(route);
+    if (group) {
+      await applyRouteGroup(group);
+    } else {
+      await applySavedRoute(route);
+    }
   }
 
-  flowMessage.value =
-    `Sentido do caminho ${route.name} invertido.`;
+  flowMessage.value = group
+    ? `Sentido do caminho "${route.name}" invertido dentro do grupo "${group.name}".`
+    : `Sentido do caminho "${route.name}" invertido.`;
 }
 
 function createRouteGroupFromSelection() {
@@ -2992,6 +3002,22 @@ function getRoutesFromGroup(group: SavedRouteGroup) {
   return savedRoutes.filter((route) =>
     group.routeIds.includes(route.id),
   );
+}
+
+function getGroupForRoute(routeId: string) {
+  const activeGroup = savedRouteGroups.find(
+    (group) =>
+      group.id === activeRouteGroupId.value &&
+      group.routeIds.includes(routeId),
+  );
+
+  if (activeGroup) {
+    return activeGroup;
+  }
+
+  return savedRouteGroups.find(
+    (group) => group.routeIds.includes(routeId),
+  ) ?? null;
 }
 
 function getRouteNamesFromGroup(group: SavedRouteGroup) {
