@@ -226,11 +226,19 @@
             </button>
           </div>
 
-          <div class="flow-actions flow-actions--single">
-            <button type="button" @click="clearManualAssignments">
-              Limpar marcas
-            </button>
-          </div>
+          <div class="flow-actions flow-actions--secondary">
+  <button type="button" @click="clearSelectedManualAssignments">
+    Limpar marca selecionada
+  </button>
+
+  <button type="button" @click="clearManualAssignments">
+    Limpar todas as marcas
+  </button>
+
+  <button type="button" @click="reverseSelectedPipesDirection">
+    Inverter sentido
+  </button>
+</div>
 
           <div class="flow-section-title">
             Caminhos
@@ -515,18 +523,14 @@
           </div>
 
           <div class="flow-actions flow-actions--secondary">
-            <button type="button" @click="toggleFlow">
-              {{ isFlowing ? 'Pausar' : 'Animar' }}
-            </button>
+  <button type="button" @click="toggleFlow">
+    {{ isFlowing ? 'Pausar' : 'Animar' }}
+  </button>
 
-            <button type="button" @click="rebuildManualFlowLayer">
-              Atualizar
-            </button>
-
-            <button type="button" @click="reverseSelectedPipesDirection">
-              Inverter sentido
-            </button>
-          </div>
+  <button type="button" @click="rebuildManualFlowLayer">
+    Atualizar
+  </button>
+</div>
 
           <label class="flow-slider">
             <span>Velocidade</span>
@@ -1185,6 +1189,65 @@ addPipeParticles(
 );
     }
   }
+}
+
+async function clearSelectedManualAssignments() {
+  if (!selectedCount.value) {
+    flowMessage.value = "Seleciona primeiro um ou mais elementos para limpar a marca.";
+    return;
+  }
+
+  let clearedCount = 0;
+  const idsByModel = new Map<string, number[]>();
+
+  for (const [modelId, ids] of selectedItems) {
+    for (const localId of ids) {
+
+      getAssignmentSet("supply1", modelId).delete(localId);
+      getAssignmentSet("supply2", modelId).delete(localId);
+      getAssignmentSet("supply3", modelId).delete(localId);
+
+      getAssignmentSet("return1", modelId).delete(localId);
+      getAssignmentSet("return2", modelId).delete(localId);
+      getAssignmentSet("return3", modelId).delete(localId);
+
+      reversedPipeDirections.get(modelId)?.delete(localId);
+
+      if (reversedPipeDirections.get(modelId)?.size === 0) {
+        reversedPipeDirections.delete(modelId);
+      }
+
+      if (!idsByModel.has(modelId)) {
+        idsByModel.set(modelId, []);
+      }
+
+      idsByModel.get(modelId)?.push(localId);
+
+      clearedCount++;
+    }
+  }
+
+  for (const [modelId, ids] of idsByModel) {
+    const model = loadedModels.get(modelId);
+
+    if (model && ids.length) {
+      await model.resetHighlight(ids);
+    }
+  }
+
+  saveReversedDirectionsToStorage();
+  updateManualStats();
+
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  } else {
+    clearFlowVisuals();
+    await fragmentManager.core.update(true);
+  }
+
+  flowMessage.value = clearedCount
+    ? `${clearedCount} marca(s) selecionada(s) removida(s).`
+    : "Nenhuma marca selecionada para remover.";
 }
 
 async function clearManualAssignments() {
