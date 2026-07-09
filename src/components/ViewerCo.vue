@@ -53,9 +53,13 @@
               Tubo
             </button>
 
-            <button type="button" @click="defineSelectedElementsAs('isolationValve')">
-              Válvula corte
-            </button>
+            <button type="button" @click="defineSelectedElementsAs('normallyOpenValve')">
+  Válvula NA
+</button>
+
+<button type="button" @click="defineSelectedElementsAs('normallyClosedValve')">
+  Válvula NF
+</button>
 
             <button type="button" @click="defineSelectedElementsAs('collector')">
               Coletor
@@ -98,7 +102,13 @@
 
             <div>
               <dt>Válvulas</dt>
-              <dd>{{ countMepElementsByType('isolationValve') }}</dd>
+<dd>
+  {{
+    countMepElementsByType('isolationValve') +
+    countMepElementsByType('normallyOpenValve') +
+    countMepElementsByType('normallyClosedValve')
+  }}
+</dd>
             </div>
 
             <div>
@@ -135,12 +145,20 @@
   </div>
 
   <div class="element-highlight-item">
-    <span>Válvulas</span>
+  <span>Válvulas NA</span>
 
-    <button type="button" @click="highlightMepElementsByType('isolationValve')">
-      Mostrar
-    </button>
-  </div>
+  <button type="button" @click="highlightMepElementsByType('normallyOpenValve')">
+    Mostrar
+  </button>
+</div>
+
+<div class="element-highlight-item">
+  <span>Válvulas NF</span>
+
+  <button type="button" @click="highlightMepElementsByType('normallyClosedValve')">
+    Mostrar
+  </button>
+</div>
 
   <div class="element-highlight-item">
     <span>Coletores</span>
@@ -592,6 +610,8 @@ type SelectionMap = Map<string, Set<number>>;
 type MepElementType =
   | "pipe"
   | "isolationValve"
+  | "normallyOpenValve"
+  | "normallyClosedValve"
   | "collector"
   | "booster"
   | "reservoirWithResistance"
@@ -747,6 +767,8 @@ const reversedPipeDirections: SelectionMap = new Map();
 const mepElementHighlightColors: Record<MepElementType, number> = {
   pipe: 0x00ffff,
   isolationValve: 0x0000ff,
+  normallyOpenValve: 0x00ff00,
+  normallyClosedValve: 0xff0000,
   collector: 0xff00ff,
   booster: 0x00ff00,
   reservoirWithResistance: 0xffff00,
@@ -2180,13 +2202,39 @@ function defineSelectedElementsAs(elementType: MepElementType) {
     for (const localId of ids) {
       const key = elementKey(modelId, localId);
 
-      mepElements[key] = {
-        modelId,
-        localId,
-        elementType,
-        circuitType: mepElements[key]?.circuitType ?? "unknown",
-        state: mepElements[key]?.state,
-      };
+      const defaultState =
+  elementType === "normallyClosedValve"
+    ? "closed"
+    : elementType === "normallyOpenValve"
+      ? "open"
+      : mepElements[key]?.state;
+
+mepElements[key] = {
+  modelId,
+  localId,
+  elementType,
+  circuitType: mepElements[key]?.circuitType ?? "unknown",
+  state: defaultState,
+};
+
+if (elementType === "normallyClosedValve") {
+  let blockedSet = blockedPipes.get(modelId);
+
+  if (!blockedSet) {
+    blockedSet = new Set<number>();
+    blockedPipes.set(modelId, blockedSet);
+  }
+
+  blockedSet.add(localId);
+}
+
+if (elementType === "normallyOpenValve") {
+  blockedPipes.get(modelId)?.delete(localId);
+
+  if (blockedPipes.get(modelId)?.size === 0) {
+    blockedPipes.delete(modelId);
+  }
+}
     }
   }
 
@@ -2353,13 +2401,15 @@ async function showSelectedMepElementInfo() {
 
 function getElementTypeLabel(elementType: MepElementType) {
   const labels: Record<MepElementType, string> = {
-    pipe: "tubagem",
-    isolationValve: "válvula de corte",
-    collector: "coletor",
-    booster: "booster",
-    reservoirWithResistance: "reservatório com resistência",
-    reservoirWithoutResistance: "reservatório sem resistência",
-  };
+  pipe: "tubagem",
+  isolationValve: "válvula de corte",
+  normallyOpenValve: "válvula NA",
+normallyClosedValve: "válvula NF",
+  collector: "coletor",
+  booster: "booster",
+  reservoirWithResistance: "reservatório com resistência",
+  reservoirWithoutResistance: "reservatório sem resistência",
+};
 
   return labels[elementType];
 }
@@ -2452,7 +2502,12 @@ async function clearMepElementsHighlightByType(elementType: MepElementType) {
 
 function isIsolationValve(modelId: string, localId: number) {
   const key = elementKey(modelId, localId);
-  return mepElements[key]?.elementType === "isolationValve";
+
+  return (
+    mepElements[key]?.elementType === "isolationValve" ||
+    mepElements[key]?.elementType === "normallyOpenValve" ||
+    mepElements[key]?.elementType === "normallyClosedValve"
+  );
 }
 
 function updateBlockedCount() {
