@@ -367,6 +367,22 @@
                 </button>
 
                 <button
+  v-if="!route.hidden"
+  type="button"
+  @click="setSavedRouteVisibility(route.id, false)"
+>
+  Ocultar
+</button>
+
+<button
+  v-else
+  type="button"
+  @click="setSavedRouteVisibility(route.id, true)"
+>
+  Mostrar
+</button>
+
+                <button
                   type="button"
                   @click="reverseSavedRoute(route.id)"
                 >
@@ -424,6 +440,22 @@
                 >
                   Aplicar
                 </button>
+
+                <button
+  v-if="!group.hidden"
+  type="button"
+  @click="setSavedRouteGroupVisibility(group.id, false)"
+>
+  Ocultar
+</button>
+
+<button
+  v-else
+  type="button"
+  @click="setSavedRouteGroupVisibility(group.id, true)"
+>
+  Mostrar
+</button>
 
                 <button
                   type="button"
@@ -667,6 +699,7 @@ type SavedRoute = {
   name: string;
   temperature: PipeCircuit;
   path: FlowNode[];
+  hidden?: boolean;
 };
 
 type SavedRouteGroup = {
@@ -674,6 +707,7 @@ type SavedRouteGroup = {
   name: string;
   temperature: PipeCircuit;
   routeIds: string[];
+  hidden?: boolean;
 };
 
 type SavedReversedDirection = {
@@ -1198,8 +1232,23 @@ isFlowing.value = shouldKeepAnimating && pipeParticles.length > 0;
 async function addAssignmentsToScene(temperature: PipeCircuit) {
   for (const [modelId, idsSet] of manualAssignments[temperature]) {
     const model = loadedModels.get(modelId);
-    const ids = [...idsSet];
-    if (!model || !ids.length) continue;
+    const allIds = [...idsSet];
+
+if (!model || !allIds.length) continue;
+
+const hiddenIds = allIds.filter((localId) =>
+  isNodeHiddenBySavedRouteVisibility({ modelId, localId }),
+);
+
+const ids = allIds.filter(
+  (localId) => !isNodeHiddenBySavedRouteVisibility({ modelId, localId }),
+);
+
+if (hiddenIds.length) {
+  await model.resetHighlight(hiddenIds);
+}
+
+if (!ids.length) continue;
 
     const circuitColors = {
   supply1: 0xff0000,
@@ -1553,6 +1602,48 @@ if (reversedPipeDirections.get(node.modelId)?.size === 0) {
   flowMessage.value = "Caminho apagado.";
 }
 
+async function resetRoutePathHighlight(route: SavedRoute) {
+  const idsByModel = new Map<string, number[]>();
+
+  for (const node of route.path) {
+    if (!idsByModel.has(node.modelId)) {
+      idsByModel.set(node.modelId, []);
+    }
+
+    idsByModel.get(node.modelId)?.push(node.localId);
+  }
+
+  for (const [modelId, ids] of idsByModel) {
+    const model = loadedModels.get(modelId);
+
+    if (model && ids.length) {
+      await model.resetHighlight(ids);
+    }
+  }
+}
+
+async function setSavedRouteVisibility(routeId: string, shouldShow: boolean) {
+  const route = savedRoutes.find((savedRoute) => savedRoute.id === routeId);
+
+  if (!route) return;
+
+  route.hidden = !shouldShow;
+
+  saveRoutesToStorage();
+
+  await resetRoutePathHighlight(route);
+
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  } else {
+    await fragmentManager.core.update(true);
+  }
+
+  flowMessage.value = shouldShow
+    ? `Caminho "${route.name}" visível.`
+    : `Caminho "${route.name}" oculto.`;
+}
+
 async function applySavedRoute(route: SavedRoute) {
   const loadedModelIds = [...loadedModels.keys()];
 
@@ -1595,6 +1686,37 @@ async function applySavedRoute(route: SavedRoute) {
 
   flowMessage.value =
     `Caminho ${route.name} aplicado.`;
+}
+
+async function setSavedRouteGroupVisibility(
+  groupId: string,
+  shouldShow: boolean,
+) {
+  const group = savedRouteGroups.find(
+    (savedGroup) => savedGroup.id === groupId,
+  );
+
+  if (!group) return;
+
+  group.hidden = !shouldShow;
+
+  saveRouteGroupsToStorage();
+
+  const routes = getRoutesFromGroup(group);
+
+  for (const route of routes) {
+    await resetRoutePathHighlight(route);
+  }
+
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  } else {
+    await fragmentManager.core.update(true);
+  }
+
+  flowMessage.value = shouldShow
+    ? `Grupo "${group.name}" visível.`
+    : `Grupo "${group.name}" oculto.`;
 }
 
 async function applyRouteGroup(group: SavedRouteGroup) {
@@ -2874,6 +2996,24 @@ function getRoutesFromGroup(group: SavedRouteGroup) {
 
 function getRouteNamesFromGroup(group: SavedRouteGroup) {
   return getRoutesFromGroup(group).map((route) => route.name);
+}
+
+function routeContainsNode(route: SavedRoute, node: FlowNode) {
+  return route.path.some((routeNode) => isSameNode(routeNode, node));
+}
+
+function isRouteHiddenByGroup(route: SavedRoute) {
+  return savedRouteGroups.some(
+    (group) => group.hidden && group.routeIds.includes(route.id),
+  );
+}
+
+function isNodeHiddenBySavedRouteVisibility(node: FlowNode) {
+  return savedRoutes.some(
+    (route) =>
+      (route.hidden || isRouteHiddenByGroup(route)) &&
+      routeContainsNode(route, node),
+  );
 }
 
 function getNextRouteNumberForCircuit(circuit: PipeCircuit) {
