@@ -263,6 +263,16 @@
   </button>
 </div>
 
+<div class="flow-actions flow-actions--secondary">
+  <button type="button" @click="hideSelectedFlowArrows">
+    Ocultar setas
+  </button>
+
+  <button type="button" @click="showSelectedFlowArrows">
+    Mostrar setas
+  </button>
+</div>
+
           <div class="flow-section-title">
             Caminhos
           </div>
@@ -732,6 +742,8 @@ const REVERSED_DIRECTIONS_STORAGE_KEY =
   "bastto-viewer-reversed-directions";
 const ROUTE_GROUPS_STORAGE_KEY =
   "bastto-viewer-route-groups";
+const HIDDEN_FLOW_ARROWS_STORAGE_KEY =
+  "bastto-viewer-hidden-flow-arrows";
 
 let world: any;
 let serializer: FRAGS.IfcImporter;
@@ -763,6 +775,7 @@ const manualAssignments: Record<PipeCircuit, SelectionMap> = {
   return3: new Map(),
 };
 const reversedPipeDirections: SelectionMap = new Map();
+const hiddenFlowArrowElements: SelectionMap = new Map();
 
 const mepElementHighlightColors: Record<MepElementType, number> = {
   pipe: 0x00ffff,
@@ -891,6 +904,7 @@ onMounted(async () => {
 loadRoutesFromStorage();
 loadRouteGroupsFromStorage();
 loadReversedDirectionsFromStorage();
+loadHiddenFlowArrowsFromStorage();
 
   createBimPanel(components, viewport);
   animateFlow();
@@ -1207,6 +1221,10 @@ await model.highlight(
       const localId = ids[index];
 
 if (isPipeBlocked(modelId, localId)) {
+  continue;
+}
+
+if (isFlowArrowHidden(modelId, localId)) {
   continue;
 }
 
@@ -2192,6 +2210,43 @@ function loadReversedDirectionsFromStorage() {
   }
 }
 
+function saveHiddenFlowArrowsToStorage() {
+  const data: SavedReversedDirection[] = [];
+
+  for (const [modelId, ids] of hiddenFlowArrowElements) {
+    data.push({
+      modelId,
+      localIds: [...ids],
+    });
+  }
+
+  localStorage.setItem(
+    HIDDEN_FLOW_ARROWS_STORAGE_KEY,
+    JSON.stringify(data),
+  );
+}
+
+function loadHiddenFlowArrowsFromStorage() {
+  const saved = localStorage.getItem(HIDDEN_FLOW_ARROWS_STORAGE_KEY);
+
+  if (!saved) return;
+
+  try {
+    const parsed = JSON.parse(saved) as SavedReversedDirection[];
+
+    hiddenFlowArrowElements.clear();
+
+    for (const item of parsed) {
+      hiddenFlowArrowElements.set(
+        item.modelId,
+        new Set(item.localIds),
+      );
+    }
+  } catch (error) {
+    console.error("Erro ao carregar setas ocultas:", error);
+  }
+}
+
 function defineSelectedElementsAs(elementType: MepElementType) {
   if (!selectedCount.value) {
     flowMessage.value = "Seleciona primeiro um ou mais elementos no modelo.";
@@ -2624,6 +2679,74 @@ async function closeSelectedValves() {
 
 async function openSelectedValves() {
   await setSelectedValvesState("open");
+}
+
+async function hideSelectedFlowArrows() {
+  if (!selectedCount.value) {
+    flowMessage.value = "Seleciona primeiro um ou mais elementos para ocultar as setas.";
+    return;
+  }
+
+  let hiddenCount = 0;
+
+  for (const [modelId, ids] of selectedItems) {
+    let hiddenSet = hiddenFlowArrowElements.get(modelId);
+
+    if (!hiddenSet) {
+      hiddenSet = new Set<number>();
+      hiddenFlowArrowElements.set(modelId, hiddenSet);
+    }
+
+    for (const localId of ids) {
+      hiddenSet.add(localId);
+      hiddenCount++;
+    }
+  }
+
+  saveHiddenFlowArrowsToStorage();
+
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  }
+
+  flowMessage.value = `${hiddenCount} elemento(s) sem setas de fluxo.`;
+}
+
+async function showSelectedFlowArrows() {
+  if (!selectedCount.value) {
+    flowMessage.value = "Seleciona primeiro um ou mais elementos para voltar a mostrar as setas.";
+    return;
+  }
+
+  let shownCount = 0;
+
+  for (const [modelId, ids] of selectedItems) {
+    const hiddenSet = hiddenFlowArrowElements.get(modelId);
+
+    if (!hiddenSet) {
+      continue;
+    }
+
+    for (const localId of ids) {
+      if (hiddenSet.delete(localId)) {
+        shownCount++;
+      }
+    }
+
+    if (hiddenSet.size === 0) {
+      hiddenFlowArrowElements.delete(modelId);
+    }
+  }
+
+  saveHiddenFlowArrowsToStorage();
+
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  }
+
+  flowMessage.value = shownCount
+    ? `${shownCount} elemento(s) voltaram a mostrar setas.`
+    : "Os elementos selecionados já mostravam setas.";
 }
 
 async function reverseSelectedPipesDirection() {
@@ -3360,6 +3483,10 @@ function getReversedDirectionSet(modelId: string) {
   }
 
   return ids;
+}
+
+function isFlowArrowHidden(modelId: string, localId: number) {
+  return hiddenFlowArrowElements.get(modelId)?.has(localId) ?? false;
 }
 
 function isPipeDirectionReversed(modelId: string, localId: number) {
