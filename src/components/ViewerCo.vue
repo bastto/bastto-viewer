@@ -195,346 +195,368 @@
         </div>
       </section>
 
-      <section
-        :class="['flow-panel', isFlowControlsPanelMinimized ? 'flow-panel--minimized' : '']"
-        aria-label="Water flow controls"
+<section
+  :class="['flow-panel', isFlowControlsPanelMinimized ? 'flow-panel--minimized' : '']"
+  aria-label="Water flow controls"
+>
+  <div class="flow-panel__header">
+    <div>
+      <p class="flow-panel__eyebrow">Fluxo de água</p>
+      <h2>Circuitos hidráulicos</h2>
+    </div>
+
+    <button
+      type="button"
+      class="flow-panel__toggle"
+      @click="toggleFlowControlsPanelMinimized"
+    >
+      {{ isFlowControlsPanelMinimized ? '+' : '−' }}
+    </button>
+  </div>
+
+  <div class="flow-panel__content">
+    <p class="selection-count">Selecionados: {{ selectedCount }}</p>
+
+    <div class="flow-section-title">
+      Circuitos
+    </div>
+
+    <div class="flow-actions">
+      <button type="button" @click="assignSelectedPipes('supply1')">
+        Avanço 1
+      </button>
+
+      <button type="button" @click="assignSelectedPipes('supply2')">
+        Avanço 2
+      </button>
+
+      <button type="button" @click="assignSelectedPipes('supply3')">
+        Avanço 3
+      </button>
+    </div>
+
+    <div class="flow-actions flow-actions--secondary">
+      <button type="button" @click="assignSelectedPipes('return1')">
+        Retorno 1
+      </button>
+
+      <button type="button" @click="assignSelectedPipes('return2')">
+        Retorno 2
+      </button>
+
+      <button type="button" @click="assignSelectedPipes('return3')">
+        Retorno 3
+      </button>
+    </div>
+
+    <div class="flow-actions flow-actions--secondary">
+      <button type="button" @click="clearSelectedManualAssignments">
+        Limpar marca selecionada
+      </button>
+
+      <button type="button" @click="clearManualAssignments">
+        Limpar todas as marcas
+      </button>
+
+      <button type="button" @click="reverseSelectedPipesDirection">
+        Sincronizar sentido
+      </button>
+    </div>
+
+    <div class="flow-actions flow-actions--secondary">
+      <button type="button" @click="hideSelectedFlowArrows">
+        Ocultar setas
+      </button>
+
+      <button type="button" @click="showSelectedFlowArrows">
+        Mostrar setas
+      </button>
+    </div>
+
+    <div class="flow-section-title">
+      Caminhos
+    </div>
+
+    <div class="flow-actions flow-actions--secondary">
+      <button type="button" @click="startManualRouteRecording">
+        Criar caminho manual
+      </button>
+
+      <button type="button" @click="cancelManualRouteRecording">
+        Cancelar manual
+      </button>
+    </div>
+
+    <p class="connection-note">
+      Caminho manual: {{ manualRouteNodes.length }} tubo(s)
+    </p>
+
+    <div class="flow-actions flow-actions--secondary">
+      <button type="button" @click="setRouteStart">
+        Definir início
+      </button>
+
+      <button type="button" @click="addRouteWaypoint">
+        Passar aqui
+      </button>
+
+      <button type="button" @click="setRouteEnd">
+        Definir fim
+      </button>
+    </div>
+
+    <div class="flow-actions">
+      <button type="button" @click="createAutoRoute('supply1')">
+        Caminho avanço 1
+      </button>
+
+      <button type="button" @click="createAutoRoute('supply2')">
+        Caminho avanço 2
+      </button>
+
+      <button type="button" @click="createAutoRoute('supply3')">
+        Caminho avanço 3
+      </button>
+    </div>
+
+    <div class="flow-actions flow-actions--secondary">
+      <button type="button" @click="createAutoRoute('return1')">
+        Caminho retorno 1
+      </button>
+
+      <button type="button" @click="createAutoRoute('return2')">
+        Caminho retorno 2
+      </button>
+
+      <button type="button" @click="createAutoRoute('return3')">
+        Caminho retorno 3
+      </button>
+    </div>
+
+    <div v-if="manualRouteNodes.length >= 2" class="flow-section-title">
+      Definir tipo do caminho manual
+    </div>
+
+    <div v-if="manualRouteNodes.length >= 2" class="flow-actions">
+      <button type="button" @click="createManualRouteFromSelection('supply1')">
+        Manual avanço 1
+      </button>
+
+      <button type="button" @click="createManualRouteFromSelection('supply2')">
+        Manual avanço 2
+      </button>
+
+      <button type="button" @click="createManualRouteFromSelection('supply3')">
+        Manual avanço 3
+      </button>
+    </div>
+
+    <div
+      v-if="manualRouteNodes.length >= 2"
+      class="flow-actions flow-actions--secondary"
+    >
+      <button type="button" @click="createManualRouteFromSelection('return1')">
+        Manual retorno 1
+      </button>
+
+      <button type="button" @click="createManualRouteFromSelection('return2')">
+        Manual retorno 2
+      </button>
+
+      <button type="button" @click="createManualRouteFromSelection('return3')">
+        Manual retorno 3
+      </button>
+    </div>
+
+    <div class="flow-actions flow-actions--single">
+      <button
+        type="button"
+        class="flow-button--primary"
+        @click="saveCurrentRoute"
       >
-        <div class="flow-panel__header">
-          <div>
-            <p class="flow-panel__eyebrow">Fluxo de água</p>
-            <h2>Circuitos hidráulicos</h2>
-          </div>
+        Guardar caminho
+      </button>
+    </div>
+
+    <div v-if="hasLoadedModel && savedRoutes.length" class="saved-routes">
+      <p class="connection-note">
+        Caminhos guardados: {{ savedRoutes.length }}
+      </p>
+
+      <div class="flow-actions flow-actions--single">
+        <button type="button" @click="createRouteGroupFromSelection">
+          Criar grupo com selecionados
+        </button>
+      </div>
+
+      <div
+        v-for="route in savedRoutes"
+        :key="route.id"
+        class="saved-route-item"
+      >
+        <label class="saved-route-select">
+          <input
+            v-model="selectedRouteIds"
+            type="checkbox"
+            :value="route.id"
+          />
+
+          <span>{{ route.name }}</span>
+        </label>
+
+        <div>
+          <button type="button" @click="applySavedRoute(route)">
+            Aplicar
+          </button>
 
           <button
+            v-if="!route.hidden"
             type="button"
-            class="flow-panel__toggle"
-            @click="toggleFlowControlsPanelMinimized"
+            @click="setSavedRouteVisibility(route.id, false)"
           >
-            {{ isFlowControlsPanelMinimized ? '+' : '−' }}
+            Ocultar
+          </button>
+
+          <button
+            v-else
+            type="button"
+            @click="setSavedRouteVisibility(route.id, true)"
+          >
+            Mostrar
+          </button>
+
+          <button type="button" @click="reverseSavedRoute(route.id)">
+            Inverter
+          </button>
+
+          <button type="button" @click="renameSavedRoute(route.id)">
+            Renomear
+          </button>
+
+          <button type="button" @click="deleteSavedRoute(route.id)">
+            Apagar
           </button>
         </div>
+      </div>
+    </div>
 
-        <div class="flow-panel__content">
-          <p class="selection-count">Selecionados: {{ selectedCount }}</p>
+    <div v-if="hasLoadedModel && savedRouteGroups.length" class="saved-routes">
+      <p class="connection-note">
+        Grupos de caminhos: {{ savedRouteGroups.length }}
+      </p>
 
-          <div class="flow-section-title">
-            Circuitos
-          </div>
+      <div
+        v-for="group in savedRouteGroups"
+        :key="group.id"
+        class="saved-route-item saved-route-item--group"
+      >
+        <div class="saved-route-group-info">
+          <strong>{{ group.name }}</strong>
 
-          <div class="flow-actions">
-            <button type="button" @click="assignSelectedPipes('supply1')">
-              Avanço 1
-            </button>
+          <p class="saved-route-group-count">
+            {{ getRoutesFromGroup(group).length }} caminho(s)
+          </p>
 
-            <button type="button" @click="assignSelectedPipes('supply2')">
-              Avanço 2
-            </button>
-
-            <button type="button" @click="assignSelectedPipes('supply3')">
-              Avanço 3
-            </button>
-          </div>
-
-          <div class="flow-actions flow-actions--secondary">
-            <button type="button" @click="assignSelectedPipes('return1')">
-              Retorno 1
-            </button>
-
-            <button type="button" @click="assignSelectedPipes('return2')">
-              Retorno 2
-            </button>
-
-            <button type="button" @click="assignSelectedPipes('return3')">
-              Retorno 3
-            </button>
-          </div>
-
-          <div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="clearSelectedManualAssignments">
-    Limpar marca selecionada
-  </button>
-
-  <button type="button" @click="clearManualAssignments">
-    Limpar todas as marcas
-  </button>
-
-  <button type="button" @click="reverseSelectedPipesDirection">
-    Inverter sentido
-  </button>
-</div>
-
-<div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="hideSelectedFlowArrows">
-    Ocultar setas
-  </button>
-
-  <button type="button" @click="showSelectedFlowArrows">
-    Mostrar setas
-  </button>
-</div>
-
-          <div class="flow-section-title">
-            Caminhos
-          </div>
-
-          <div class="flow-actions flow-actions--secondary">
-            <button type="button" @click="setRouteStart">
-              Definir início
-            </button>
-
-            <button type="button" @click="addRouteWaypoint">
-              Passar aqui
-            </button>
-
-            <button type="button" @click="setRouteEnd">
-              Definir fim
-            </button>
-          </div>
-
-          <div class="flow-actions">
-            <button type="button" @click="createAutoRoute('supply1')">
-              Caminho avanço 1
-            </button>
-
-            <button type="button" @click="createAutoRoute('supply2')">
-              Caminho avanço 2
-            </button>
-
-            <button type="button" @click="createAutoRoute('supply3')">
-              Caminho avanço 3
-            </button>
-          </div>
-
-          <div class="flow-actions flow-actions--secondary">
-            <button type="button" @click="createAutoRoute('return1')">
-              Caminho retorno 1
-            </button>
-
-            <button type="button" @click="createAutoRoute('return2')">
-              Caminho retorno 2
-            </button>
-
-            <button type="button" @click="createAutoRoute('return3')">
-              Caminho retorno 3
-            </button>
-          </div>
-
-          <div class="flow-actions flow-actions--single">
-            <button
-              type="button"
-              class="flow-button--primary"
-              @click="saveCurrentRoute"
+          <ul class="saved-route-group-list">
+            <li
+              v-for="routeName in getRouteNamesFromGroup(group)"
+              :key="routeName"
             >
-              Guardar caminho
-            </button>
-          </div>
-
-          <div v-if="hasLoadedModel && savedRoutes.length" class="saved-routes">
-            <p class="connection-note">
-              Caminhos guardados: {{ savedRoutes.length }}
-            </p>
-
-            <div class="flow-actions flow-actions--single">
-              <button
-                type="button"
-                @click="createRouteGroupFromSelection"
-              >
-                Criar grupo com selecionados
-              </button>
-            </div>
-
-            <div
-              v-for="route in savedRoutes"
-              :key="route.id"
-              class="saved-route-item"
-            >
-              <label class="saved-route-select">
-                <input
-                  v-model="selectedRouteIds"
-                  type="checkbox"
-                  :value="route.id"
-                />
-
-                <span>{{ route.name }}</span>
-              </label>
-
-              <div>
-                <button
-                  type="button"
-                  @click="applySavedRoute(route)"
-                >
-                  Aplicar
-                </button>
-
-                <button
-  v-if="!route.hidden"
-  type="button"
-  @click="setSavedRouteVisibility(route.id, false)"
->
-  Ocultar
-</button>
-
-<button
-  v-else
-  type="button"
-  @click="setSavedRouteVisibility(route.id, true)"
->
-  Mostrar
-</button>
-
-                <button
-                  type="button"
-                  @click="reverseSavedRoute(route.id)"
-                >
-                  Inverter
-                </button>
-
-                <button
-                  type="button"
-                  @click="renameSavedRoute(route.id)"
-                >
-                  Renomear
-                </button>
-
-                <button
-                  type="button"
-                  @click="deleteSavedRoute(route.id)"
-                >
-                  Apagar
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="hasLoadedModel && savedRouteGroups.length" class="saved-routes">
-            <p class="connection-note">
-              Grupos de caminhos: {{ savedRouteGroups.length }}
-            </p>
-
-            <div
-              v-for="group in savedRouteGroups"
-              :key="group.id"
-              class="saved-route-item saved-route-item--group"
-            >
-              <div class="saved-route-group-info">
-                <strong>{{ group.name }}</strong>
-
-                <p class="saved-route-group-count">
-                  {{ getRoutesFromGroup(group).length }} caminho(s)
-                </p>
-
-                <ul class="saved-route-group-list">
-                  <li
-                    v-for="routeName in getRouteNamesFromGroup(group)"
-                    :key="routeName"
-                  >
-                    {{ routeName }}
-                  </li>
-                </ul>
-              </div>
-
-              <div>
-                <button
-                  type="button"
-                  @click="applyRouteGroup(group)"
-                >
-                  Aplicar
-                </button>
-
-                <button
-  v-if="!group.hidden"
-  type="button"
-  @click="setSavedRouteGroupVisibility(group.id, false)"
->
-  Ocultar
-</button>
-
-<button
-  v-else
-  type="button"
-  @click="setSavedRouteGroupVisibility(group.id, true)"
->
-  Mostrar
-</button>
-
-                <button
-                  type="button"
-                  @click="reverseRouteGroup(group.id)"
-                >
-                  Inverter
-                </button>
-
-                <button
-                  type="button"
-                  @click="renameRouteGroup(group.id)"
-                >
-                  Renomear
-                </button>
-
-                <button
-                  type="button"
-                  @click="deleteRouteGroup(group.id)"
-                >
-                  Apagar
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <p class="connection-note">Inicio: {{ routeStartLabel }}</p>
-          <p class="connection-note">Passagens: {{ routeWaypoints.length }}</p>
-          <p class="connection-note">Fim: {{ routeEndLabel }}</p>
-
-          <dl class="flow-stats">
-            <div>
-              <dt>Av. 1</dt>
-              <dd>{{ pipeStats.supply1 }}</dd>
-            </div>
-
-            <div>
-              <dt>Av. 2</dt>
-              <dd>{{ pipeStats.supply2 }}</dd>
-            </div>
-
-            <div>
-              <dt>Av. 3</dt>
-              <dd>{{ pipeStats.supply3 }}</dd>
-            </div>
-
-            <div>
-              <dt>Ret. 1</dt>
-              <dd>{{ pipeStats.return1 }}</dd>
-            </div>
-
-            <div>
-              <dt>Ret. 2</dt>
-              <dd>{{ pipeStats.return2 }}</dd>
-            </div>
-
-            <div>
-              <dt>Ret. 3</dt>
-              <dd>{{ pipeStats.return3 }}</dd>
-            </div>
-
-            <div>
-              <dt>Total</dt>
-              <dd>{{ pipeStats.total }}</dd>
-            </div>
-
-            <div>
-              <dt>Lig.</dt>
-              <dd>{{ flowConnections.length }}</dd>
-            </div>
-
-            <div>
-              <dt>Bloq.</dt>
-              <dd>{{ blockedCount }}</dd>
-            </div>
-          </dl>
-
-          <p class="flow-note">{{ flowMessage }}</p>
+              {{ routeName }}
+            </li>
+          </ul>
         </div>
-      </section>
+
+        <div>
+          <button type="button" @click="applyRouteGroup(group)">
+            Aplicar
+          </button>
+
+          <button
+            v-if="!group.hidden"
+            type="button"
+            @click="setSavedRouteGroupVisibility(group.id, false)"
+          >
+            Ocultar
+          </button>
+
+          <button
+            v-else
+            type="button"
+            @click="setSavedRouteGroupVisibility(group.id, true)"
+          >
+            Mostrar
+          </button>
+
+          <button type="button" @click="reverseRouteGroup(group.id)">
+            Inverter
+          </button>
+
+          <button type="button" @click="renameRouteGroup(group.id)">
+            Renomear
+          </button>
+
+          <button type="button" @click="deleteRouteGroup(group.id)">
+            Apagar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <p class="connection-note">Inicio: {{ routeStartLabel }}</p>
+    <p class="connection-note">Passagens: {{ routeWaypoints.length }}</p>
+    <p class="connection-note">Fim: {{ routeEndLabel }}</p>
+
+    <dl class="flow-stats">
+      <div>
+        <dt>Av. 1</dt>
+        <dd>{{ pipeStats.supply1 }}</dd>
+      </div>
+
+      <div>
+        <dt>Av. 2</dt>
+        <dd>{{ pipeStats.supply2 }}</dd>
+      </div>
+
+      <div>
+        <dt>Av. 3</dt>
+        <dd>{{ pipeStats.supply3 }}</dd>
+      </div>
+
+      <div>
+        <dt>Ret. 1</dt>
+        <dd>{{ pipeStats.return1 }}</dd>
+      </div>
+
+      <div>
+        <dt>Ret. 2</dt>
+        <dd>{{ pipeStats.return2 }}</dd>
+      </div>
+
+      <div>
+        <dt>Ret. 3</dt>
+        <dd>{{ pipeStats.return3 }}</dd>
+      </div>
+
+      <div>
+        <dt>Total</dt>
+        <dd>{{ pipeStats.total }}</dd>
+      </div>
+
+      <div>
+        <dt>Lig.</dt>
+        <dd>{{ flowConnections.length }}</dd>
+      </div>
+
+      <div>
+        <dt>Bloq.</dt>
+        <dd>{{ blockedCount }}</dd>
+      </div>
+    </dl>
+
+    <p class="flow-note">{{ flowMessage }}</p>
+  </div>
+</section>
 
       <section
         :class="[
@@ -623,13 +645,13 @@
   </div>
 
   <a
-    href="https://github.com/bastto"
-    target="_blank"
-    rel="noopener noreferrer"
-    class="corner-logo"
-  >
-    /src/assets/bastto-logo.svg
-  </a>
+  href="https://github.com/bastto"
+  target="_blank"
+  rel="noopener noreferrer"
+  class="corner-logo"
+>
+  /src/assets/bastto-logo.svg
+</a>
   </template>
 
 <script setup lang="ts">
@@ -779,6 +801,8 @@ const ROUTE_GROUPS_STORAGE_KEY =
   "bastto-viewer-route-groups";
 const HIDDEN_FLOW_ARROWS_STORAGE_KEY =
   "bastto-viewer-hidden-flow-arrows";
+const SYNCED_PIPE_DIRECTIONS_STORAGE_KEY =
+  "bastto-viewer-synced-pipe-directions";
 
 let world: any;
 let serializer: FRAGS.IfcImporter;
@@ -793,6 +817,8 @@ const staticFlowObjects: StaticFlowObject[] = [];
 const selectedItems: SelectionMap = new Map();
 const flowConnections = reactive<FlowConnection[]>([]);
 const routeWaypoints = reactive<FlowNode[]>([]);
+const manualRouteNodes = reactive<FlowNode[]>([]);
+const isManualRouteRecording = ref(false);
 const mepElements = reactive<Record<string, MepElement>>({});
 const savedRoutes = reactive<SavedRoute[]>([]);
 const savedRouteGroups = reactive<SavedRouteGroup[]>([]);
@@ -811,6 +837,7 @@ const manualAssignments: Record<PipeCircuit, SelectionMap> = {
   return3: new Map(),
 };
 const reversedPipeDirections: SelectionMap = new Map();
+const syncedPipeDirections: SelectionMap = new Map();
 const hiddenFlowArrowElements: SelectionMap = new Map();
 
 const mepElementHighlightColors: Record<MepElementType, number> = {
@@ -940,6 +967,7 @@ onMounted(async () => {
 loadRoutesFromStorage();
 loadRouteGroupsFromStorage();
 loadReversedDirectionsFromStorage();
+loadSyncedPipeDirectionsFromStorage();
 loadHiddenFlowArrowsFromStorage();
 
   createBimPanel(components, viewport);
@@ -982,6 +1010,8 @@ function createBimPanel(components: OBC.Components, viewport: HTMLElement) {
   updatePropertiesTable({ modelIdMap });
 
   await showSelectedMepElementInfo();
+
+  addSelectedNodeToManualRoute();
 
   if (countAssignments() > 0) {
     await rebuildManualFlowLayer();
@@ -1408,6 +1438,42 @@ manualAssignments.return3.clear();
   routeEndLabel.value = "nenhum";
 }
 
+function startManualRouteRecording() {
+  manualRouteNodes.splice(0);
+  isManualRouteRecording.value = true;
+  flowMessage.value =
+    "Modo manual ativo. Seleciona os tubos pela ordem do percurso.";
+}
+
+function cancelManualRouteRecording() {
+  manualRouteNodes.splice(0);
+  isManualRouteRecording.value = false;
+  flowMessage.value = "Caminho manual cancelado.";
+}
+
+function addSelectedNodeToManualRoute() {
+  if (!isManualRouteRecording.value) {
+    return;
+  }
+
+  const node = getFirstSelectedNode();
+
+  if (!node) {
+    return;
+  }
+
+  const lastNode = manualRouteNodes[manualRouteNodes.length - 1];
+
+  if (lastNode && isSameNode(lastNode, node)) {
+    return;
+  }
+
+  manualRouteNodes.push(node);
+
+  flowMessage.value =
+    `Ponto manual adicionado. Total: ${manualRouteNodes.length}.`;
+}
+
 function setRouteStart() {
   const node = getFirstSelectedNode();
   if (!node) {
@@ -1444,6 +1510,38 @@ function addRouteWaypoint() {
   if (!alreadyExists) routeWaypoints.push(node);
 
   flowMessage.value = `Ponto de passagem adicionado. Total: ${routeWaypoints.length}.`;
+}
+
+async function createManualRouteFromSelection(temperature: PipeCircuit) {
+  if (manualRouteNodes.length < 2) {
+    flowMessage.value =
+      "Seleciona pelo menos dois tubos pela ordem do caminho manual.";
+    return;
+  }
+
+  const path = [...manualRouteNodes];
+
+  flowConnections.splice(0);
+
+  for (let index = 0; index < path.length - 1; index++) {
+    flowConnections.push({
+      from: path[index],
+      to: path[index + 1],
+      temperature,
+    });
+  }
+
+  assignPathToTemperature(path, temperature);
+
+  updateManualStats();
+
+  await rebuildManualFlowLayer();
+
+  manualRouteNodes.splice(0);
+  isManualRouteRecording.value = false;
+
+  flowMessage.value =
+    `Caminho manual ${getCircuitLabel(temperature)} criado com ${path.length} tubo(s).`;
 }
 
 async function createAutoRoute(temperature: PipeCircuit) {
@@ -1790,16 +1888,18 @@ async function reverseRouteGroup(groupId: string) {
   }
 
   for (const route of routes) {
-    const reversedPath = [...route.path].reverse();
+  const reversedPath = [...route.path].reverse();
 
-    route.path.splice(
-      0,
-      route.path.length,
-      ...reversedPath,
-    );
-  }
+  route.path.splice(
+    0,
+    route.path.length,
+    ...reversedPath,
+  );
 
-  saveRoutesToStorage();
+  toggleSyncedPipesForPath(route.path);
+}
+
+saveRoutesToStorage();
 
   if (loadedModels.size) {
     await applyRouteGroup(group);
@@ -1861,13 +1961,15 @@ async function reverseSavedRoute(routeId: string) {
 
   const reversedPath = [...route.path].reverse();
 
-  route.path.splice(
-    0,
-    route.path.length,
-    ...reversedPath,
-  );
+route.path.splice(
+  0,
+  route.path.length,
+  ...reversedPath,
+);
 
-  saveRoutesToStorage();
+toggleSyncedPipesForPath(route.path);
+
+saveRoutesToStorage();
 
   const group = getGroupForRoute(routeId);
 
@@ -2307,6 +2409,43 @@ function loadMepElementsFromStorage() {
     }
   } catch (error) {
     console.error("Erro ao carregar elementos MEP guardados:", error);
+  }
+}
+
+function saveSyncedPipeDirectionsToStorage() {
+  const data: SavedReversedDirection[] = [];
+
+  for (const [modelId, ids] of syncedPipeDirections) {
+    data.push({
+      modelId,
+      localIds: [...ids],
+    });
+  }
+
+  localStorage.setItem(
+    SYNCED_PIPE_DIRECTIONS_STORAGE_KEY,
+    JSON.stringify(data),
+  );
+}
+
+function loadSyncedPipeDirectionsFromStorage() {
+  const saved = localStorage.getItem(SYNCED_PIPE_DIRECTIONS_STORAGE_KEY);
+
+  if (!saved) return;
+
+  try {
+    const parsed = JSON.parse(saved) as SavedReversedDirection[];
+
+    syncedPipeDirections.clear();
+
+    for (const item of parsed) {
+      syncedPipeDirections.set(
+        item.modelId,
+        new Set(item.localIds),
+      );
+    }
+  } catch (error) {
+    console.error("Erro ao carregar tubos sincronizados:", error);
   }
 }
 
@@ -2888,38 +3027,42 @@ async function showSelectedFlowArrows() {
 
 async function reverseSelectedPipesDirection() {
   if (!selectedCount.value) {
-    flowMessage.value = "Seleciona primeiro um ou mais tubos para inverter o sentido.";
+    flowMessage.value =
+      "Seleciona primeiro um ou mais tubos para sincronizar o sentido.";
     return;
   }
 
   let changedCount = 0;
 
   for (const [modelId, ids] of selectedItems) {
-    const reversedSet = getReversedDirectionSet(modelId);
+    const syncedSet = getSyncedDirectionSet(modelId);
 
     for (const localId of ids) {
-      if (reversedSet.has(localId)) {
-        reversedSet.delete(localId);
+      if (syncedSet.has(localId)) {
+        syncedSet.delete(localId);
       } else {
-        reversedSet.add(localId);
+        syncedSet.add(localId);
       }
+
+      toggleReversedPipeDirection(modelId, localId);
 
       changedCount++;
     }
 
-    if (reversedSet.size === 0) {
-      reversedPipeDirections.delete(modelId);
+    if (syncedSet.size === 0) {
+      syncedPipeDirections.delete(modelId);
     }
   }
 
+  saveSyncedPipeDirectionsToStorage();
   saveReversedDirectionsToStorage();
 
-if (countAssignments() > 0 || flowConnections.length > 0) {
-  await rebuildManualFlowLayer();
-}
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  }
 
-flowMessage.value =
-  `${changedCount} tubo(s) com sentido invertido.`;
+  flowMessage.value =
+    `${changedCount} tubo(s) sincronizado(s) com o sentido do caminho.`;
 }
 
 async function clearBlockedPipes() {
@@ -3646,6 +3789,47 @@ function toNumberArray(value: unknown): number[] {
   }
   const number = Number(value);
   return Number.isFinite(number) ? [number] : [];
+}
+
+function getSyncedDirectionSet(modelId: string) {
+  let ids = syncedPipeDirections.get(modelId);
+
+  if (!ids) {
+    ids = new Set<number>();
+    syncedPipeDirections.set(modelId, ids);
+  }
+
+  return ids;
+}
+
+function isPipeDirectionSynced(modelId: string, localId: number) {
+  return syncedPipeDirections.get(modelId)?.has(localId) ?? false;
+}
+
+function toggleReversedPipeDirection(modelId: string, localId: number) {
+  const reversedSet = getReversedDirectionSet(modelId);
+
+  if (reversedSet.has(localId)) {
+    reversedSet.delete(localId);
+  } else {
+    reversedSet.add(localId);
+  }
+
+  if (reversedSet.size === 0) {
+    reversedPipeDirections.delete(modelId);
+  }
+}
+
+function toggleSyncedPipesForPath(path: FlowNode[]) {
+  for (const node of path) {
+    if (!isPipeDirectionSynced(node.modelId, node.localId)) {
+      continue;
+    }
+
+    toggleReversedPipeDirection(node.modelId, node.localId);
+  }
+
+  saveReversedDirectionsToStorage();
 }
 
 function getReversedDirectionSet(modelId: string) {
