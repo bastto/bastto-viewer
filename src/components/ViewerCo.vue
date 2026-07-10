@@ -277,67 +277,80 @@
       Caminhos
     </div>
 
-    <div class="flow-actions flow-actions--secondary">
-      <button type="button" @click="startManualRouteRecording">
-        Criar caminho manual
-      </button>
+    <div class="flow-actions flow-actions--single">
+  <button
+    type="button"
+    :class="[
+      'manual-route-mode-button',
+      isManualRouteRecording ? 'manual-route-mode-button--active' : ''
+    ]"
+    @click="toggleManualRouteRecording"
+  >
+    {{ isManualRouteRecording ? 'Desativar modo manual' : 'Ativar modo manual' }}
+  </button>
+</div>
 
-      <button type="button" @click="cancelManualRouteRecording">
-        Cancelar manual
-      </button>
-    </div>
+<p v-if="isManualRouteRecording" class="manual-route-status">
+  Modo manual ativo, selecione os tubos pela ordem do percurso.
+</p>
 
-    <p class="connection-note">
-      Caminho manual: {{ manualRouteNodes.length }} tubo(s)
-    </p>
+<p class="connection-note">
+  Caminho manual: {{ manualRouteNodes.length }} tubo(s)
+</p>
 
-    <div class="flow-actions flow-actions--secondary">
-      <button type="button" @click="setRouteStart">
-        Definir início
-      </button>
+<div v-if="!isManualRouteRecording" class="flow-actions flow-actions--secondary">
+  <button type="button" @click="setRouteStart">
+    Definir início
+  </button>
 
-      <button type="button" @click="addRouteWaypoint">
-        Passar aqui
-      </button>
+  <button type="button" @click="addRouteWaypoint">
+    Passar aqui
+  </button>
 
-      <button type="button" @click="setRouteEnd">
-        Definir fim
-      </button>
-    </div>
+  <button type="button" @click="setRouteEnd">
+    Definir fim
+  </button>
+</div>
 
-    <div class="flow-actions">
-      <button type="button" @click="createAutoRoute('supply1')">
-        Caminho avanço 1
-      </button>
+<div v-if="!isManualRouteRecording" class="flow-actions">
+  <button type="button" @click="createAutoRoute('supply1')">
+    Caminho avanço 1
+  </button>
 
-      <button type="button" @click="createAutoRoute('supply2')">
-        Caminho avanço 2
-      </button>
+  <button type="button" @click="createAutoRoute('supply2')">
+    Caminho avanço 2
+  </button>
 
-      <button type="button" @click="createAutoRoute('supply3')">
-        Caminho avanço 3
-      </button>
-    </div>
+  <button type="button" @click="createAutoRoute('supply3')">
+    Caminho avanço 3
+  </button>
+</div>
 
-    <div class="flow-actions flow-actions--secondary">
-      <button type="button" @click="createAutoRoute('return1')">
-        Caminho retorno 1
-      </button>
+<div v-if="!isManualRouteRecording" class="flow-actions flow-actions--secondary">
+  <button type="button" @click="createAutoRoute('return1')">
+    Caminho retorno 1
+  </button>
 
-      <button type="button" @click="createAutoRoute('return2')">
-        Caminho retorno 2
-      </button>
+  <button type="button" @click="createAutoRoute('return2')">
+    Caminho retorno 2
+  </button>
 
-      <button type="button" @click="createAutoRoute('return3')">
-        Caminho retorno 3
-      </button>
-    </div>
+  <button type="button" @click="createAutoRoute('return3')">
+    Caminho retorno 3
+  </button>
+</div>
 
-    <div v-if="manualRouteNodes.length >= 2" class="flow-section-title">
-      Definir tipo do caminho manual
-    </div>
+<div
+  v-if="isManualRouteRecording && manualRouteNodes.length >= 2"
+  class="flow-section-title"
+>
+  Selecionar tipo do caminho manual
+</div>
 
-    <div v-if="manualRouteNodes.length >= 2" class="flow-actions">
+<div
+  v-if="isManualRouteRecording && manualRouteNodes.length >= 2"
+  class="flow-actions"
+>
       <button type="button" @click="createManualRouteFromSelection('supply1')">
         Manual avanço 1
       </button>
@@ -352,9 +365,9 @@
     </div>
 
     <div
-      v-if="manualRouteNodes.length >= 2"
-      class="flow-actions flow-actions--secondary"
-    >
+  v-if="isManualRouteRecording && manualRouteNodes.length >= 2"
+  class="flow-actions flow-actions--secondary"
+>
       <button type="button" @click="createManualRouteFromSelection('return1')">
         Manual retorno 1
       </button>
@@ -1449,6 +1462,15 @@ function cancelManualRouteRecording() {
   manualRouteNodes.splice(0);
   isManualRouteRecording.value = false;
   flowMessage.value = "Caminho manual cancelado.";
+}
+
+function toggleManualRouteRecording() {
+  if (isManualRouteRecording.value) {
+    cancelManualRouteRecording();
+    return;
+  }
+
+  startManualRouteRecording();
 }
 
 function addSelectedNodeToManualRoute() {
@@ -4284,6 +4306,38 @@ function chunk<T>(items: T[], size: number) {
   gap: 4px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.manual-route-mode-button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 6px;
+  background: #f7fbff;
+  color: #111820;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.manual-route-mode-button:hover {
+  background: #d9f0ff;
+}
+
+.manual-route-mode-button--active {
+  background: #8fd3ff !important;
+  color: #07131a !important;
+  box-shadow: 0 0 0 2px rgba(143, 211, 255, 0.35);
+}
+
+.manual-route-status {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(143, 211, 255, 0.18);
+  color: #8fd3ff;
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1.35;
 }
 
 @media (max-width: 820px) {
