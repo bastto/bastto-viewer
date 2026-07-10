@@ -520,6 +520,12 @@
     <p class="connection-note">Passagens: {{ routeWaypoints.length }}</p>
     <p class="connection-note">Fim: {{ routeEndLabel }}</p>
 
+
+<p v-if="routeWarningMessage" class="route-warning-message">
+  {{ routeWarningMessage }}
+</p>
+
+
     <dl class="flow-stats">
       <div>
         <dt>Av. 1</dt>
@@ -745,6 +751,17 @@ type SavedRouteGroup = {
   hidden?: boolean;
 };
 
+type RouteDirectionAppearance = {
+  routeName: string;
+  previousKey: string | null;
+  nextKey: string | null;
+};
+
+type SharedRouteDirectionConflict = {
+  node: FlowNode;
+  routeNames: string[];
+};
+
 type SavedReversedDirection = {
   modelId: string;
   localIds: number[];
@@ -782,6 +799,7 @@ const loadingProgress = ref(0);
 const loadingFileName = ref("");
 const flowSpeed = ref(1);
 const flowMessage = ref("Seleciona tubos no modelo e atribui um circuito.");
+const routeWarningMessage = ref("");
 const selectedCount = ref(0);
 const selectedMepElementInfo = ref("Nenhum elemento classificado selecionado.");
 const hasLoadedModel = ref(false);
@@ -1891,8 +1909,14 @@ async function applyRouteGroup(group: SavedRouteGroup) {
 
   await rebuildManualFlowLayer();
 
-  flowMessage.value =
-    `Grupo "${group.name}" aplicado com ${routes.length} caminho(s).`;
+  const directionConflicts = findSharedRouteDirectionConflicts(group);
+
+routeWarningMessage.value = directionConflicts.length
+  ? `Atenção: ${directionConflicts.length} tubo(s) partilhado(s) podem ter sentidos diferentes.`
+  : "";
+
+flowMessage.value =
+  `Grupo "${group.name}" aplicado com ${routes.length} caminho(s).`;
 }
 
 async function reverseRouteGroup(groupId: string) {
@@ -2049,19 +2073,27 @@ function createRouteGroupFromSelection() {
 
   if (!trimmedName) return;
 
-  savedRouteGroups.push({
-    id: crypto.randomUUID(),
-    name: trimmedName,
-    temperature,
-    routeIds: [...selectedRouteIds.value],
-  });
+  const newGroup: SavedRouteGroup = {
+  id: crypto.randomUUID(),
+  name: trimmedName,
+  temperature,
+  routeIds: [...selectedRouteIds.value],
+};
 
-  selectedRouteIds.value = [];
+savedRouteGroups.push(newGroup);
 
-  saveRouteGroupsToStorage();
+selectedRouteIds.value = [];
 
-  flowMessage.value =
-    `Grupo "${trimmedName}" criado com ${routes.length} caminho(s).`;
+saveRouteGroupsToStorage();
+
+const directionConflicts = findSharedRouteDirectionConflicts(newGroup);
+
+routeWarningMessage.value = directionConflicts.length
+  ? `Atenção: ${directionConflicts.length} tubo(s) partilhado(s) podem ter sentidos diferentes.`
+  : "";
+
+flowMessage.value =
+  `Grupo "${trimmedName}" criado com ${routes.length} caminho(s).`;
 }
 
 function renameSavedRoute(routeId: string) {
@@ -3187,6 +3219,117 @@ function getGroupForRoute(routeId: string) {
 
 function getRouteNamesFromGroup(group: SavedRouteGroup) {
   return getRoutesFromGroup(group).map((route) => route.name);
+}
+
+function getRouteDirectionAppearance(
+  route: SavedRoute,
+  nodeIndex: number,
+): RouteDirectionAppearance {
+  const previousNode = route.path[nodeIndex - 1] ?? null;
+  const nextNode = route.path[nodeIndex + 1] ?? null;
+
+  return {
+    routeName: route.name,
+    previousKey: previousNode ? nodeKey(previousNode) : null,
+    nextKey: nextNode ? nodeKey(nextNode) : null,
+  };
+}
+
+function directionAppearancesAreOpposite(
+  first: RouteDirectionAppearance,
+  second: RouteDirectionAppearance,
+) {
+  if (
+    first.previousKey &&
+    first.nextKey &&
+    second.previousKey &&
+    second.nextKey
+  ) {
+    return (
+      first.previousKey === second.nextKey &&
+      first.nextKey === second.previousKey
+    );
+  }
+
+  if (first.nextKey && second.previousKey) {
+    return first.nextKey === second.previousKey;
+  }
+
+  if (first.previousKey && second.nextKey) {
+    return first.previousKey === second.nextKey;
+  }
+
+  return false;
+}
+
+function findSharedRouteDirectionConflicts(
+  group: SavedRouteGroup,
+): SharedRouteDirectionConflict[] {
+  const routes = getRoutesFromGroup(group);
+  const appearancesByNode = new Map<
+    string,
+    {
+      node: FlowNode;
+      appearances: RouteDirectionAppearance[];
+    }
+  >();
+
+  for (const route of routes) {
+    route.path.forEach((node, nodeIndex) => {
+      const key = nodeKey(node);
+
+      if (!appearancesByNode.has(key)) {
+        appearancesByNode.set(key, {
+          node,
+          appearances: [],
+        });
+      }
+
+      appearancesByNode.get(key)?.appearances.push(
+        getRouteDirectionAppearance(route, nodeIndex),
+      );
+    });
+  }
+
+  const conflicts: SharedRouteDirectionConflict[] = [];
+
+  for (const item of appearancesByNode.values()) {
+    if (item.appearances.length < 2) {
+      continue;
+    }
+
+    let hasConflict = false;
+
+    for (let index = 0; index < item.appearances.length; index++) {
+      for (
+        let compareIndex = index + 1;
+        compareIndex < item.appearances.length;
+        compareIndex++
+      ) {
+        if (
+          directionAppearancesAreOpposite(
+            item.appearances[index],
+            item.appearances[compareIndex],
+          )
+        ) {
+          hasConflict = true;
+        }
+      }
+    }
+
+    if (hasConflict) {
+      conflicts.push({
+        node: item.node,
+        routeNames: [
+          ...new Set(
+            item.appearances.map((appearance) => appearance.routeName),
+          ),
+        ],
+      });
+    }
+  }
+
+  return conflicts;
 }
 
 function routeContainsNode(route: SavedRoute, node: FlowNode) {
@@ -4338,6 +4481,18 @@ function chunk<T>(items: T[], size: number) {
   font-size: 0.82rem;
   font-weight: 900;
   line-height: 1.35;
+}
+
+.route-warning-message {
+  margin: 12px 0 0;
+  padding: 10px;
+  border-radius: 6px;
+  background: rgba(255, 193, 7, 0.18);
+  color: #ffc107;
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1.35;
+  border: 1px solid rgba(255, 193, 7, 0.35);
 }
 
 @media (max-width: 820px) {
