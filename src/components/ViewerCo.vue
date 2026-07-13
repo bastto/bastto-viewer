@@ -986,10 +986,6 @@ onMounted(async () => {
 
   world.camera.controls.addEventListener("rest", async () => {
   await fragmentManager.core.update(true);
-
-  if (countAssignments() > 0) {
-    await rebuildManualFlowLayer();
-  }
 });
 
   fragmentManager.list.onItemSet.add(async ({ value: model }) => {
@@ -1057,15 +1053,16 @@ function createBimPanel(components: OBC.Components, viewport: HTMLElement) {
 
   await showSelectedMepElementInfo();
 
-addSelectedNodeToManualRoute();
+  addSelectedNodeToManualRoute();
 
-if (countAssignments() > 0) {
-  await rebuildManualFlowLayer();
-}
+  if (isManualRouteRecording.value && manualRouteNodes.length > 0) {
+    await updateManualRoutePreviewHighlight();
+    return;
+  }
 
-if (isManualRouteRecording.value && manualRouteNodes.length > 0) {
-  await updateManualRoutePreviewHighlight();
-}
+  if (countAssignments() > 0) {
+    await rebuildManualFlowLayer();
+  }
 });
 
   highlighter.events.select.onClear.add(async () => {
@@ -1076,6 +1073,10 @@ if (isManualRouteRecording.value && manualRouteNodes.length > 0) {
   updatePropertiesTable({
     modelIdMap: {},
   });
+
+  if (isManualRouteRecording.value) {
+    return;
+  }
 
   if (countAssignments() > 0) {
     await rebuildManualFlowLayer();
@@ -1395,12 +1396,6 @@ async function clearSelectedManualAssignments() {
       getAssignmentSet("return2", modelId).delete(localId);
       getAssignmentSet("return3", modelId).delete(localId);
 
-      reversedPipeDirections.get(modelId)?.delete(localId);
-
-      if (reversedPipeDirections.get(modelId)?.size === 0) {
-        reversedPipeDirections.delete(modelId);
-      }
-
       if (!idsByModel.has(modelId)) {
         idsByModel.set(modelId, []);
       }
@@ -1418,8 +1413,7 @@ async function clearSelectedManualAssignments() {
       await model.resetHighlight(ids);
     }
   }
-
-  saveReversedDirectionsToStorage();
+  
   updateManualStats();
 
   if (countAssignments() > 0 || flowConnections.length > 0) {
@@ -1456,9 +1450,6 @@ manualAssignments.supply3.clear();
 manualAssignments.return1.clear();
 manualAssignments.return2.clear();
 manualAssignments.return3.clear();
-
-reversedPipeDirections.clear();
-saveReversedDirectionsToStorage();
 
   flowConnections.splice(0);
   currentRouteConnections.splice(0);
@@ -1565,10 +1556,6 @@ async function removeLastManualRouteNode() {
 
   if (manualRouteNodes.length > 0) {
     await updateManualRoutePreviewHighlight();
-  }
-
-  if (countAssignments() > 0 || flowConnections.length > 0) {
-    await rebuildManualFlowLayer();
   } else {
     await fragmentManager.core.update(true);
   }
