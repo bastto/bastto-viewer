@@ -405,24 +405,12 @@
         Caminhos guardados: {{ savedRoutes.length }}
       </p>
 
-      <div class="flow-actions flow-actions--single">
-        <button type="button" @click="createRouteGroupFromSelection">
-          Criar grupo com selecionados
-        </button>
-      </div>
-
       <div
         v-for="route in savedRoutes"
         :key="route.id"
         class="saved-route-item"
       >
-        <label class="saved-route-select saved-route-select--details">
-  <input
-    v-model="selectedRouteIds"
-    type="checkbox"
-    :value="route.id"
-  />
-
+        <div class="saved-route-select saved-route-select--details">
   <span class="saved-route-text">
     <strong>{{ route.name }}</strong>
 
@@ -432,7 +420,7 @@
       {{ getRouteVisibilityLabel(route) }}
     </small>
   </span>
-</label>
+</div>
 
         <div>
           <button type="button" @click="applySavedRoute(route)">
@@ -470,74 +458,9 @@
       </div>
     </div>
 
-    <div v-if="hasLoadedModel && savedRouteGroups.length" class="saved-routes">
-      <p class="connection-note">
-        Grupos de caminhos: {{ savedRouteGroups.length }}
-      </p>
-
-      <div
-        v-for="group in savedRouteGroups"
-        :key="group.id"
-        class="saved-route-item saved-route-item--group"
-      >
-        <div class="saved-route-group-info">
-          <strong>{{ group.name }}</strong>
-
-          <p class="saved-route-group-count">
-            {{ getRoutesFromGroup(group).length }} caminho(s)
-          </p>
-
-          <ul class="saved-route-group-list">
-            <li
-              v-for="routeName in getRouteNamesFromGroup(group)"
-              :key="routeName"
-            >
-              {{ routeName }}
-            </li>
-          </ul>
-        </div>
-
-        <div>
-          <button type="button" @click="applyRouteGroup(group)">
-            Aplicar
-          </button>
-
-          <button
-            v-if="!group.hidden"
-            type="button"
-            @click="setSavedRouteGroupVisibility(group.id, false)"
-          >
-            Ocultar
-          </button>
-
-          <button
-            v-else
-            type="button"
-            @click="setSavedRouteGroupVisibility(group.id, true)"
-          >
-            Mostrar
-          </button>
-
-          <button type="button" @click="renameRouteGroup(group.id)">
-            Renomear
-          </button>
-
-          <button type="button" @click="deleteRouteGroup(group.id)">
-            Apagar
-          </button>
-        </div>
-      </div>
-    </div>
-
     <p class="connection-note">Inicio: {{ routeStartLabel }}</p>
     <p class="connection-note">Passagens: {{ routeWaypoints.length }}</p>
     <p class="connection-note">Fim: {{ routeEndLabel }}</p>
-
-
-<p v-if="routeWarningMessage" class="route-warning-message">
-  {{ routeWarningMessage }}
-</p>
-
 
     <dl class="flow-stats">
       <div>
@@ -756,25 +679,6 @@ type SavedRoute = {
   hidden?: boolean;
 };
 
-type SavedRouteGroup = {
-  id: string;
-  name: string;
-  temperature: PipeCircuit;
-  routeIds: string[];
-  hidden?: boolean;
-};
-
-type RouteDirectionAppearance = {
-  routeName: string;
-  previousKey: string | null;
-  nextKey: string | null;
-};
-
-type SharedRouteDirectionConflict = {
-  node: FlowNode;
-  routeNames: string[];
-};
-
 type SavedReversedDirection = {
   modelId: string;
   localIds: number[];
@@ -812,7 +716,6 @@ const loadingProgress = ref(0);
 const loadingFileName = ref("");
 const flowSpeed = ref(1);
 const flowMessage = ref("Seleciona tubos no modelo e atribui um circuito.");
-const routeWarningMessage = ref("");
 const selectedCount = ref(0);
 const selectedMepElementInfo = ref("Nenhum elemento classificado selecionado.");
 const hasLoadedModel = ref(false);
@@ -841,8 +744,6 @@ const MEP_ELEMENTS_STORAGE_KEY = "bastto-viewer-mep-elements";
 const ROUTES_STORAGE_KEY = "bastto-viewer-routes";
 const REVERSED_DIRECTIONS_STORAGE_KEY =
   "bastto-viewer-reversed-directions";
-const ROUTE_GROUPS_STORAGE_KEY =
-  "bastto-viewer-route-groups";
 const HIDDEN_FLOW_ARROWS_STORAGE_KEY =
   "bastto-viewer-hidden-flow-arrows";
 const SYNCED_PIPE_DIRECTIONS_STORAGE_KEY =
@@ -866,9 +767,6 @@ const manualRouteNodes = reactive<FlowNode[]>([]);
 const isManualRouteRecording = ref(false);
 const mepElements = reactive<Record<string, MepElement>>({});
 const savedRoutes = reactive<SavedRoute[]>([]);
-const savedRouteGroups = reactive<SavedRouteGroup[]>([]);
-const selectedRouteIds = ref<string[]>([]);
-const activeRouteGroupId = ref<string | null>(null);
 let routeStart: FlowNode | null = null;
 let routeEnd: FlowNode | null = null;
 let ignoredManualRouteNodeAfterRemove: FlowNode | null = null;
@@ -1007,10 +905,11 @@ onMounted(async () => {
 
   loadMepElementsFromStorage();
 loadRoutesFromStorage();
-loadRouteGroupsFromStorage();
 loadReversedDirectionsFromStorage();
 loadSyncedPipeDirectionsFromStorage();
 loadHiddenFlowArrowsFromStorage();
+
+localStorage.removeItem("bastto-viewer-route-groups");
 
   createBimPanel(components, viewport);
   animateFlow();
@@ -1868,7 +1767,6 @@ async function setSavedRouteVisibility(routeId: string, shouldShow: boolean) {
 }
 
 async function applySavedRoute(route: SavedRoute) {
-  activeRouteGroupId.value = null;
   const loadedModelIds = [...loadedModels.keys()];
 
   if (!loadedModelIds.length) {
@@ -1912,124 +1810,13 @@ async function applySavedRoute(route: SavedRoute) {
     `Caminho ${route.name} aplicado.`;
 }
 
-async function setSavedRouteGroupVisibility(
-  groupId: string,
-  shouldShow: boolean,
-) {
-  const group = savedRouteGroups.find(
-    (savedGroup) => savedGroup.id === groupId,
+async function reverseSavedRoute(routeId: string) {
+  const route = savedRoutes.find(
+    (savedRoute) => savedRoute.id === routeId,
   );
 
-  if (!group) return;
+  if (!route) return;
 
-  group.hidden = !shouldShow;
-
-  saveRouteGroupsToStorage();
-
-  const routes = getRoutesFromGroup(group);
-
-  for (const route of routes) {
-    await resetRoutePathHighlight(route);
-  }
-
-  if (countAssignments() > 0 || flowConnections.length > 0) {
-    await rebuildManualFlowLayer();
-  } else {
-    await fragmentManager.core.update(true);
-  }
-
-  flowMessage.value = shouldShow
-    ? `Grupo "${group.name}" visível.`
-    : `Grupo "${group.name}" oculto.`;
-}
-
-async function applyRouteGroup(group: SavedRouteGroup) {
-  activeRouteGroupId.value = group.id;
-  const routes = getRoutesFromGroup(group);
-
-  if (!routes.length) {
-    flowMessage.value = "Este grupo não tem caminhos válidos.";
-    return;
-  }
-
-  const loadedModelIds = [...loadedModels.keys()];
-
-  if (!loadedModelIds.length) {
-    flowMessage.value = "Carrega primeiro o IFC antes de aplicar o grupo.";
-    return;
-  }
-
-  const fallbackModelId = loadedModelIds[0];
-
-  flowConnections.splice(0);
-
-  for (const route of routes) {
-    const adaptedPath = route.path.map((node) => {
-      if (loadedModels.has(node.modelId)) {
-        return node;
-      }
-
-      return {
-        modelId: fallbackModelId,
-        localId: node.localId,
-      };
-    });
-
-    assignPathToTemperature(
-      adaptedPath,
-      route.temperature,
-    );
-
-    for (let index = 0; index < adaptedPath.length - 1; index++) {
-      flowConnections.push({
-        from: adaptedPath[index],
-        to: adaptedPath[index + 1],
-        temperature: route.temperature,
-      });
-    }
-  }
-
-  updateManualStats();
-
-  await rebuildManualFlowLayer();
-
-  const sharedNodes = findSharedRouteNodesInGroup(group);
-
-routeWarningMessage.value = sharedNodes.length
-  ? `Atenção: ${sharedNodes.length} tubo(s) partilhado(s) entre caminhos do grupo. Evite inverter este grupo.`
-  : "";
-
-flowMessage.value =
-  `Grupo "${group.name}" aplicado com ${routes.length} caminho(s).`;
-}
-
-async function reverseRouteGroup(groupId: string) {
-  const group = savedRouteGroups.find(
-    (savedGroup) => savedGroup.id === groupId,
-  );
-
-  if (!group) return;
-
-  const routes = getRoutesFromGroup(group);
-
-  if (!routes.length) {
-    flowMessage.value = "Este grupo não tem caminhos válidos.";
-    return;
-  }
-
-  const sharedNodes = findSharedRouteNodesInGroup(group);
-
-if (sharedNodes.length) {
-  routeWarningMessage.value =
-    `Atenção: este grupo tem ${sharedNodes.length} tubo(s) partilhado(s). Inverta os caminhos individualmente para não trocar sentidos indevidos.`;
-
-  flowMessage.value =
-    `Inversão do grupo "${group.name}" cancelada para proteger os sentidos dos caminhos.`;
-
-  return;
-}
-
-  for (const route of routes) {
   const reversedPath = [...route.path].reverse();
 
   route.path.splice(
@@ -2039,179 +1826,15 @@ if (sharedNodes.length) {
   );
 
   toggleSyncedPipesForPath(route.path);
-}
 
-saveRoutesToStorage();
-
-  if (loadedModels.size) {
-    await applyRouteGroup(group);
-  }
-
-  flowMessage.value =
-    `Sentido do grupo "${group.name}" invertido.`;
-}
-
-function deleteRouteGroup(groupId: string) {
-  const index = savedRouteGroups.findIndex(
-    (group) => group.id === groupId,
-  );
-
-  if (index === -1) return;
-
-  const groupName = savedRouteGroups[index].name;
-
-  savedRouteGroups.splice(index, 1);
-
-  saveRouteGroupsToStorage();
-
-  flowMessage.value =
-    `Grupo "${groupName}" apagado.`;
-}
-
-function renameRouteGroup(groupId: string) {
-  const group = savedRouteGroups.find(
-    (savedGroup) => savedGroup.id === groupId,
-  );
-
-  if (!group) return;
-
-  const newName = prompt(
-    "Novo nome do grupo:",
-    group.name,
-  );
-
-  if (!newName) return;
-
-  const trimmedName = newName.trim();
-
-  if (!trimmedName) return;
-
-  group.name = trimmedName;
-
-  saveRouteGroupsToStorage();
-
-  flowMessage.value =
-    `Grupo renomeado para "${trimmedName}".`;
-}
-
-async function reverseSavedRoute(routeId: string) {
-  const route = savedRoutes.find(
-    (savedRoute) => savedRoute.id === routeId,
-  );
-
-  if (!route) return;
-
-  const sharedNodes = findSharedNodesForRoute(route);
-
-if (sharedNodes.length) {
-  const shouldContinue = confirm(
-    `Este caminho tem ${sharedNodes.length} tubo(s) partilhado(s) com outro caminho. ` +
-    `Ao inverter, pode ser necessário verificar os sentidos desses tubos. Deseja continuar?`,
-  );
-
-  if (!shouldContinue) {
-    routeWarningMessage.value =
-      `Inversão cancelada. O caminho "${route.name}" tem tubos partilhados.`;
-
-    flowMessage.value =
-      `Inversão do caminho "${route.name}" cancelada.`;
-
-    return;
-  }
-
-  routeWarningMessage.value =
-    `Atenção: o caminho "${route.name}" foi invertido e tem ${sharedNodes.length} tubo(s) partilhado(s). Verifique os sentidos.`;
-}
-
-  const reversedPath = [...route.path].reverse();
-
-route.path.splice(
-  0,
-  route.path.length,
-  ...reversedPath,
-);
-
-toggleSyncedPipesForPath(route.path);
-
-saveRoutesToStorage();
-
-  const group = getGroupForRoute(routeId);
+  saveRoutesToStorage();
 
   if (loadedModels.size) {
-    if (group) {
-      await applyRouteGroup(group);
-    } else {
-      await applySavedRoute(route);
-    }
+    await applySavedRoute(route);
   }
 
-  flowMessage.value = group
-    ? `Sentido do caminho "${route.name}" invertido dentro do grupo "${group.name}".`
-    : `Sentido do caminho "${route.name}" invertido.`;
-}
-
-function createRouteGroupFromSelection() {
-  if (selectedRouteIds.value.length < 2) {
-    flowMessage.value =
-      "Seleciona pelo menos dois caminhos para criar um grupo.";
-    return;
-  }
-
-  const routes = savedRoutes.filter((route) =>
-    selectedRouteIds.value.includes(route.id),
-  );
-
-  if (!routes.length) {
-    flowMessage.value = "Nenhum caminho válido selecionado.";
-    return;
-  }
-
-  const temperature = routes[0].temperature;
-
-  const allSameCircuit = routes.every(
-    (route) => route.temperature === temperature,
-  );
-
-  if (!allSameCircuit) {
-    flowMessage.value =
-      "Só podes agrupar caminhos do mesmo circuito.";
-    return;
-  }
-
-  const circuitLabel = getCircuitLabel(temperature);
-
-  const groupName = prompt(
-    "Nome do grupo de caminhos:",
-    `Grupo ${circuitLabel}`,
-  );
-
-  if (!groupName) return;
-
-  const trimmedName = groupName.trim();
-
-  if (!trimmedName) return;
-
-  const newGroup: SavedRouteGroup = {
-  id: crypto.randomUUID(),
-  name: trimmedName,
-  temperature,
-  routeIds: [...selectedRouteIds.value],
-};
-
-savedRouteGroups.push(newGroup);
-
-selectedRouteIds.value = [];
-
-saveRouteGroupsToStorage();
-
-const sharedNodes = findSharedRouteNodesInGroup(newGroup);
-
-routeWarningMessage.value = sharedNodes.length
-  ? `Atenção: ${sharedNodes.length} tubo(s) partilhado(s) entre caminhos do grupo. Verifique os sentidos.`
-  : "";
-
-flowMessage.value =
-  `Grupo "${trimmedName}" criado com ${routes.length} caminho(s).`;
+  flowMessage.value =
+    `Sentido do caminho "${route.name}" invertido.`;
 }
 
 function renameSavedRoute(routeId: string) {
@@ -2543,28 +2166,6 @@ function loadRoutesFromStorage() {
     savedRoutes.push(...parsed);
   } catch (error) {
     console.error("Erro ao carregar caminhos guardados:", error);
-  }
-}
-
-function saveRouteGroupsToStorage() {
-  localStorage.setItem(
-    ROUTE_GROUPS_STORAGE_KEY,
-    JSON.stringify(savedRouteGroups),
-  );
-}
-
-function loadRouteGroupsFromStorage() {
-  const saved = localStorage.getItem(ROUTE_GROUPS_STORAGE_KEY);
-
-  if (!saved) return;
-
-  try {
-    const parsed = JSON.parse(saved) as SavedRouteGroup[];
-
-    savedRouteGroups.splice(0);
-    savedRouteGroups.push(...parsed);
-  } catch (error) {
-    console.error("Erro ao carregar grupos de caminhos:", error);
   }
 }
 
@@ -3342,225 +2943,14 @@ function getRouteCircuitDisplayLabel(route: SavedRoute) {
   return capitalizeFirstLetter(getCircuitLabel(route.temperature));
 }
 
-function getRoutesFromGroup(group: SavedRouteGroup) {
-  return savedRoutes.filter((route) =>
-    group.routeIds.includes(route.id),
-  );
-}
-
-function getGroupForRoute(routeId: string) {
-  const activeGroup = savedRouteGroups.find(
-    (group) =>
-      group.id === activeRouteGroupId.value &&
-      group.routeIds.includes(routeId),
-  );
-
-  if (activeGroup) {
-    return activeGroup;
-  }
-
-  return savedRouteGroups.find(
-    (group) => group.routeIds.includes(routeId),
-  ) ?? null;
-}
-
-function getRouteNamesFromGroup(group: SavedRouteGroup) {
-  return getRoutesFromGroup(group).map((route) => route.name);
-}
-
-function getRouteDirectionAppearance(
-  route: SavedRoute,
-  nodeIndex: number,
-): RouteDirectionAppearance {
-  const previousNode = route.path[nodeIndex - 1] ?? null;
-  const nextNode = route.path[nodeIndex + 1] ?? null;
-
-  return {
-    routeName: route.name,
-    previousKey: previousNode ? nodeKey(previousNode) : null,
-    nextKey: nextNode ? nodeKey(nextNode) : null,
-  };
-}
-
-function directionAppearancesAreOpposite(
-  first: RouteDirectionAppearance,
-  second: RouteDirectionAppearance,
-) {
-  if (
-    first.previousKey &&
-    first.nextKey &&
-    second.previousKey &&
-    second.nextKey
-  ) {
-    return (
-      first.previousKey === second.nextKey &&
-      first.nextKey === second.previousKey
-    );
-  }
-
-  if (first.nextKey && second.previousKey) {
-    return first.nextKey === second.previousKey;
-  }
-
-  if (first.previousKey && second.nextKey) {
-    return first.previousKey === second.nextKey;
-  }
-
-  return false;
-}
-
-function findSharedRouteDirectionConflicts(
-  group: SavedRouteGroup,
-): SharedRouteDirectionConflict[] {
-  const routes = getRoutesFromGroup(group);
-  const appearancesByNode = new Map<
-    string,
-    {
-      node: FlowNode;
-      appearances: RouteDirectionAppearance[];
-    }
-  >();
-
-  for (const route of routes) {
-    route.path.forEach((node, nodeIndex) => {
-      const key = nodeKey(node);
-
-      if (!appearancesByNode.has(key)) {
-        appearancesByNode.set(key, {
-          node,
-          appearances: [],
-        });
-      }
-
-      appearancesByNode.get(key)?.appearances.push(
-        getRouteDirectionAppearance(route, nodeIndex),
-      );
-    });
-  }
-
-  const conflicts: SharedRouteDirectionConflict[] = [];
-
-  for (const item of appearancesByNode.values()) {
-    if (item.appearances.length < 2) {
-      continue;
-    }
-
-    let hasConflict = false;
-
-    for (let index = 0; index < item.appearances.length; index++) {
-      for (
-        let compareIndex = index + 1;
-        compareIndex < item.appearances.length;
-        compareIndex++
-      ) {
-        if (
-          directionAppearancesAreOpposite(
-            item.appearances[index],
-            item.appearances[compareIndex],
-          )
-        ) {
-          hasConflict = true;
-        }
-      }
-    }
-
-    if (hasConflict) {
-      conflicts.push({
-        node: item.node,
-        routeNames: [
-          ...new Set(
-            item.appearances.map((appearance) => appearance.routeName),
-          ),
-        ],
-      });
-    }
-  }
-
-  return conflicts;
-}
-
-function findSharedRouteNodesInGroup(
-  group: SavedRouteGroup,
-): SharedRouteDirectionConflict[] {
-  const routes = getRoutesFromGroup(group);
-
-  const appearancesByNode = new Map<
-    string,
-    {
-      node: FlowNode;
-      routeNames: Set<string>;
-    }
-  >();
-
-  for (const route of routes) {
-    for (const node of route.path) {
-      const key = nodeKey(node);
-
-      if (!appearancesByNode.has(key)) {
-        appearancesByNode.set(key, {
-          node,
-          routeNames: new Set<string>(),
-        });
-      }
-
-      appearancesByNode.get(key)?.routeNames.add(route.name);
-    }
-  }
-
-  const sharedNodes: SharedRouteDirectionConflict[] = [];
-
-  for (const item of appearancesByNode.values()) {
-    if (item.routeNames.size < 2) {
-      continue;
-    }
-
-    sharedNodes.push({
-      node: item.node,
-      routeNames: [...item.routeNames],
-    });
-  }
-
-  return sharedNodes;
-}
-
-function findSharedNodesForRoute(route: SavedRoute) {
-  const sharedNodes: FlowNode[] = [];
-
-  for (const node of route.path) {
-    const key = nodeKey(node);
-
-    const isShared = savedRoutes.some((otherRoute) => {
-      if (otherRoute.id === route.id) {
-        return false;
-      }
-
-      return otherRoute.path.some(
-        (otherNode) => nodeKey(otherNode) === key,
-      );
-    });
-
-    if (isShared) {
-      sharedNodes.push(node);
-    }
-  }
-
-  return sharedNodes;
-}
-
 function routeContainsNode(route: SavedRoute, node: FlowNode) {
   return route.path.some((routeNode) => isSameNode(routeNode, node));
-}
-
-function isRouteHiddenByGroup(route: SavedRoute) {
-  return savedRouteGroups.some(
-    (group) => group.hidden && group.routeIds.includes(route.id),
-  );
 }
 
 function isNodeHiddenBySavedRouteVisibility(node: FlowNode) {
   return savedRoutes.some(
     (route) =>
-      (route.hidden || isRouteHiddenByGroup(route)) &&
+      route.hidden &&
       routeContainsNode(route, node),
   );
 }
@@ -4623,30 +4013,6 @@ function chunk<T>(items: T[], size: number) {
   font-size: 0.72rem;
 }
 
-.saved-route-item--group {
-  align-items: flex-start;
-}
-
-.saved-route-group-info {
-  display: grid;
-  gap: 4px;
-}
-
-.saved-route-group-count {
-  margin: 0;
-  color: #b8c9d3;
-  font-size: 0.72rem;
-  font-weight: 700;
-}
-
-.saved-route-group-list {
-  margin: 4px 0 0;
-  padding-left: 16px;
-  color: #dbe9f1;
-  font-size: 0.72rem;
-  line-height: 1.35;
-}
-
 .saved-route-select {
   display: flex;
   align-items: center;
@@ -4673,10 +4039,6 @@ function chunk<T>(items: T[], size: number) {
   color: #b8c9d3;
   font-size: 0.68rem;
   font-weight: 700;
-}
-
-.saved-route-select input {
-  cursor: pointer;
 }
 
 .saved-route-item > div:last-child {
@@ -4716,18 +4078,6 @@ function chunk<T>(items: T[], size: number) {
   font-size: 0.82rem;
   font-weight: 900;
   line-height: 1.35;
-}
-
-.route-warning-message {
-  margin: 12px 0 0;
-  padding: 10px;
-  border-radius: 6px;
-  background: rgba(255, 193, 7, 0.18);
-  color: #ffc107;
-  font-size: 0.82rem;
-  font-weight: 900;
-  line-height: 1.35;
-  border: 1px solid rgba(255, 193, 7, 0.35);
 }
 
 @media (max-width: 820px) {
