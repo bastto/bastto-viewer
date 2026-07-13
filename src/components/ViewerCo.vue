@@ -472,19 +472,24 @@
       </p>
 
       <div
-        v-for="route in savedRoutes"
-        :key="route.id"
-        class="saved-route-item"
-      >
+  v-for="route in savedRoutes"
+  :key="route.id"
+  class="saved-route-item"
+  :class="{ 'saved-route-item--locked': route.locked }"
+>
         <div class="saved-route-select saved-route-select--details">
   <span class="saved-route-text">
-    <strong>{{ route.name }}</strong>
+    <strong>
+  <span v-if="route.locked" class="route-lock-icon">🔒</span>
+  {{ route.name }}
+</strong>
 
     <small>
-      {{ getRouteCircuitDisplayLabel(route) }} ·
-      {{ getRoutePipeCount(route) }} tubo(s) ·
-      {{ getRouteVisibilityLabel(route) }}
-    </small>
+  {{ getRouteCircuitDisplayLabel(route) }} ·
+  {{ getRoutePipeCount(route) }} tubo(s) ·
+  {{ getRouteVisibilityLabel(route) }} ·
+  {{ getRouteProtectionLabel(route) }}
+</small>
   </span>
 </div>
 
@@ -509,17 +514,33 @@
             Mostrar
           </button>
 
-          <button type="button" @click="reverseSavedRoute(route.id)">
-            Inverter
-          </button>
+          <button
+  v-if="!route.locked"
+  type="button"
+  @click="reverseSavedRoute(route.id)"
+>
+  Inverter
+</button>
 
-          <button type="button" @click="renameSavedRoute(route.id)">
-            Renomear
-          </button>
+<button
+  v-if="!route.locked"
+  type="button"
+  @click="renameSavedRoute(route.id)"
+>
+  Renomear
+</button>
 
-          <button type="button" @click="deleteSavedRoute(route.id)">
-            Apagar
-          </button>
+<button type="button" @click="toggleSavedRouteProtection(route.id)">
+  {{ route.locked ? 'Desproteger' : 'Proteger' }}
+</button>
+
+<button
+  v-if="!route.locked"
+  type="button"
+  @click="deleteSavedRoute(route.id)"
+>
+  Apagar
+</button>
         </div>
       </div>
     </div>
@@ -721,6 +742,7 @@ type SavedRoute = {
   temperature: PipeCircuit;
   path: FlowNode[];
   hidden?: boolean;
+  locked?: boolean;
 };
 
 type SavedReversedDirection = {
@@ -1688,7 +1710,13 @@ async function deleteSavedRoute(routeId: string) {
 
   const route = savedRoutes[index];
 
-  savedRoutes.splice(index, 1);
+if (route.locked) {
+  flowMessage.value =
+    `O caminho "${route.name}" está protegido. Desprotege primeiro para apagar.`;
+  return;
+}
+
+savedRoutes.splice(index, 1);
 
   const idsByModel = new Map<string, number[]>();
 
@@ -1834,6 +1862,12 @@ async function reverseSavedRoute(routeId: string) {
 
   if (!route) return;
 
+  if (route.locked) {
+  flowMessage.value =
+    `O caminho "${route.name}" está protegido. Desprotege primeiro para inverter.`;
+  return;
+}
+
   const reversedPath = [...route.path].reverse();
 
   route.path.splice(
@@ -1854,12 +1888,39 @@ async function reverseSavedRoute(routeId: string) {
     `Sentido do caminho "${route.name}" invertido.`;
 }
 
+function toggleSavedRouteProtection(routeId: string) {
+  const route = savedRoutes.find(
+    (savedRoute) => savedRoute.id === routeId,
+  );
+
+  if (!route) {
+    return;
+  }
+
+  route.locked = !route.locked;
+
+  saveRoutesToStorage();
+
+  if (route.locked) {
+    flowMessage.value = `Caminho "${route.name}" protegido.`;
+    return;
+  }
+
+  flowMessage.value = `Caminho "${route.name}" desprotegido.`;
+}
+
 function renameSavedRoute(routeId: string) {
   const route = savedRoutes.find(
     (savedRoute) => savedRoute.id === routeId,
   );
 
   if (!route) return;
+
+  if (route.locked) {
+  flowMessage.value =
+    `O caminho "${route.name}" está protegido. Desprotege primeiro para renomear.`;
+  return;
+}
 
   const newName = prompt(
     "Novo nome do caminho:",
@@ -2893,6 +2954,18 @@ async function reverseSelectedPipesDirection() {
     return;
   }
 
+  const lockedRouteNames = selectedItemsHaveLockedRouteNodes();
+
+if (lockedRouteNames.length) {
+  flowMessage.value =
+    `Não é possível sincronizar/inverter o sentido. ` +
+    `A seleção contém tubo(s) de caminho(s) protegido(s): ` +
+    lockedRouteNames.join(", ") +
+    `. Desprotege primeiro o caminho.`;
+
+  return;
+}
+
   let changedCount = 0;
 
   for (const [modelId, ids] of selectedItems) {
@@ -3257,12 +3330,45 @@ function getRouteVisibilityLabel(route: SavedRoute) {
   return route.hidden ? "oculto" : "visível";
 }
 
+function getRouteProtectionLabel(route: SavedRoute) {
+  return route.locked ? "protegido" : "editável";
+}
+
 function getRouteCircuitDisplayLabel(route: SavedRoute) {
   return capitalizeFirstLetter(getCircuitLabel(route.temperature));
 }
 
 function routeContainsNode(route: SavedRoute, node: FlowNode) {
   return route.path.some((routeNode) => isSameNode(routeNode, node));
+}
+
+function getLockedRoutesForNode(node: FlowNode) {
+  return savedRoutes.filter(
+    (route) =>
+      route.locked &&
+      routeContainsNode(route, node),
+  );
+}
+
+function selectedItemsHaveLockedRouteNodes() {
+  const lockedRouteNames = new Set<string>();
+
+  for (const [modelId, ids] of selectedItems) {
+    for (const localId of ids) {
+      const node: FlowNode = {
+        modelId,
+        localId,
+      };
+
+      const lockedRoutes = getLockedRoutesForNode(node);
+
+      for (const route of lockedRoutes) {
+        lockedRouteNames.add(route.name);
+      }
+    }
+  }
+
+  return [...lockedRouteNames];
 }
 
 function isNodeHiddenBySavedRouteVisibility(node: FlowNode) {
@@ -4456,6 +4562,19 @@ function chunk<T>(items: T[], size: number) {
   color: #111820;
   font-size: 0.78rem;
   font-weight: 800;
+}
+
+.saved-route-item--locked {
+  border: 1px solid rgba(143, 211, 255, 0.45);
+  background: rgba(143, 211, 255, 0.12);
+}
+
+.saved-route-item--locked .saved-route-text strong {
+  color: #8fd3ff;
+}
+
+.route-lock-icon {
+  margin-right: 4px;
 }
 
 @media (max-width: 820px) {
