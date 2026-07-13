@@ -264,6 +264,36 @@
   </button>
 </div>
 
+<div class="flow-section-title">
+  Legenda de cores
+</div>
+
+<div class="cycle-color-legend">
+  <div
+    v-for="cycleNumber in waterCycleCount"
+    :key="`legend-cycle-${cycleNumber}`"
+    class="cycle-color-legend__row"
+  >
+    <div class="cycle-color-legend__item">
+      <span
+        class="cycle-color-dot"
+        :style="{ backgroundColor: getCircuitColorStyle(getSupplyCircuitKey(cycleNumber)) }"
+      ></span>
+
+      <span>Avanço {{ cycleNumber }}</span>
+    </div>
+
+    <div class="cycle-color-legend__item">
+      <span
+        class="cycle-color-dot"
+        :style="{ backgroundColor: getCircuitColorStyle(getReturnCircuitKey(cycleNumber)) }"
+      ></span>
+
+      <span>Retorno {{ cycleNumber }}</span>
+    </div>
+  </div>
+</div>
+
     <div class="flow-actions flow-actions--secondary">
       <button type="button" @click="clearSelectedManualAssignments">
         Limpar marca selecionada
@@ -2919,6 +2949,10 @@ function getPipeStat(circuit: PipeCircuit) {
   return pipeStats[circuit] ?? 0;
 }
 
+function getCircuitColorStyle(circuit: PipeCircuit) {
+  return `#${getCircuitColor(circuit).toString(16).padStart(6, "0")}`;
+}
+
 function saveWaterCycleCountToStorage() {
   localStorage.setItem(
     WATER_CYCLE_COUNT_STORAGE_KEY,
@@ -4186,6 +4220,39 @@ function chunk<T>(items: T[], size: number) {
   background: #f7fbff;
   color: #111820;
   font-weight: 800;
+}
+
+.cycle-color-legend {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.cycle-color-legend__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.cycle-color-legend__item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #dbe9f1;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.cycle-color-dot {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.16);
 }
 
 @media (max-width: 820px) {
