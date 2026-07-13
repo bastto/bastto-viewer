@@ -298,6 +298,15 @@
   Caminho manual: {{ manualRouteNodes.length }} tubo(s)
 </p>
 
+<div
+  v-if="isManualRouteRecording && manualRouteNodes.length > 0"
+  class="flow-actions flow-actions--single"
+>
+  <button type="button" @click.stop.prevent="removeLastManualRouteNode">
+  Remover último tubo
+</button>
+</div>
+
 <div v-if="!isManualRouteRecording" class="flow-actions flow-actions--secondary">
   <button type="button" @click="setRouteStart">
     Definir início
@@ -857,6 +866,7 @@ const selectedRouteIds = ref<string[]>([]);
 const activeRouteGroupId = ref<string | null>(null);
 let routeStart: FlowNode | null = null;
 let routeEnd: FlowNode | null = null;
+let ignoredManualRouteNodeAfterRemove: FlowNode | null = null;
 const blockedPipes: SelectionMap = new Map();
 const valveBlockedPipeLinks = new Map<string, FlowNode[]>();
 const manualAssignments: Record<PipeCircuit, SelectionMap> = {
@@ -1042,11 +1052,15 @@ function createBimPanel(components: OBC.Components, viewport: HTMLElement) {
 
   await showSelectedMepElementInfo();
 
-  addSelectedNodeToManualRoute();
+addSelectedNodeToManualRoute();
 
-  if (countAssignments() > 0) {
-    await rebuildManualFlowLayer();
-  }
+if (countAssignments() > 0) {
+  await rebuildManualFlowLayer();
+}
+
+if (isManualRouteRecording.value && manualRouteNodes.length > 0) {
+  await updateManualRoutePreviewHighlight();
+}
 });
 
   highlighter.events.select.onClear.add(async () => {
@@ -1502,6 +1516,14 @@ function addSelectedNodeToManualRoute() {
     return;
   }
 
+  if (
+    ignoredManualRouteNodeAfterRemove &&
+    isSameNode(ignoredManualRouteNodeAfterRemove, node)
+  ) {
+    ignoredManualRouteNodeAfterRemove = null;
+    return;
+  }
+
   const lastNode = manualRouteNodes[manualRouteNodes.length - 1];
 
   if (lastNode && isSameNode(lastNode, node)) {
@@ -1510,8 +1532,69 @@ function addSelectedNodeToManualRoute() {
 
   manualRouteNodes.push(node);
 
+  void updateManualRoutePreviewHighlight();
+
   flowMessage.value =
     `Ponto manual adicionado. Total: ${manualRouteNodes.length}.`;
+}
+
+async function removeLastManualRouteNode() {
+  if (manualRouteNodes.length === 0) {
+    flowMessage.value = "Não há tubos para remover do caminho manual.";
+    return;
+  }
+
+  const removedNode = manualRouteNodes[manualRouteNodes.length - 1];
+
+  ignoredManualRouteNodeAfterRemove = removedNode;
+
+  manualRouteNodes.splice(manualRouteNodes.length - 1, 1);
+
+  const model = loadedModels.get(removedNode.modelId);
+
+  if (model) {
+    await model.resetHighlight([removedNode.localId]);
+  }
+
+  if (manualRouteNodes.length > 0) {
+    await updateManualRoutePreviewHighlight();
+  }
+
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  } else {
+    await fragmentManager.core.update(true);
+  }
+
+  flowMessage.value =
+    `Último tubo removido do caminho manual. Total: ${manualRouteNodes.length}.`;
+}
+
+async function updateManualRoutePreviewHighlight() {
+  const idsByModel = new Map<string, number[]>();
+
+  for (const node of manualRouteNodes) {
+    if (!idsByModel.has(node.modelId)) {
+      idsByModel.set(node.modelId, []);
+    }
+
+    idsByModel.get(node.modelId)?.push(node.localId);
+  }
+
+  for (const [modelId, ids] of idsByModel) {
+    const model = loadedModels.get(modelId);
+
+    if (!model || !ids.length) {
+      continue;
+    }
+
+    await model.highlight(
+      ids,
+      createHighlight(0x8fd3ff, "manual-route-preview"),
+    );
+  }
+
+  await fragmentManager.core.update(true);
 }
 
 function setRouteStart() {
@@ -2086,10 +2169,10 @@ selectedRouteIds.value = [];
 
 saveRouteGroupsToStorage();
 
-const directionConflicts = findSharedRouteDirectionConflicts(newGroup);
+const sharedNodes = findSharedRouteNodesInGroup(newGroup);
 
-routeWarningMessage.value = directionConflicts.length
-  ? `Atenção: ${directionConflicts.length} tubo(s) partilhado(s) podem ter sentidos diferentes.`
+routeWarningMessage.value = sharedNodes.length
+  ? `Atenção: ${sharedNodes.length} tubo(s) partilhado(s) entre caminhos do grupo. Verifique os sentidos.`
   : "";
 
 flowMessage.value =
@@ -3332,6 +3415,50 @@ function findSharedRouteDirectionConflicts(
   return conflicts;
 }
 
+function findSharedRouteNodesInGroup(
+  group: SavedRouteGroup,
+): SharedRouteDirectionConflict[] {
+  const routes = getRoutesFromGroup(group);
+
+  const appearancesByNode = new Map<
+    string,
+    {
+      node: FlowNode;
+      routeNames: Set<string>;
+    }
+  >();
+
+  for (const route of routes) {
+    for (const node of route.path) {
+      const key = nodeKey(node);
+
+      if (!appearancesByNode.has(key)) {
+        appearancesByNode.set(key, {
+          node,
+          routeNames: new Set<string>(),
+        });
+      }
+
+      appearancesByNode.get(key)?.routeNames.add(route.name);
+    }
+  }
+
+  const sharedNodes: SharedRouteDirectionConflict[] = [];
+
+  for (const item of appearancesByNode.values()) {
+    if (item.routeNames.size < 2) {
+      continue;
+    }
+
+    sharedNodes.push({
+      node: item.node,
+      routeNames: [...item.routeNames],
+    });
+  }
+
+  return sharedNodes;
+}
+
 function routeContainsNode(route: SavedRoute, node: FlowNode) {
   return route.path.some((routeNode) => isSameNode(routeNode, node));
 }
@@ -3482,9 +3609,7 @@ function addPipeParticles(
   temperature: PipeCircuit,
   hints: PipeDirectionHints = {},
   node?: FlowNode,
-)
-
- {
+) {
   const size = new THREE.Vector3();
   const center = new THREE.Vector3();
 
@@ -3502,13 +3627,13 @@ function addPipeParticles(
 
   let { start, end } = choosePipeDirection(endpointA, endpointB, hints);
 
-if (node && isPipeDirectionReversed(node.modelId, node.localId)) {
-  const originalStart = start;
-  start = end;
-  end = originalStart;
-}
+  if (node && isPipeDirectionReversed(node.modelId, node.localId)) {
+    const originalStart = start;
+    start = end;
+    end = originalStart;
+  }
 
-const direction = end.clone().sub(start).normalize();
+  const direction = end.clone().sub(start).normalize();
 
   const radius = 0.04;
   const geometry = new THREE.ConeGeometry(radius * 1.2, radius * 2.5, 8);
@@ -3523,7 +3648,7 @@ const direction = end.clone().sub(start).normalize();
 
     mesh.quaternion.setFromUnitVectors(
       new THREE.Vector3(0, 1, 0),
-      direction
+      direction,
     );
 
     mesh.position.copy(start);
