@@ -218,36 +218,51 @@
     <p class="selection-count">Selecionados: {{ selectedCount }}</p>
 
     <div class="flow-section-title">
-      Circuitos
-    </div>
+  Configuração da central
+</div>
 
-    <div class="flow-actions">
-      <button type="button" @click="assignSelectedPipes('supply1')">
-        Avanço 1
-      </button>
+<label class="flow-cycle-config">
+  <span>Número de ciclos de água</span>
 
-      <button type="button" @click="assignSelectedPipes('supply2')">
-        Avanço 2
-      </button>
+  <input
+    v-model.number="pendingWaterCycleCount"
+    type="number"
+    min="1"
+    max="12"
+  />
+</label>
 
-      <button type="button" @click="assignSelectedPipes('supply3')">
-        Avanço 3
-      </button>
-    </div>
+<div class="flow-actions flow-actions--single">
+  <button type="button" @click="applyWaterCycleCount">
+    Aplicar ciclos
+  </button>
+</div>
 
-    <div class="flow-actions flow-actions--secondary">
-      <button type="button" @click="assignSelectedPipes('return1')">
-        Retorno 1
-      </button>
+<div class="flow-section-title">
+  Circuitos
+</div>
 
-      <button type="button" @click="assignSelectedPipes('return2')">
-        Retorno 2
-      </button>
+<div class="flow-actions">
+  <button
+    v-for="cycleNumber in waterCycleCount"
+    :key="`supply-${cycleNumber}`"
+    type="button"
+    @click="assignSelectedPipes(getSupplyCircuitKey(cycleNumber))"
+  >
+    Avanço {{ cycleNumber }}
+  </button>
+</div>
 
-      <button type="button" @click="assignSelectedPipes('return3')">
-        Retorno 3
-      </button>
-    </div>
+<div class="flow-actions flow-actions--secondary">
+  <button
+    v-for="cycleNumber in waterCycleCount"
+    :key="`return-${cycleNumber}`"
+    type="button"
+    @click="assignSelectedPipes(getReturnCircuitKey(cycleNumber))"
+  >
+    Retorno {{ cycleNumber }}
+  </button>
+</div>
 
     <div class="flow-actions flow-actions--secondary">
       <button type="button" @click="clearSelectedManualAssignments">
@@ -322,30 +337,24 @@
 </div>
 
 <div v-if="!isManualRouteRecording" class="flow-actions">
-  <button type="button" @click="createAutoRoute('supply1')">
-    Caminho avanço 1
-  </button>
-
-  <button type="button" @click="createAutoRoute('supply2')">
-    Caminho avanço 2
-  </button>
-
-  <button type="button" @click="createAutoRoute('supply3')">
-    Caminho avanço 3
+  <button
+    v-for="cycleNumber in waterCycleCount"
+    :key="`auto-supply-${cycleNumber}`"
+    type="button"
+    @click="createAutoRoute(getSupplyCircuitKey(cycleNumber))"
+  >
+    Caminho avanço {{ cycleNumber }}
   </button>
 </div>
 
 <div v-if="!isManualRouteRecording" class="flow-actions flow-actions--secondary">
-  <button type="button" @click="createAutoRoute('return1')">
-    Caminho retorno 1
-  </button>
-
-  <button type="button" @click="createAutoRoute('return2')">
-    Caminho retorno 2
-  </button>
-
-  <button type="button" @click="createAutoRoute('return3')">
-    Caminho retorno 3
+  <button
+    v-for="cycleNumber in waterCycleCount"
+    :key="`auto-return-${cycleNumber}`"
+    type="button"
+    @click="createAutoRoute(getReturnCircuitKey(cycleNumber))"
+  >
+    Caminho retorno {{ cycleNumber }}
   </button>
 </div>
 
@@ -360,35 +369,29 @@
   v-if="isManualRouteRecording && manualRouteNodes.length >= 2"
   class="flow-actions"
 >
-      <button type="button" @click="createManualRouteFromSelection('supply1')">
-        Manual avanço 1
-      </button>
+  <button
+    v-for="cycleNumber in waterCycleCount"
+    :key="`manual-supply-${cycleNumber}`"
+    type="button"
+    @click="createManualRouteFromSelection(getSupplyCircuitKey(cycleNumber))"
+  >
+    Manual avanço {{ cycleNumber }}
+  </button>
+</div>
 
-      <button type="button" @click="createManualRouteFromSelection('supply2')">
-        Manual avanço 2
-      </button>
-
-      <button type="button" @click="createManualRouteFromSelection('supply3')">
-        Manual avanço 3
-      </button>
-    </div>
-
-    <div
+<div
   v-if="isManualRouteRecording && manualRouteNodes.length >= 2"
   class="flow-actions flow-actions--secondary"
 >
-      <button type="button" @click="createManualRouteFromSelection('return1')">
-        Manual retorno 1
-      </button>
-
-      <button type="button" @click="createManualRouteFromSelection('return2')">
-        Manual retorno 2
-      </button>
-
-      <button type="button" @click="createManualRouteFromSelection('return3')">
-        Manual retorno 3
-      </button>
-    </div>
+  <button
+    v-for="cycleNumber in waterCycleCount"
+    :key="`manual-return-${cycleNumber}`"
+    type="button"
+    @click="createManualRouteFromSelection(getReturnCircuitKey(cycleNumber))"
+  >
+    Manual retorno {{ cycleNumber }}
+  </button>
+</div>
 
     <div class="flow-actions flow-actions--single">
       <button
@@ -463,52 +466,36 @@
     <p class="connection-note">Fim: {{ routeEndLabel }}</p>
 
     <dl class="flow-stats">
-      <div>
-        <dt>Av. 1</dt>
-        <dd>{{ pipeStats.supply1 }}</dd>
-      </div>
+  <template
+    v-for="cycleNumber in waterCycleCount"
+    :key="`stats-cycle-${cycleNumber}`"
+  >
+    <div>
+      <dt>Av. {{ cycleNumber }}</dt>
+      <dd>{{ getPipeStat(getSupplyCircuitKey(cycleNumber)) }}</dd>
+    </div>
 
-      <div>
-        <dt>Av. 2</dt>
-        <dd>{{ pipeStats.supply2 }}</dd>
-      </div>
+    <div>
+      <dt>Ret. {{ cycleNumber }}</dt>
+      <dd>{{ getPipeStat(getReturnCircuitKey(cycleNumber)) }}</dd>
+    </div>
+  </template>
 
-      <div>
-        <dt>Av. 3</dt>
-        <dd>{{ pipeStats.supply3 }}</dd>
-      </div>
+  <div>
+    <dt>Total</dt>
+    <dd>{{ pipeStats.total }}</dd>
+  </div>
 
-      <div>
-        <dt>Ret. 1</dt>
-        <dd>{{ pipeStats.return1 }}</dd>
-      </div>
+  <div>
+    <dt>Lig.</dt>
+    <dd>{{ flowConnections.length }}</dd>
+  </div>
 
-      <div>
-        <dt>Ret. 2</dt>
-        <dd>{{ pipeStats.return2 }}</dd>
-      </div>
-
-      <div>
-        <dt>Ret. 3</dt>
-        <dd>{{ pipeStats.return3 }}</dd>
-      </div>
-
-      <div>
-        <dt>Total</dt>
-        <dd>{{ pipeStats.total }}</dd>
-      </div>
-
-      <div>
-        <dt>Lig.</dt>
-        <dd>{{ flowConnections.length }}</dd>
-      </div>
-
-      <div>
-        <dt>Bloq.</dt>
-        <dd>{{ blockedCount }}</dd>
-      </div>
-    </dl>
-
+  <div>
+    <dt>Bloq.</dt>
+    <dd>{{ blockedCount }}</dd>
+  </div>
+</dl>
     <p class="flow-note">{{ flowMessage }}</p>
   </div>
 </section>
@@ -618,13 +605,7 @@ import * as BUI from "@thatopen/ui";
 import * as BUIC from "@thatopen/ui-obc";
 import * as OBCF from "@thatopen/components-front";
 
-type PipeCircuit =
-  | "supply1"
-  | "supply2"
-  | "supply3"
-  | "return1"
-  | "return2"
-  | "return3";
+type PipeCircuit = string;
 type SelectionMap = Map<string, Set<number>>;
 type MepElementType =
   | "pipe"
@@ -716,6 +697,8 @@ const loadingProgress = ref(0);
 const loadingFileName = ref("");
 const flowSpeed = ref(1);
 const flowMessage = ref("Seleciona tubos no modelo e atribui um circuito.");
+const waterCycleCount = ref(3);
+const pendingWaterCycleCount = ref(3);
 const selectedCount = ref(0);
 const selectedMepElementInfo = ref("Nenhum elemento classificado selecionado.");
 const hasLoadedModel = ref(false);
@@ -725,23 +708,16 @@ const isSimulationControlPanelMinimized = ref(true);
 const routeStartLabel = ref("nenhum");
 const routeEndLabel = ref("nenhum");
 const blockedCount = ref(0);
-const pipeStats = reactive({
+const pipeStats = reactive<Record<string, number>>({
   supply: 0,
   return: 0,
-
-  supply1: 0,
-  supply2: 0,
-  supply3: 0,
-
-  return1: 0,
-  return2: 0,
-  return3: 0,
-
   total: 0,
 });
 
 const MEP_ELEMENTS_STORAGE_KEY = "bastto-viewer-mep-elements";
 const ROUTES_STORAGE_KEY = "bastto-viewer-routes";
+const WATER_CYCLE_COUNT_STORAGE_KEY =
+  "bastto-viewer-water-cycle-count";
 const REVERSED_DIRECTIONS_STORAGE_KEY =
   "bastto-viewer-reversed-directions";
 const HIDDEN_FLOW_ARROWS_STORAGE_KEY =
@@ -772,14 +748,7 @@ let routeEnd: FlowNode | null = null;
 let ignoredManualRouteNodeAfterRemove: FlowNode | null = null;
 const blockedPipes: SelectionMap = new Map();
 const valveBlockedPipeLinks = new Map<string, FlowNode[]>();
-const manualAssignments: Record<PipeCircuit, SelectionMap> = {
-  supply1: new Map(),
-  supply2: new Map(),
-  supply3: new Map(),
-  return1: new Map(),
-  return2: new Map(),
-  return3: new Map(),
-};
+const manualAssignments = reactive<Record<string, SelectionMap>>({});
 const reversedPipeDirections: SelectionMap = new Map();
 const syncedPipeDirections: SelectionMap = new Map();
 const hiddenFlowArrowElements: SelectionMap = new Map();
@@ -795,49 +764,52 @@ const mepElementHighlightColors: Record<MepElementType, number> = {
   reservoirWithoutResistance: 0xff6600,
 };
 
-const circuitMaterials = {
-  supply1: new THREE.MeshBasicMaterial({
-    color: 0xff0000,
-    transparent: true,
-    opacity: 0.9,
-    depthTest: false,
-  }),
+const circuitMaterialCache = new Map<string, THREE.MeshBasicMaterial>();
 
-  supply2: new THREE.MeshBasicMaterial({
-    color: 0xff5252,
-    transparent: true,
-    opacity: 0.9,
-    depthTest: false,
-  }),
+function getCircuitColor(circuit: PipeCircuit) {
+  const cycleNumber = getCircuitCycleNumber(circuit);
 
-  supply3: new THREE.MeshBasicMaterial({
-    color: 0xff8a80,
-    transparent: true,
-    opacity: 0.9,
-    depthTest: false,
-  }),
+  const supplyColors = [
+    0xff0000,
+    0xff5252,
+    0xff8a80,
+    0xd50000,
+    0xff1744,
+    0xb71c1c,
+  ];
 
-  return1: new THREE.MeshBasicMaterial({
-    color: 0xff8c00,
-    transparent: true,
-    opacity: 0.9,
-    depthTest: false,
-  }),
+  const returnColors = [
+    0xff8c00,
+    0xffa726,
+    0xffc107,
+    0xff6d00,
+    0xffb300,
+    0xe65100,
+  ];
 
-  return2: new THREE.MeshBasicMaterial({
-    color: 0xffa726,
-    transparent: true,
-    opacity: 0.9,
-    depthTest: false,
-  }),
+  const palette = isSupplyCircuit(circuit) ? supplyColors : returnColors;
 
-  return3: new THREE.MeshBasicMaterial({
-    color: 0xffc107,
+  return palette[(cycleNumber - 1) % palette.length];
+}
+
+function getCircuitMaterial(circuit: PipeCircuit) {
+  const cachedMaterial = circuitMaterialCache.get(circuit);
+
+  if (cachedMaterial) {
+    return cachedMaterial;
+  }
+
+  const material = new THREE.MeshBasicMaterial({
+    color: getCircuitColor(circuit),
     transparent: true,
     opacity: 0.9,
     depthTest: false,
-  }),
-};
+  });
+
+  circuitMaterialCache.set(circuit, material);
+
+  return material;
+}
 
 onMounted(async () => {
   if (!containerRef.value) return;
@@ -903,7 +875,8 @@ onMounted(async () => {
   }
 });
 
-  loadMepElementsFromStorage();
+  loadWaterCycleCountFromStorage();
+loadMepElementsFromStorage();
 loadRoutesFromStorage();
 loadReversedDirectionsFromStorage();
 loadSyncedPipeDirectionsFromStorage();
@@ -1163,9 +1136,9 @@ async function assignSelectedPipes(circuit: PipeCircuit) {
   for (const id of ids) {
 
     // remove o tubo de todos os outros circuitos
-    Object.values(manualAssignments).forEach((setMap) => {
-      setMap.get(modelId)?.delete(id);
-    });
+    for (const existingCircuit of getAllKnownCircuitKeys()) {
+  getAssignmentSet(existingCircuit, modelId).delete(id);
+}
 
     targetSet.add(id);
   }
@@ -1174,7 +1147,7 @@ async function assignSelectedPipes(circuit: PipeCircuit) {
   updateManualStats();
   await rebuildManualFlowLayer();
   flowMessage.value =
-  `${selectedCount.value} elemento(s) marcados como ${circuit}.`;
+  `${selectedCount.value} elemento(s) marcados como ${getCircuitLabel(circuit)}.`;
 }
 
 async function rebuildManualFlowLayer() {
@@ -1190,13 +1163,9 @@ clearFlowVisuals(true);
     return;
   }
 
-  await addAssignmentsToScene("supply1");
-await addAssignmentsToScene("supply2");
-await addAssignmentsToScene("supply3");
-
-await addAssignmentsToScene("return1");
-await addAssignmentsToScene("return2");
-await addAssignmentsToScene("return3");
+  for (const circuit of getAllKnownCircuitKeys()) {
+  await addAssignmentsToScene(circuit);
+}
 
   updateManualStats();
 
@@ -1211,7 +1180,13 @@ isFlowing.value = shouldKeepAnimating && pipeParticles.length > 0;
 }
 
 async function addAssignmentsToScene(temperature: PipeCircuit) {
-  for (const [modelId, idsSet] of manualAssignments[temperature]) {
+  const assignmentMap = manualAssignments[temperature];
+
+  if (!assignmentMap) {
+    return;
+  }
+
+  for (const [modelId, idsSet] of assignmentMap) {
     const model = loadedModels.get(modelId);
     const allIds = [...idsSet];
 
@@ -1231,19 +1206,10 @@ if (hiddenIds.length) {
 
 if (!ids.length) continue;
 
-    const circuitColors = {
-  supply1: 0xff0000,
-  supply2: 0xff5252,
-  supply3: 0xff8a80,
-  return1: 0xff8c00,
-  return2: 0xffa726,
-  return3: 0xffc107,
-};
-
-await model.highlight(
+    await model.highlight(
   ids,
   createHighlight(
-    circuitColors[temperature],
+    getCircuitColor(temperature),
     temperature,
   ),
 );
@@ -1287,13 +1253,9 @@ async function clearSelectedManualAssignments() {
   for (const [modelId, ids] of selectedItems) {
     for (const localId of ids) {
 
-      getAssignmentSet("supply1", modelId).delete(localId);
-      getAssignmentSet("supply2", modelId).delete(localId);
-      getAssignmentSet("supply3", modelId).delete(localId);
-
-      getAssignmentSet("return1", modelId).delete(localId);
-      getAssignmentSet("return2", modelId).delete(localId);
-      getAssignmentSet("return3", modelId).delete(localId);
+      for (const circuit of getAllKnownCircuitKeys()) {
+  getAssignmentSet(circuit, modelId).delete(localId);
+}
 
       if (!idsByModel.has(modelId)) {
         idsByModel.set(modelId, []);
@@ -1331,24 +1293,15 @@ async function clearManualAssignments() {
   clearFlowVisuals();
 
   for (const [modelId, model] of loadedModels) {
-    const ids = [
-  ...getAssignmentSet("supply1", modelId),
-  ...getAssignmentSet("supply2", modelId),
-  ...getAssignmentSet("supply3", modelId),
-  ...getAssignmentSet("return1", modelId),
-  ...getAssignmentSet("return2", modelId),
-  ...getAssignmentSet("return3", modelId),
-];
+    const ids = getAllKnownCircuitKeys().flatMap((circuit) => [
+  ...getAssignmentSet(circuit, modelId),
+]);
     if (ids.length) await model.resetHighlight(ids);
   }
 
-  manualAssignments.supply1.clear();
-manualAssignments.supply2.clear();
-manualAssignments.supply3.clear();
-
-manualAssignments.return1.clear();
-manualAssignments.return2.clear();
-manualAssignments.return3.clear();
+  for (const circuit of getAllKnownCircuitKeys()) {
+  manualAssignments[circuit]?.clear();
+}
 
   flowConnections.splice(0);
   currentRouteConnections.splice(0);
@@ -1364,13 +1317,9 @@ manualAssignments.return3.clear();
 }
 
 function resetAssignmentMaps() {
-  manualAssignments.supply1.clear();
-manualAssignments.supply2.clear();
-manualAssignments.supply3.clear();
-
-manualAssignments.return1.clear();
-manualAssignments.return2.clear();
-manualAssignments.return3.clear();
+  for (const circuit of getAllKnownCircuitKeys()) {
+  manualAssignments[circuit]?.clear();
+}
   flowConnections.splice(0);
   currentRouteConnections.splice(0);
   routeWaypoints.splice(0);
@@ -1612,7 +1561,7 @@ for (let index = 0; index < path.length - 1; index++) {
     updateManualStats();
     await rebuildManualFlowLayer();
     flowMessage.value =
-  `Caminho ${temperature} criado com ${path.length} tubos.`;
+  `Caminho ${getCircuitLabel(temperature)} criado com ${path.length} tubo(s).`;
   } catch (error) {
     console.error("Automatic route failed:", error);
     flowMessage.value = "Nao foi possivel calcular o caminho automatico.";
@@ -1627,9 +1576,9 @@ function assignPathToTemperature(
 ) {
   for (const node of path) {
 
-    Object.values(manualAssignments).forEach((setMap) => {
-      setMap.get(node.modelId)?.delete(node.localId);
-    });
+    for (const existingCircuit of getAllKnownCircuitKeys()) {
+  getAssignmentSet(existingCircuit, node.modelId).delete(node.localId);
+}
 
     getAssignmentSet(temperature, node.modelId).add(node.localId);
   }
@@ -1677,13 +1626,9 @@ async function deleteSavedRoute(routeId: string) {
   const idsByModel = new Map<string, number[]>();
 
   for (const node of route.path) {
-    getAssignmentSet("supply1", node.modelId).delete(node.localId);
-    getAssignmentSet("supply2", node.modelId).delete(node.localId);
-    getAssignmentSet("supply3", node.modelId).delete(node.localId);
-
-    getAssignmentSet("return1", node.modelId).delete(node.localId);
-    getAssignmentSet("return2", node.modelId).delete(node.localId);
-    getAssignmentSet("return3", node.modelId).delete(node.localId);
+    for (const circuit of getAllKnownCircuitKeys()) {
+  getAssignmentSet(circuit, node.modelId).delete(node.localId);
+}
 
     reversedPipeDirections.get(node.modelId)?.delete(node.localId);
 
@@ -1747,7 +1692,9 @@ async function resetRoutePathHighlight(route: SavedRoute) {
 async function setSavedRouteVisibility(routeId: string, shouldShow: boolean) {
   const route = savedRoutes.find((savedRoute) => savedRoute.id === routeId);
 
-  if (!route) return;
+  if (!route) {
+    return;
+  }
 
   route.hidden = !shouldShow;
 
@@ -1761,9 +1708,12 @@ async function setSavedRouteVisibility(routeId: string, shouldShow: boolean) {
     await fragmentManager.core.update(true);
   }
 
-  flowMessage.value = shouldShow
-    ? `Caminho "${route.name}" visível.`
-    : `Caminho "${route.name}" oculto.`;
+  if (shouldShow) {
+  flowMessage.value = "Caminho \"" + route.name + "\" visível.";
+  return;
+}
+
+flowMessage.value = "Caminho \"" + route.name + "\" oculto.";
 }
 
 async function applySavedRoute(route: SavedRoute) {
@@ -2371,14 +2321,9 @@ async function deleteSelectedElementDefinitions() {
         blockedSet.delete(localId);
       }
 
-      getAssignmentSet("supply1", modelId).delete(localId);
-getAssignmentSet("supply2", modelId).delete(localId);
-getAssignmentSet("supply3", modelId).delete(localId);
-
-getAssignmentSet("return1", modelId).delete(localId);
-getAssignmentSet("return2", modelId).delete(localId);
-getAssignmentSet("return3", modelId).delete(localId);
-
+      for (const circuit of getAllKnownCircuitKeys()) {
+  getAssignmentSet(circuit, modelId).delete(localId);
+}
       reversedPipeDirections.get(modelId)?.delete(localId);
 
 if (reversedPipeDirections.get(modelId)?.size === 0) {
@@ -2914,17 +2859,182 @@ function formatNodeLabel(node: FlowNode) {
   return `${node.modelId} #${node.localId}`;
 }
 
-function getCircuitLabel(circuit: PipeCircuit) {
-  const labels: Record<PipeCircuit, string> = {
-    supply1: "avanço 1",
-    supply2: "avanço 2",
-    supply3: "avanço 3",
-    return1: "retorno 1",
-    return2: "retorno 2",
-    return3: "retorno 3",
-  };
+function getSupplyCircuitKey(cycleNumber: number) {
+  return `supply${cycleNumber}`;
+}
 
-  return labels[circuit];
+function getReturnCircuitKey(cycleNumber: number) {
+  return `return${cycleNumber}`;
+}
+
+function getAvailableCircuits() {
+  const circuits: PipeCircuit[] = [];
+
+  for (let cycleNumber = 1; cycleNumber <= waterCycleCount.value; cycleNumber++) {
+    circuits.push(getSupplyCircuitKey(cycleNumber));
+    circuits.push(getReturnCircuitKey(cycleNumber));
+  }
+
+  return circuits;
+}
+
+function getAllKnownCircuitKeys() {
+  return [
+    ...new Set([
+      ...getAvailableCircuits(),
+      ...Object.keys(manualAssignments),
+      ...savedRoutes.map((route) => route.temperature),
+    ]),
+  ];
+}
+
+function getCircuitCycleNumber(circuit: PipeCircuit) {
+  const match = circuit.match(/\d+$/);
+  return match ? Number(match[0]) : 1;
+}
+
+function isSupplyCircuit(circuit: PipeCircuit) {
+  return circuit.startsWith("supply");
+}
+
+function isReturnCircuit(circuit: PipeCircuit) {
+  return circuit.startsWith("return");
+}
+
+function getCircuitLabel(circuit: PipeCircuit) {
+  const cycleNumber = getCircuitCycleNumber(circuit);
+
+  if (isSupplyCircuit(circuit)) {
+    return `avanço ${cycleNumber}`;
+  }
+
+  if (isReturnCircuit(circuit)) {
+    return `retorno ${cycleNumber}`;
+  }
+
+  return circuit;
+}
+
+function getPipeStat(circuit: PipeCircuit) {
+  return pipeStats[circuit] ?? 0;
+}
+
+function saveWaterCycleCountToStorage() {
+  localStorage.setItem(
+    WATER_CYCLE_COUNT_STORAGE_KEY,
+    String(waterCycleCount.value),
+  );
+}
+
+function loadWaterCycleCountFromStorage() {
+  const saved = localStorage.getItem(WATER_CYCLE_COUNT_STORAGE_KEY);
+  const parsed = saved ? Number(saved) : 3;
+
+  const safeValue = Number.isFinite(parsed)
+    ? Math.max(1, Math.min(12, Math.round(parsed)))
+    : 3;
+
+  waterCycleCount.value = safeValue;
+  pendingWaterCycleCount.value = safeValue;
+
+  ensureConfiguredAssignments();
+}
+
+function ensureConfiguredAssignments() {
+  for (const circuit of getAvailableCircuits()) {
+    if (!manualAssignments[circuit]) {
+      manualAssignments[circuit] = new Map();
+    }
+  }
+}
+
+async function applyWaterCycleCount() {
+  const nextCount = Math.max(
+    1,
+    Math.min(12, Math.round(Number(pendingWaterCycleCount.value) || 1)),
+  );
+
+  const previousCount = waterCycleCount.value;
+
+  if (nextCount === previousCount) {
+    flowMessage.value = `A central já está configurada com ${nextCount} ciclo(s) de água.`;
+    return;
+  }
+
+  if (nextCount < previousCount) {
+    const removedCircuits: PipeCircuit[] = [];
+
+    for (
+      let cycleNumber = nextCount + 1;
+      cycleNumber <= previousCount;
+      cycleNumber++
+    ) {
+      removedCircuits.push(getSupplyCircuitKey(cycleNumber));
+      removedCircuits.push(getReturnCircuitKey(cycleNumber));
+    }
+
+    const hasAssignmentsToRemove = removedCircuits.some(
+      (circuit) =>
+        [...(manualAssignments[circuit]?.values() ?? [])].some(
+          (ids) => ids.size > 0,
+        ),
+    );
+
+    const hasRoutesToRemove = savedRoutes.some((route) =>
+      removedCircuits.includes(route.temperature),
+    );
+
+    if (hasAssignmentsToRemove || hasRoutesToRemove) {
+      const shouldContinue = confirm(
+        `Existem marcações ou caminhos nos ciclos que vão ser removidos. ` +
+          `Deseja continuar e apagar esses dados?`,
+      );
+
+      if (!shouldContinue) {
+        pendingWaterCycleCount.value = previousCount;
+        flowMessage.value = "Alteração do número de ciclos cancelada.";
+        return;
+      }
+    }
+
+    for (const circuit of removedCircuits) {
+      delete manualAssignments[circuit];
+    }
+
+    for (let index = savedRoutes.length - 1; index >= 0; index--) {
+      if (removedCircuits.includes(savedRoutes[index].temperature)) {
+        savedRoutes.splice(index, 1);
+      }
+    }
+
+    for (let index = flowConnections.length - 1; index >= 0; index--) {
+      if (removedCircuits.includes(flowConnections[index].temperature)) {
+        flowConnections.splice(index, 1);
+      }
+    }
+
+    for (let index = currentRouteConnections.length - 1; index >= 0; index--) {
+      if (removedCircuits.includes(currentRouteConnections[index].temperature)) {
+        currentRouteConnections.splice(index, 1);
+      }
+    }
+
+    saveRoutesToStorage();
+  }
+
+  waterCycleCount.value = nextCount;
+  pendingWaterCycleCount.value = nextCount;
+
+  ensureConfiguredAssignments();
+  saveWaterCycleCountToStorage();
+  updateManualStats();
+
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  }
+
+  flowMessage.value =
+    `Número de ciclos de água atualizado para ${nextCount}.`;
 }
 
 function capitalizeFirstLetter(text: string) {
@@ -2964,16 +3074,7 @@ function getNextRouteNumberForCircuit(circuit: PipeCircuit) {
 }
 
 function getNodeTemperature(node: FlowNode): PipeCircuit | null {
-  const circuits: PipeCircuit[] = [
-    "supply1",
-    "supply2",
-    "supply3",
-    "return1",
-    "return2",
-    "return3",
-  ];
-
-  for (const circuit of circuits) {
+  for (const circuit of getAllKnownCircuitKeys()) {
     if (getAssignmentSet(circuit, node.modelId).has(node.localId)) {
       return circuit;
     }
@@ -3002,7 +3103,7 @@ function addConnectionParticles(start: any, end: any, temperature: PipeCircuit) 
 
   const radius = 0.055;
   const geometry = new THREE.ConeGeometry(radius * 1.3, radius * 2.8, 10);
-  const material = circuitMaterials[temperature];
+  const material = getCircuitMaterial(temperature);
   const particleCount = Math.max(2, Math.round(length / 0.65));
 
   for (let i = 0; i < particleCount; i++) {
@@ -3026,18 +3127,11 @@ function addConnectionLine(start: any, end: any, temperature: PipeCircuit) {
   const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
 
   const material = new THREE.LineBasicMaterial({
-  color: {
-    supply1: 0xff0000,
-    supply2: 0xff5252,
-    supply3: 0xff8a80,
-    return1: 0xff8c00,
-    return2: 0xffa726,
-    return3: 0xffc107,
-  }[temperature],
-    transparent: true,
-    opacity: 0.35,
-    depthTest: false,
-  });
+  color: getCircuitColor(temperature),
+  transparent: true,
+  opacity: 0.35,
+  depthTest: false,
+});
   const line = new THREE.Line(geometry, material);
   line.renderOrder = 15;
   flowGroup.add(line);
@@ -3116,7 +3210,7 @@ function addPipeParticles(
   const radius = 0.04;
   const geometry = new THREE.ConeGeometry(radius * 1.2, radius * 2.5, 8);
 
-  const material = circuitMaterials[temperature];
+  const material = getCircuitMaterial(temperature);
 
   const particleCount = Math.max(1, Math.round(length / 0.4));
 
@@ -3503,18 +3597,13 @@ function clearFlowVisuals(keepFlowState = false) {
 function clearFlowLayer() {
   clearFlowVisuals();
 
-  pipeStats.supply = 0;
-  pipeStats.return = 0;
+  for (const key of Object.keys(pipeStats)) {
+  pipeStats[key] = 0;
+}
 
-  pipeStats.supply1 = 0;
-  pipeStats.supply2 = 0;
-  pipeStats.supply3 = 0;
-
-  pipeStats.return1 = 0;
-  pipeStats.return2 = 0;
-  pipeStats.return3 = 0;
-
-  pipeStats.total = 0;
+pipeStats.supply = 0;
+pipeStats.return = 0;
+pipeStats.total = 0;
 }
 
 function replaceSelection(modelIdMap: unknown) {
@@ -3630,53 +3719,52 @@ function isPipeDirectionReversed(modelId: string, localId: number) {
 }
 
 function getAssignmentSet(circuit: PipeCircuit, modelId: string) {
+  if (!manualAssignments[circuit]) {
+    manualAssignments[circuit] = new Map();
+  }
+
   let ids = manualAssignments[circuit].get(modelId);
+
   if (!ids) {
     ids = new Set<number>();
     manualAssignments[circuit].set(modelId, ids);
   }
+
   return ids;
 }
 
 function updateManualStats() {
-  pipeStats.supply1 = countAssignmentType("supply1");
-  pipeStats.supply2 = countAssignmentType("supply2");
-  pipeStats.supply3 = countAssignmentType("supply3");
+  let supplyTotal = 0;
+  let returnTotal = 0;
 
-  pipeStats.return1 = countAssignmentType("return1");
-  pipeStats.return2 = countAssignmentType("return2");
-  pipeStats.return3 = countAssignmentType("return3");
+  for (const circuit of getAllKnownCircuitKeys()) {
+    pipeStats[circuit] = countAssignmentType(circuit);
 
-  pipeStats.supply =
-    pipeStats.supply1 +
-    pipeStats.supply2 +
-    pipeStats.supply3;
+    if (isSupplyCircuit(circuit)) {
+      supplyTotal += pipeStats[circuit];
+    }
 
-  pipeStats.return =
-    pipeStats.return1 +
-    pipeStats.return2 +
-    pipeStats.return3;
+    if (isReturnCircuit(circuit)) {
+      returnTotal += pipeStats[circuit];
+    }
+  }
 
-  pipeStats.total =
-    pipeStats.supply +
-    pipeStats.return;
+  pipeStats.supply = supplyTotal;
+  pipeStats.return = returnTotal;
+  pipeStats.total = supplyTotal + returnTotal;
 }
 
 function countAssignmentType(circuit: PipeCircuit) {
-  return [...manualAssignments[circuit].values()].reduce(
+  return [...(manualAssignments[circuit]?.values() ?? [])].reduce(
     (total, ids) => total + ids.size,
     0,
   );
 }
 
 function countAssignments() {
-  return (
-    countAssignmentType("supply1") +
-    countAssignmentType("supply2") +
-    countAssignmentType("supply3") +
-    countAssignmentType("return1") +
-    countAssignmentType("return2") +
-    countAssignmentType("return3")
+  return getAllKnownCircuitKeys().reduce(
+    (total, circuit) => total + countAssignmentType(circuit),
+    0,
   );
 }
 
@@ -4078,6 +4166,26 @@ function chunk<T>(items: T[], size: number) {
   font-size: 0.82rem;
   font-weight: 900;
   line-height: 1.35;
+}
+
+.flow-cycle-config {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #dbe9f1;
+}
+
+.flow-cycle-config input {
+  width: 100%;
+  min-height: 36px;
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: #f7fbff;
+  color: #111820;
+  font-weight: 800;
 }
 
 @media (max-width: 820px) {
