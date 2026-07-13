@@ -81,15 +81,22 @@
           </div>
 
           <div class="flow-actions flow-actions--single">
-            <button
-              type="button"
-              class="flow-button--danger"
-              @click="deleteSelectedElementDefinitions"
-            >
-              Apagar definição
-            </button>
-          </div>
+  <button
+    type="button"
+    class="flow-button--danger"
+    @click="deleteSelectedElementDefinitions"
+  >
+    Apagar definição selecionada
+  </button>
 
+  <button
+    type="button"
+    class="flow-button--danger"
+    @click="deleteAllElementDefinitions"
+  >
+    Apagar todas as definições
+  </button>
+</div>
           <p class="connection-note">
             Elementos definidos: {{ countDefinedMepElements() }}
           </p>
@@ -239,6 +246,32 @@
 </div>
 
 <div class="flow-section-title">
+  Nomes dos ciclos
+</div>
+
+<div class="cycle-name-list">
+  <label
+    v-for="cycleNumber in waterCycleCount"
+    :key="`cycle-name-${cycleNumber}`"
+    class="cycle-name-item"
+  >
+    <span>Ciclo {{ cycleNumber }}</span>
+
+    <input
+      v-model="cycleNames[cycleNumber]"
+      type="text"
+      :placeholder="`Ex: AQS, Aquecimento, Água fria...`"
+    />
+  </label>
+</div>
+
+<div class="flow-actions flow-actions--single">
+  <button type="button" @click="saveCycleNames">
+    Guardar nomes dos ciclos
+  </button>
+</div>
+
+<div class="flow-section-title">
   Circuitos
 </div>
 
@@ -249,7 +282,7 @@
     type="button"
     @click="assignSelectedPipes(getSupplyCircuitKey(cycleNumber))"
   >
-    Avanço {{ cycleNumber }}
+    Avanço {{ getCycleDisplayName(cycleNumber) }}
   </button>
 </div>
 
@@ -260,7 +293,7 @@
     type="button"
     @click="assignSelectedPipes(getReturnCircuitKey(cycleNumber))"
   >
-    Retorno {{ cycleNumber }}
+    Retorno {{ getCycleDisplayName(cycleNumber) }}
   </button>
 </div>
 
@@ -280,7 +313,7 @@
         :style="{ backgroundColor: getCircuitColorStyle(getSupplyCircuitKey(cycleNumber)) }"
       ></span>
 
-      <span>Avanço {{ cycleNumber }}</span>
+      <span>Avanço {{ getCycleDisplayName(cycleNumber) }}</span>
     </div>
 
     <div class="cycle-color-legend__item">
@@ -289,7 +322,7 @@
         :style="{ backgroundColor: getCircuitColorStyle(getReturnCircuitKey(cycleNumber)) }"
       ></span>
 
-      <span>Retorno {{ cycleNumber }}</span>
+      <span>Retorno {{ getCycleDisplayName(cycleNumber) }}</span>
     </div>
   </div>
 </div>
@@ -373,7 +406,7 @@
     type="button"
     @click="createAutoRoute(getSupplyCircuitKey(cycleNumber))"
   >
-    Caminho avanço {{ cycleNumber }}
+    Caminho Avanço {{ getCycleDisplayName(cycleNumber) }}
   </button>
 </div>
 
@@ -384,7 +417,7 @@
     type="button"
     @click="createAutoRoute(getReturnCircuitKey(cycleNumber))"
   >
-    Caminho retorno {{ cycleNumber }}
+    Caminho Retorno {{ getCycleDisplayName(cycleNumber) }}
   </button>
 </div>
 
@@ -405,7 +438,7 @@
     type="button"
     @click="createManualRouteFromSelection(getSupplyCircuitKey(cycleNumber))"
   >
-    Manual avanço {{ cycleNumber }}
+    Manual Avanço {{ getCycleDisplayName(cycleNumber) }}
   </button>
 </div>
 
@@ -419,7 +452,7 @@
     type="button"
     @click="createManualRouteFromSelection(getReturnCircuitKey(cycleNumber))"
   >
-    Manual retorno {{ cycleNumber }}
+    Manual Retorno {{ getCycleDisplayName(cycleNumber) }}
   </button>
 </div>
 
@@ -501,12 +534,12 @@
     :key="`stats-cycle-${cycleNumber}`"
   >
     <div>
-      <dt>Av. {{ cycleNumber }}</dt>
+      <dt>Av. {{ getCycleDisplayName(cycleNumber) }}</dt>
       <dd>{{ getPipeStat(getSupplyCircuitKey(cycleNumber)) }}</dd>
     </div>
 
     <div>
-      <dt>Ret. {{ cycleNumber }}</dt>
+      <dt>Ret. {{ getCycleDisplayName(cycleNumber) }}</dt>
       <dd>{{ getPipeStat(getReturnCircuitKey(cycleNumber)) }}</dd>
     </div>
   </template>
@@ -729,6 +762,7 @@ const flowSpeed = ref(1);
 const flowMessage = ref("Seleciona tubos no modelo e atribui um circuito.");
 const waterCycleCount = ref(3);
 const pendingWaterCycleCount = ref(3);
+const cycleNames = reactive<Record<string, string>>({});
 const selectedCount = ref(0);
 const selectedMepElementInfo = ref("Nenhum elemento classificado selecionado.");
 const hasLoadedModel = ref(false);
@@ -748,6 +782,8 @@ const MEP_ELEMENTS_STORAGE_KEY = "bastto-viewer-mep-elements";
 const ROUTES_STORAGE_KEY = "bastto-viewer-routes";
 const WATER_CYCLE_COUNT_STORAGE_KEY =
   "bastto-viewer-water-cycle-count";
+const WATER_CYCLE_NAMES_STORAGE_KEY =
+  "bastto-viewer-water-cycle-names";
 const REVERSED_DIRECTIONS_STORAGE_KEY =
   "bastto-viewer-reversed-directions";
 const HIDDEN_FLOW_ARROWS_STORAGE_KEY =
@@ -906,6 +942,7 @@ onMounted(async () => {
 });
 
   loadWaterCycleCountFromStorage();
+loadCycleNamesFromStorage();
 loadMepElementsFromStorage();
 loadRoutesFromStorage();
 loadReversedDirectionsFromStorage();
@@ -2382,6 +2419,82 @@ if (reversedPipeDirections.get(modelId)?.size === 0) {
     : "Os elementos selecionados não tinham definição guardada.";
 }
 
+async function deleteAllElementDefinitions() {
+  const elements = Object.values(mepElements);
+
+  if (!elements.length) {
+    flowMessage.value = "Não existem definições de elementos para apagar.";
+    return;
+  }
+
+  const shouldContinue = confirm(
+    "Esta ação vai apagar todas as definições dos elementos. Deseja continuar?",
+  );
+
+  if (!shouldContinue) {
+    flowMessage.value = "Remoção de todas as definições cancelada.";
+    return;
+  }
+
+  const idsByModel = new Map<string, number[]>();
+
+  for (const element of elements) {
+    const { modelId, localId } = element;
+
+    for (const circuit of getAllKnownCircuitKeys()) {
+      getAssignmentSet(circuit, modelId).delete(localId);
+    }
+
+    reversedPipeDirections.get(modelId)?.delete(localId);
+
+    if (reversedPipeDirections.get(modelId)?.size === 0) {
+      reversedPipeDirections.delete(modelId);
+    }
+
+    blockedPipes.get(modelId)?.delete(localId);
+
+    if (blockedPipes.get(modelId)?.size === 0) {
+      blockedPipes.delete(modelId);
+    }
+
+    if (!idsByModel.has(modelId)) {
+      idsByModel.set(modelId, []);
+    }
+
+    idsByModel.get(modelId)?.push(localId);
+  }
+
+  for (const key of Object.keys(mepElements)) {
+    delete mepElements[key];
+  }
+
+  valveBlockedPipeLinks.clear();
+
+  for (const [modelId, ids] of idsByModel) {
+    const model = loadedModels.get(modelId);
+
+    if (model && ids.length) {
+      await model.resetHighlight(ids);
+    }
+  }
+
+  updateBlockedCount();
+  updateManualStats();
+
+  saveMepElementsToStorage();
+  saveReversedDirectionsToStorage();
+
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  } else {
+    clearFlowVisuals();
+    await fragmentManager.core.update(true);
+  }
+
+  flowMessage.value =
+    `${elements.length} definição(ões) de elemento apagada(s).`;
+}
+
 function getAttributeValueText(value: any): string {
   if (value === null || value === undefined) {
     return "";
@@ -2933,13 +3046,14 @@ function isReturnCircuit(circuit: PipeCircuit) {
 
 function getCircuitLabel(circuit: PipeCircuit) {
   const cycleNumber = getCircuitCycleNumber(circuit);
+  const cycleName = getCycleDisplayName(cycleNumber);
 
   if (isSupplyCircuit(circuit)) {
-    return `avanço ${cycleNumber}`;
+    return `avanço ${cycleName}`;
   }
 
   if (isReturnCircuit(circuit)) {
-    return `retorno ${cycleNumber}`;
+    return `retorno ${cycleName}`;
   }
 
   return circuit;
@@ -2947,6 +3061,62 @@ function getCircuitLabel(circuit: PipeCircuit) {
 
 function getPipeStat(circuit: PipeCircuit) {
   return pipeStats[circuit] ?? 0;
+}
+
+function ensureCycleNames() {
+  for (let cycleNumber = 1; cycleNumber <= waterCycleCount.value; cycleNumber++) {
+    const key = String(cycleNumber);
+
+    if (!cycleNames[key]) {
+      cycleNames[key] = String(cycleNumber);
+    }
+  }
+
+  for (const key of Object.keys(cycleNames)) {
+    const cycleNumber = Number(key);
+
+    if (cycleNumber > waterCycleCount.value) {
+      delete cycleNames[key];
+    }
+  }
+}
+
+function getCycleDisplayName(cycleNumber: number) {
+  const name = cycleNames[String(cycleNumber)]?.trim();
+
+  return name || String(cycleNumber);
+}
+
+function saveCycleNamesToStorage() {
+  localStorage.setItem(
+    WATER_CYCLE_NAMES_STORAGE_KEY,
+    JSON.stringify(cycleNames),
+  );
+}
+
+function loadCycleNamesFromStorage() {
+  const saved = localStorage.getItem(WATER_CYCLE_NAMES_STORAGE_KEY);
+
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved) as Record<string, string>;
+
+      for (const [key, value] of Object.entries(parsed)) {
+        cycleNames[key] = value;
+      }
+    } catch (error) {
+      console.error("Erro ao carregar nomes dos ciclos:", error);
+    }
+  }
+
+  ensureCycleNames();
+}
+
+function saveCycleNames() {
+  ensureCycleNames();
+  saveCycleNamesToStorage();
+
+  flowMessage.value = "Nomes dos ciclos guardados.";
 }
 
 function getCircuitColorStyle(circuit: PipeCircuit) {
@@ -3057,11 +3227,15 @@ async function applyWaterCycleCount() {
   }
 
   waterCycleCount.value = nextCount;
-  pendingWaterCycleCount.value = nextCount;
+pendingWaterCycleCount.value = nextCount;
 
-  ensureConfiguredAssignments();
-  saveWaterCycleCountToStorage();
-  updateManualStats();
+ensureConfiguredAssignments();
+ensureCycleNames();
+
+saveWaterCycleCountToStorage();
+saveCycleNamesToStorage();
+
+updateManualStats();
 
   if (countAssignments() > 0 || flowConnections.length > 0) {
     await rebuildManualFlowLayer();
@@ -4253,6 +4427,35 @@ function chunk<T>(items: T[], size: number) {
   height: 12px;
   border-radius: 999px;
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.16);
+}
+
+.cycle-name-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.cycle-name-item {
+  display: grid;
+  gap: 5px;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #dbe9f1;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.cycle-name-item input {
+  width: 100%;
+  min-height: 34px;
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 9px;
+  background: #f7fbff;
+  color: #111820;
+  font-size: 0.78rem;
+  font-weight: 800;
 }
 
 @media (max-width: 820px) {
