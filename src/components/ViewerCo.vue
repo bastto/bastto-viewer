@@ -416,15 +416,23 @@
         :key="route.id"
         class="saved-route-item"
       >
-        <label class="saved-route-select">
-          <input
-            v-model="selectedRouteIds"
-            type="checkbox"
-            :value="route.id"
-          />
+        <label class="saved-route-select saved-route-select--details">
+  <input
+    v-model="selectedRouteIds"
+    type="checkbox"
+    :value="route.id"
+  />
 
-          <span>{{ route.name }}</span>
-        </label>
+  <span class="saved-route-text">
+    <strong>{{ route.name }}</strong>
+
+    <small>
+      {{ getRouteCircuitDisplayLabel(route) }} ·
+      {{ getRoutePipeCount(route) }} tubo(s) ·
+      {{ getRouteVisibilityLabel(route) }}
+    </small>
+  </span>
+</label>
 
         <div>
           <button type="button" @click="applySavedRoute(route)">
@@ -508,10 +516,6 @@
             @click="setSavedRouteGroupVisibility(group.id, true)"
           >
             Mostrar
-          </button>
-
-          <button type="button" @click="reverseRouteGroup(group.id)">
-            Inverter
           </button>
 
           <button type="button" @click="renameRouteGroup(group.id)">
@@ -856,6 +860,7 @@ const pipeParticles: PipeParticle[] = [];
 const staticFlowObjects: StaticFlowObject[] = [];
 const selectedItems: SelectionMap = new Map();
 const flowConnections = reactive<FlowConnection[]>([]);
+const currentRouteConnections = reactive<FlowConnection[]>([]);
 const routeWaypoints = reactive<FlowNode[]>([]);
 const manualRouteNodes = reactive<FlowNode[]>([]);
 const isManualRouteRecording = ref(false);
@@ -1456,6 +1461,7 @@ reversedPipeDirections.clear();
 saveReversedDirectionsToStorage();
 
   flowConnections.splice(0);
+  currentRouteConnections.splice(0);
   routeWaypoints.splice(0);
   routeStart = null;
   routeEnd = null;
@@ -1476,6 +1482,7 @@ manualAssignments.return1.clear();
 manualAssignments.return2.clear();
 manualAssignments.return3.clear();
   flowConnections.splice(0);
+  currentRouteConnections.splice(0);
   routeWaypoints.splice(0);
   routeStart = null;
   routeEnd = null;
@@ -1644,15 +1651,18 @@ async function createManualRouteFromSelection(temperature: PipeCircuit) {
 
   const path = [...manualRouteNodes];
 
-  flowConnections.splice(0);
+currentRouteConnections.splice(0);
 
-  for (let index = 0; index < path.length - 1; index++) {
-    flowConnections.push({
-      from: path[index],
-      to: path[index + 1],
-      temperature,
-    });
-  }
+for (let index = 0; index < path.length - 1; index++) {
+  const connection: FlowConnection = {
+    from: path[index],
+    to: path[index + 1],
+    temperature,
+  };
+
+  currentRouteConnections.push(connection);
+  addFlowConnectionIfMissing(connection);
+}
 
   assignPathToTemperature(path, temperature);
 
@@ -1699,14 +1709,18 @@ async function createAutoRoute(temperature: PipeCircuit) {
       return;
     }
 
-    flowConnections.splice(0);
-    for (let index = 0; index < path.length - 1; index++) {
-      flowConnections.push({
-        from: path[index],
-        to: path[index + 1],
-        temperature,
-      });
-    }
+    currentRouteConnections.splice(0);
+
+for (let index = 0; index < path.length - 1; index++) {
+  const connection: FlowConnection = {
+    from: path[index],
+    to: path[index + 1],
+    temperature,
+  };
+
+  currentRouteConnections.push(connection);
+  addFlowConnectionIfMissing(connection);
+}
 
     assignPathToTemperature(path, temperature);
     updateManualStats();
@@ -1736,27 +1750,27 @@ function assignPathToTemperature(
 }
 
 function saveCurrentRoute() {
-  if (!flowConnections.length) {
+  if (!currentRouteConnections.length) {
     flowMessage.value = "Cria primeiro um caminho antes de o guardar.";
     return;
   }
 
-  const temperature = flowConnections[0].temperature;
+  const temperature = currentRouteConnections[0].temperature;
 
   const path: FlowNode[] = [
-    flowConnections[0].from,
-    ...flowConnections.map((connection) => connection.to),
+    currentRouteConnections[0].from,
+    ...currentRouteConnections.map((connection) => connection.to),
   ];
 
   const circuitLabel = getCircuitLabel(temperature);
-const routeNumber = getNextRouteNumberForCircuit(temperature);
+  const routeNumber = getNextRouteNumberForCircuit(temperature);
 
-savedRoutes.push({
-  id: crypto.randomUUID(),
-  name: `Caminho ${circuitLabel} - ${routeNumber}`,
-  temperature,
-  path,
-});
+  savedRoutes.push({
+    id: crypto.randomUUID(),
+    name: `${capitalizeFirstLetter(circuitLabel)} - Caminho ${routeNumber}`,
+    temperature,
+    path,
+  });
 
   saveRoutesToStorage();
 
@@ -1992,10 +2006,10 @@ async function applyRouteGroup(group: SavedRouteGroup) {
 
   await rebuildManualFlowLayer();
 
-  const directionConflicts = findSharedRouteDirectionConflicts(group);
+  const sharedNodes = findSharedRouteNodesInGroup(group);
 
-routeWarningMessage.value = directionConflicts.length
-  ? `Atenção: ${directionConflicts.length} tubo(s) partilhado(s) podem ter sentidos diferentes.`
+routeWarningMessage.value = sharedNodes.length
+  ? `Atenção: ${sharedNodes.length} tubo(s) partilhado(s) entre caminhos do grupo. Evite inverter este grupo.`
   : "";
 
 flowMessage.value =
@@ -2015,6 +2029,18 @@ async function reverseRouteGroup(groupId: string) {
     flowMessage.value = "Este grupo não tem caminhos válidos.";
     return;
   }
+
+  const sharedNodes = findSharedRouteNodesInGroup(group);
+
+if (sharedNodes.length) {
+  routeWarningMessage.value =
+    `Atenção: este grupo tem ${sharedNodes.length} tubo(s) partilhado(s). Inverta os caminhos individualmente para não trocar sentidos indevidos.`;
+
+  flowMessage.value =
+    `Inversão do grupo "${group.name}" cancelada para proteger os sentidos dos caminhos.`;
+
+  return;
+}
 
   for (const route of routes) {
   const reversedPath = [...route.path].reverse();
@@ -2087,6 +2113,28 @@ async function reverseSavedRoute(routeId: string) {
   );
 
   if (!route) return;
+
+  const sharedNodes = findSharedNodesForRoute(route);
+
+if (sharedNodes.length) {
+  const shouldContinue = confirm(
+    `Este caminho tem ${sharedNodes.length} tubo(s) partilhado(s) com outro caminho. ` +
+    `Ao inverter, pode ser necessário verificar os sentidos desses tubos. Deseja continuar?`,
+  );
+
+  if (!shouldContinue) {
+    routeWarningMessage.value =
+      `Inversão cancelada. O caminho "${route.name}" tem tubos partilhados.`;
+
+    flowMessage.value =
+      `Inversão do caminho "${route.name}" cancelada.`;
+
+    return;
+  }
+
+  routeWarningMessage.value =
+    `Atenção: o caminho "${route.name}" foi invertido e tem ${sharedNodes.length} tubo(s) partilhado(s). Verifique os sentidos.`;
+}
 
   const reversedPath = [...route.path].reverse();
 
@@ -3248,6 +3296,19 @@ async function getPipeDirectionHints(node: FlowNode): Promise<PipeDirectionHints
   return hints;
 }
 
+function addFlowConnectionIfMissing(connection: FlowConnection) {
+  const alreadyExists = flowConnections.some(
+    (existingConnection) =>
+      existingConnection.temperature === connection.temperature &&
+      isSameNode(existingConnection.from, connection.from) &&
+      isSameNode(existingConnection.to, connection.to),
+  );
+
+  if (!alreadyExists) {
+    flowConnections.push(connection);
+  }
+}
+
 function isSameNode(a: FlowNode, b: FlowNode) {
   return a.modelId === b.modelId && a.localId === b.localId;
 }
@@ -3276,6 +3337,22 @@ function getCircuitLabel(circuit: PipeCircuit) {
   };
 
   return labels[circuit];
+}
+
+function capitalizeFirstLetter(text: string) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function getRoutePipeCount(route: SavedRoute) {
+  return route.path.length;
+}
+
+function getRouteVisibilityLabel(route: SavedRoute) {
+  return route.hidden ? "oculto" : "visível";
+}
+
+function getRouteCircuitDisplayLabel(route: SavedRoute) {
+  return capitalizeFirstLetter(getCircuitLabel(route.temperature));
 }
 
 function getRoutesFromGroup(group: SavedRouteGroup) {
@@ -3454,6 +3531,30 @@ function findSharedRouteNodesInGroup(
       node: item.node,
       routeNames: [...item.routeNames],
     });
+  }
+
+  return sharedNodes;
+}
+
+function findSharedNodesForRoute(route: SavedRoute) {
+  const sharedNodes: FlowNode[] = [];
+
+  for (const node of route.path) {
+    const key = nodeKey(node);
+
+    const isShared = savedRoutes.some((otherRoute) => {
+      if (otherRoute.id === route.id) {
+        return false;
+      }
+
+      return otherRoute.path.some(
+        (otherNode) => nodeKey(otherNode) === key,
+      );
+    });
+
+    if (isShared) {
+      sharedNodes.push(node);
+    }
   }
 
   return sharedNodes;
@@ -4563,6 +4664,28 @@ function chunk<T>(items: T[], size: number) {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.saved-route-select--details {
+  align-items: flex-start;
+}
+
+.saved-route-text {
+  display: grid;
+  gap: 3px;
+  line-height: 1.25;
+}
+
+.saved-route-text strong {
+  color: #f7fbff;
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.saved-route-text small {
+  color: #b8c9d3;
+  font-size: 0.68rem;
+  font-weight: 700;
 }
 
 .saved-route-select input {
