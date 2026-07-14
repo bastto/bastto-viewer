@@ -398,10 +398,6 @@
     Definir início
   </button>
 
-  <button type="button" @click="addRouteWaypoint">
-    Passar aqui
-  </button>
-
   <button type="button" @click="setRouteEnd">
     Definir fim
   </button>
@@ -566,7 +562,6 @@
     </div>
 
     <p class="connection-note">Inicio: {{ routeStartLabel }}</p>
-    <p class="connection-note">Passagens: {{ routeWaypoints.length }}</p>
     <p class="connection-note">Fim: {{ routeEndLabel }}</p>
 
     <dl class="flow-stats">
@@ -1579,20 +1574,6 @@ function setRouteEnd() {
   routeEndLabel.value = formatNodeLabel(node);
   flowMessage.value =
   "Fim definido. Agora calcula o caminho de avanço ou retorno.";
-}
-
-function addRouteWaypoint() {
-  discardRouteMessage.value = "";
-  const node = getFirstSelectedNode();
-  if (!node) {
-    flowMessage.value = "Seleciona primeiro um tubo/ponto por onde o caminho deve passar.";
-    return;
-  }
-
-  const alreadyExists = routeWaypoints.some((waypoint) => isSameNode(waypoint, node));
-  if (!alreadyExists) routeWaypoints.push(node);
-
-  flowMessage.value = `Ponto de passagem adicionado. Total: ${routeWaypoints.length}.`;
 }
 
 async function createManualRouteFromSelection(temperature: PipeCircuit) {
