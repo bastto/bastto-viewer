@@ -502,7 +502,10 @@
       v-for="route in savedRoutes"
       :key="route.id"
       class="saved-route-item"
-      :class="{ 'saved-route-item--locked': route.locked }"
+      :class="{
+  'saved-route-item--locked': route.locked,
+  'saved-route-item--highlighted': highlightedSavedRouteId === route.id
+}"
     >
       <div class="saved-route-select saved-route-select--details">
         <span class="saved-route-text">
@@ -524,6 +527,10 @@
         <button type="button" @click="applySavedRoute(route)">
           Aplicar
         </button>
+
+        <button type="button" @click="toggleSavedRouteHighlight(route)">
+  {{ highlightedSavedRouteId === route.id ? 'Limpar realce' : 'Realçar' }}
+</button>
 
         <button
           v-if="!route.hidden"
@@ -890,6 +897,7 @@ const pendingWaterCycleCount = ref(3);
 const cycleNames = reactive<Record<string, string>>({});
 const isCycleNamesPanelOpen = ref(false);
 const isSavedRoutesPanelOpen = ref(true);
+const highlightedSavedRouteId = ref<string | null>(null);
 const isCentralSummaryOpen = ref(false);
 const selectedCount = ref(0);
 const selectedMepElementInfo = ref("Nenhum elemento classificado selecionado.");
@@ -1881,6 +1889,10 @@ if (route.locked) {
   return;
 }
 
+if (highlightedSavedRouteId.value === routeId) {
+  highlightedSavedRouteId.value = null;
+}
+
 savedRoutes.splice(index, 1);
 
   const idsByModel = new Map<string, number[]>();
@@ -1947,6 +1959,85 @@ async function resetRoutePathHighlight(route: SavedRoute) {
       await model.resetHighlight(ids);
     }
   }
+}
+
+async function restoreFlowVisualsAfterRouteHighlight() {
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+    return;
+  }
+
+  await fragmentManager.core.update(true);
+}
+
+async function toggleSavedRouteHighlight(route: SavedRoute) {
+  const loadedModelIds = [...loadedModels.keys()];
+
+  if (!loadedModelIds.length) {
+    flowMessage.value = "Carrega primeiro o IFC antes de realçar um caminho.";
+    return;
+  }
+
+  if (highlightedSavedRouteId.value === route.id) {
+    highlightedSavedRouteId.value = null;
+
+    await resetRoutePathHighlight(route);
+    await restoreFlowVisualsAfterRouteHighlight();
+
+    flowMessage.value = `Realce do caminho "${route.name}" removido.`;
+    return;
+  }
+
+  const previousRoute = savedRoutes.find(
+    (savedRoute) => savedRoute.id === highlightedSavedRouteId.value,
+  );
+
+  if (previousRoute) {
+    await resetRoutePathHighlight(previousRoute);
+    await restoreFlowVisualsAfterRouteHighlight();
+  }
+
+  const fallbackModelId = loadedModelIds[0];
+
+  const adaptedPath = route.path.map((node) => {
+    if (loadedModels.has(node.modelId)) {
+      return node;
+    }
+
+    return {
+      modelId: fallbackModelId,
+      localId: node.localId,
+    };
+  });
+
+  const idsByModel = new Map<string, number[]>();
+
+  for (const node of adaptedPath) {
+    if (!idsByModel.has(node.modelId)) {
+      idsByModel.set(node.modelId, []);
+    }
+
+    idsByModel.get(node.modelId)?.push(node.localId);
+  }
+
+  for (const [modelId, ids] of idsByModel) {
+    const model = loadedModels.get(modelId);
+
+    if (!model || !ids.length) {
+      continue;
+    }
+
+    await model.highlight(
+      ids,
+      createHighlight(0x00e5ff, `saved-route-highlight-${route.id}`),
+    );
+  }
+
+  highlightedSavedRouteId.value = route.id;
+
+  await fragmentManager.core.update(true);
+
+  flowMessage.value = `Caminho "${route.name}" realçado.`;
 }
 
 async function setSavedRouteVisibility(routeId: string, shouldShow: boolean) {
@@ -4878,6 +4969,15 @@ function chunk<T>(items: T[], size: number) {
   color: #f7fbff;
   font-size: 1rem;
   font-weight: 900;
+}
+
+.saved-route-item--highlighted {
+  border: 1px solid rgba(0, 229, 255, 0.75);
+  background: rgba(0, 229, 255, 0.12);
+}
+
+.saved-route-item--highlighted .saved-route-text strong {
+  color: #00e5ff;
 }
 
 @media (max-width: 820px) {
