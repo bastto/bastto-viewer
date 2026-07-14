@@ -465,14 +465,26 @@
 </div>
 
     <div class="flow-actions flow-actions--single">
-      <button
-        type="button"
-        class="flow-button--primary"
-        @click="saveCurrentRoute"
-      >
-        Guardar caminho
-      </button>
-    </div>
+  <button
+    type="button"
+    class="flow-button--primary"
+    @click="saveCurrentRoute"
+  >
+    Guardar caminho
+  </button>
+
+  <button
+    type="button"
+    class="flow-button--danger"
+    @click="discardCurrentRoute"
+  >
+    Descartar caminho atual
+  </button>
+</div>
+
+<p v-if="discardRouteMessage" class="discard-route-message">
+  {{ discardRouteMessage }}
+</p>
 
     <div v-if="hasLoadedModel && savedRoutes.length" class="saved-routes">
       <p class="connection-note">
@@ -790,6 +802,7 @@ const loadingProgress = ref(0);
 const loadingFileName = ref("");
 const flowSpeed = ref(1);
 const flowMessage = ref("Seleciona tubos no modelo e atribui um circuito.");
+const discardRouteMessage = ref("");
 const waterCycleCount = ref(3);
 const pendingWaterCycleCount = ref(3);
 const cycleNames = reactive<Record<string, string>>({});
@@ -910,6 +923,8 @@ function getCircuitMaterial(circuit: PipeCircuit) {
 
 onMounted(async () => {
   if (!containerRef.value) return;
+
+  discardRouteMessage.value = "";
 
   BUI.Manager.init();
 
@@ -1428,6 +1443,7 @@ function resetAssignmentMaps() {
 }
 
 function startManualRouteRecording() {
+  discardRouteMessage.value = "";
   manualRouteNodes.splice(0);
   isManualRouteRecording.value = true;
   flowMessage.value =
@@ -1538,6 +1554,7 @@ async function updateManualRoutePreviewHighlight() {
 }
 
 function setRouteStart() {
+  discardRouteMessage.value = "";
   const node = getFirstSelectedNode();
   if (!node) {
     flowMessage.value = "Seleciona primeiro o tubo/ponto inicial.";
@@ -1550,6 +1567,8 @@ function setRouteStart() {
 }
 
 function setRouteEnd() {
+  discardRouteMessage.value = "";
+
   const node = getFirstSelectedNode();
   if (!node) {
     flowMessage.value = "Seleciona primeiro o tubo/ponto final.";
@@ -1563,6 +1582,7 @@ function setRouteEnd() {
 }
 
 function addRouteWaypoint() {
+  discardRouteMessage.value = "";
   const node = getFirstSelectedNode();
   if (!node) {
     flowMessage.value = "Seleciona primeiro um tubo/ponto por onde o caminho deve passar.";
@@ -1576,6 +1596,7 @@ function addRouteWaypoint() {
 }
 
 async function createManualRouteFromSelection(temperature: PipeCircuit) {
+  discardRouteMessage.value = "";
   if (manualRouteNodes.length < 2) {
     flowMessage.value =
       "Seleciona pelo menos dois tubos pela ordem do caminho manual.";
@@ -1611,6 +1632,7 @@ for (let index = 0; index < path.length - 1; index++) {
 }
 
 async function createAutoRoute(temperature: PipeCircuit) {
+  discardRouteMessage.value = "";
   if (!routeStart || !routeEnd) {
     flowMessage.value = "Define primeiro o inicio e o fim do caminho.";
     return;
@@ -1707,7 +1729,71 @@ function saveCurrentRoute() {
 
   saveRoutesToStorage();
 
+  discardRouteMessage.value = "";
+
   flowMessage.value = "Caminho guardado com sucesso.";
+}
+
+async function discardCurrentRoute() {
+  if (!currentRouteConnections.length && !manualRouteNodes.length) {
+  discardRouteMessage.value = "Não existe caminho atual para descartar.";
+  flowMessage.value = "Não existe caminho atual para descartar.";
+  return;
+}
+
+  const nodesToClear = new Map<string, FlowNode>();
+
+  for (const connection of currentRouteConnections) {
+    nodesToClear.set(nodeKey(connection.from), connection.from);
+    nodesToClear.set(nodeKey(connection.to), connection.to);
+  }
+
+  for (const node of manualRouteNodes) {
+    nodesToClear.set(nodeKey(node), node);
+  }
+
+  for (let index = flowConnections.length - 1; index >= 0; index--) {
+    const shouldRemove = currentRouteConnections.some((connection) =>
+      isSameConnection(flowConnections[index], connection),
+    );
+
+    if (shouldRemove) {
+      flowConnections.splice(index, 1);
+    }
+  }
+
+  for (const node of nodesToClear.values()) {
+    for (const circuit of getAllKnownCircuitKeys()) {
+      getAssignmentSet(circuit, node.modelId).delete(node.localId);
+    }
+  }
+
+  currentRouteConnections.splice(0);
+  manualRouteNodes.splice(0);
+  routeWaypoints.splice(0);
+
+  routeStart = null;
+  routeEnd = null;
+  routeStartLabel.value = "nenhum";
+  routeEndLabel.value = "nenhum";
+  isManualRouteRecording.value = false;
+
+  updateManualStats();
+
+  if (savedRoutes.length) {
+    await applyAllSavedRoutes();
+  } else if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  } else {
+    clearFlowVisuals();
+    await fragmentManager.core.update(true);
+  }
+
+  discardRouteMessage.value =
+  "Caminho atual descartado. Caminhos guardados mantidos.";
+
+flowMessage.value =
+  "Caminho atual descartado. Caminhos guardados mantidos.";
 }
 
 async function deleteSavedRoute(routeId: string) {
@@ -3052,6 +3138,17 @@ async function getPipeDirectionHints(node: FlowNode): Promise<PipeDirectionHints
   }
 
   return hints;
+}
+
+function isSameConnection(
+  firstConnection: FlowConnection,
+  secondConnection: FlowConnection,
+) {
+  return (
+    firstConnection.temperature === secondConnection.temperature &&
+    isSameNode(firstConnection.from, secondConnection.from) &&
+    isSameNode(firstConnection.to, secondConnection.to)
+  );
 }
 
 function addFlowConnectionIfMissing(connection: FlowConnection) {
@@ -4616,6 +4713,17 @@ function chunk<T>(items: T[], size: number) {
 
 .section-collapse-button:hover {
   background: #d9f0ff;
+}
+
+.discard-route-message {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(255, 227, 227, 0.14);
+  color: #ffd6d6;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 @media (max-width: 820px) {
