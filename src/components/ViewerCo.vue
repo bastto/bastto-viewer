@@ -482,84 +482,96 @@
   {{ discardRouteMessage }}
 </p>
 
-    <div v-if="hasLoadedModel && savedRoutes.length" class="saved-routes">
-      <p class="connection-note">
-        Caminhos guardados: {{ savedRoutes.length }}
-      </p>
+ <div v-if="hasLoadedModel && savedRoutes.length" class="saved-routes">
+  <div class="saved-routes-header">
+    <span>
+      Caminhos guardados: {{ savedRoutes.length }}
+    </span>
 
-      <div
-  v-for="route in savedRoutes"
-  :key="route.id"
-  class="saved-route-item"
-  :class="{ 'saved-route-item--locked': route.locked }"
->
-        <div class="saved-route-select saved-route-select--details">
-  <span class="saved-route-text">
-    <strong>
-  <span v-if="route.locked" class="route-lock-icon">🔒</span>
-  {{ route.name }}
-</strong>
+    <button
+      type="button"
+      class="section-collapse-button"
+      @click="toggleSavedRoutesPanel"
+    >
+      {{ isSavedRoutesPanelOpen ? '−' : '+' }}
+    </button>
+  </div>
 
-    <small>
-  {{ getRouteCircuitDisplayLabel(route) }} ·
-  {{ getRoutePipeCount(route) }} tubo(s) ·
-  {{ getRouteVisibilityLabel(route) }} ·
-  {{ getRouteProtectionLabel(route) }}
-</small>
-  </span>
-</div>
+  <div v-if="isSavedRoutesPanelOpen" class="saved-routes-list">
+    <div
+      v-for="route in savedRoutes"
+      :key="route.id"
+      class="saved-route-item"
+      :class="{ 'saved-route-item--locked': route.locked }"
+    >
+      <div class="saved-route-select saved-route-select--details">
+        <span class="saved-route-text">
+          <strong>
+            <span v-if="route.locked" class="route-lock-icon">🔒</span>
+            {{ route.name }}
+          </strong>
 
-        <div>
-          <button type="button" @click="applySavedRoute(route)">
-            Aplicar
-          </button>
+          <small>
+            {{ getRouteCircuitDisplayLabel(route) }} ·
+            {{ getRoutePipeCount(route) }} tubo(s) ·
+            {{ getRouteVisibilityLabel(route) }} ·
+            {{ getRouteProtectionLabel(route) }}
+          </small>
+        </span>
+      </div>
 
-          <button
-            v-if="!route.hidden"
-            type="button"
-            @click="setSavedRouteVisibility(route.id, false)"
-          >
-            Ocultar
-          </button>
+      <div>
+        <button type="button" @click="applySavedRoute(route)">
+          Aplicar
+        </button>
 
-          <button
-            v-else
-            type="button"
-            @click="setSavedRouteVisibility(route.id, true)"
-          >
-            Mostrar
-          </button>
+        <button
+          v-if="!route.hidden"
+          type="button"
+          @click="setSavedRouteVisibility(route.id, false)"
+        >
+          Ocultar
+        </button>
 
-          <button
-  v-if="!route.locked"
-  type="button"
-  @click="reverseSavedRoute(route.id)"
->
-  Inverter
-</button>
+        <button
+          v-else
+          type="button"
+          @click="setSavedRouteVisibility(route.id, true)"
+        >
+          Mostrar
+        </button>
 
-<button
-  v-if="!route.locked"
-  type="button"
-  @click="renameSavedRoute(route.id)"
->
-  Renomear
-</button>
+        <button
+          v-if="!route.locked"
+          type="button"
+          @click="reverseSavedRoute(route.id)"
+        >
+          Inverter
+        </button>
 
-<button type="button" @click="toggleSavedRouteProtection(route.id)">
-  {{ route.locked ? 'Desproteger' : 'Proteger' }}
-</button>
+        <button
+          v-if="!route.locked"
+          type="button"
+          @click="renameSavedRoute(route.id)"
+        >
+          Renomear
+        </button>
 
-<button
-  v-if="!route.locked"
-  type="button"
-  @click="deleteSavedRoute(route.id)"
->
-  Apagar
-</button>
-        </div>
+        <button type="button" @click="toggleSavedRouteProtection(route.id)">
+          {{ route.locked ? 'Desproteger' : 'Proteger' }}
+        </button>
+
+        <button
+          v-if="!route.locked"
+          type="button"
+          @click="deleteSavedRoute(route.id)"
+        >
+          Apagar
+        </button>
       </div>
     </div>
+  </div>
+</div>
 
     <p class="connection-note">Inicio: {{ routeStartLabel }}</p>
     <p class="connection-note">Fim: {{ routeEndLabel }}</p>
@@ -802,6 +814,7 @@ const waterCycleCount = ref(3);
 const pendingWaterCycleCount = ref(3);
 const cycleNames = reactive<Record<string, string>>({});
 const isCycleNamesPanelOpen = ref(false);
+const isSavedRoutesPanelOpen = ref(true);
 const selectedCount = ref(0);
 const selectedMepElementInfo = ref("Nenhum elemento classificado selecionado.");
 const hasLoadedModel = ref(false);
@@ -3276,6 +3289,10 @@ function toggleCycleNamesPanel() {
   isCycleNamesPanelOpen.value = !isCycleNamesPanelOpen.value;
 }
 
+function toggleSavedRoutesPanel() {
+  isSavedRoutesPanelOpen.value = !isSavedRoutesPanelOpen.value;
+}
+
 function saveCycleNames() {
   ensureCycleNames();
   saveCycleNamesToStorage();
@@ -4705,6 +4722,26 @@ function chunk<T>(items: T[], size: number) {
   font-size: 0.78rem;
   font-weight: 800;
   line-height: 1.35;
+}
+
+.saved-routes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(143, 211, 255, 0.14);
+  color: #dbe9f1;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.saved-routes-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 @media (max-width: 820px) {
