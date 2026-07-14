@@ -245,11 +245,19 @@
   </button>
 </div>
 
-<div class="flow-section-title">
-  Nomes dos ciclos
+<div class="flow-section-title flow-section-title--button">
+  <span>Renomear ciclos</span>
+
+  <button
+    type="button"
+    class="section-collapse-button"
+    @click="toggleCycleNamesPanel"
+  >
+    {{ isCycleNamesPanelOpen ? '−' : '+' }}
+  </button>
 </div>
 
-<div class="cycle-name-list">
+<div v-if="isCycleNamesPanelOpen" class="cycle-name-list">
   <label
     v-for="cycleNumber in waterCycleCount"
     :key="`cycle-name-${cycleNumber}`"
@@ -263,12 +271,12 @@
       :placeholder="`Ex: AQS, Aquecimento, Água fria...`"
     />
   </label>
-</div>
 
-<div class="flow-actions flow-actions--single">
-  <button type="button" @click="saveCycleNames">
-    Guardar nomes dos ciclos
-  </button>
+  <div class="flow-actions flow-actions--single">
+    <button type="button" @click="saveCycleNames">
+      Guardar nomes dos ciclos
+    </button>
+  </div>
 </div>
 
 <div class="flow-section-title">
@@ -785,6 +793,7 @@ const flowMessage = ref("Seleciona tubos no modelo e atribui um circuito.");
 const waterCycleCount = ref(3);
 const pendingWaterCycleCount = ref(3);
 const cycleNames = reactive<Record<string, string>>({});
+const isCycleNamesPanelOpen = ref(false);
 const selectedCount = ref(0);
 const selectedMepElementInfo = ref("Nenhum elemento classificado selecionado.");
 const hasLoadedModel = ref(false);
@@ -3185,6 +3194,10 @@ function loadCycleNamesFromStorage() {
   ensureCycleNames();
 }
 
+function toggleCycleNamesPanel() {
+  isCycleNamesPanelOpen.value = !isCycleNamesPanelOpen.value;
+}
+
 function saveCycleNames() {
   ensureCycleNames();
   saveCycleNamesToStorage();
@@ -4543,7 +4556,9 @@ function chunk<T>(items: T[], size: number) {
 
 .cycle-name-item {
   display: grid;
-  gap: 5px;
+  grid-template-columns: 72px 1fr;
+  align-items: center;
+  gap: 8px;
   padding: 8px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.08);
@@ -4575,6 +4590,32 @@ function chunk<T>(items: T[], size: number) {
 
 .route-lock-icon {
   margin-right: 4px;
+}
+
+.flow-section-title--button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.section-collapse-button {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: #f7fbff;
+  color: #111820;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.section-collapse-button:hover {
+  background: #d9f0ff;
 }
 
 @media (max-width: 820px) {
