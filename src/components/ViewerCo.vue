@@ -692,6 +692,81 @@
           <p class="connection-note">
             Bloqueios ativos: {{ blockedCount }}
           </p>
+         <template v-if="hasLoadedModel">
+  <div class="flow-section-title flow-section-title--button">
+    <span>Resumo da central</span>
+
+    <button
+      type="button"
+      class="section-collapse-button"
+      @click="toggleCentralSummary"
+    >
+      {{ isCentralSummaryOpen ? '−' : '+' }}
+    </button>
+  </div>
+
+  <div v-if="isCentralSummaryOpen" class="central-summary"> 
+  <div class="central-summary__item">
+    <span>Ciclos</span>
+    <strong>{{ waterCycleCount }}</strong>
+  </div>
+
+  <div class="central-summary__item">
+    <span>Elementos definidos</span>
+    <strong>{{ countDefinedMepElements() }}</strong>
+  </div>
+
+  <div class="central-summary__item">
+    <span>Tubos classificados</span>
+    <strong>{{ countMepElementsByType('pipe') }}</strong>
+  </div>
+
+  <div class="central-summary__item">
+    <span>Válvulas</span>
+    <strong>{{ countValveElements() }}</strong>
+  </div>
+
+  <div class="central-summary__item">
+    <span>Boosters</span>
+    <strong>{{ countMepElementsByType('booster') }}</strong>
+  </div>
+
+  <div class="central-summary__item">
+    <span>Reservatórios</span>
+    <strong>{{ countReservoirElements() }}</strong>
+  </div>
+
+  <div class="central-summary__item">
+    <span>Caminhos guardados</span>
+    <strong>{{ savedRoutes.length }}</strong>
+  </div>
+
+  <div class="central-summary__item">
+    <span>Caminhos visíveis</span>
+    <strong>{{ countVisibleSavedRoutes() }}</strong>
+  </div>
+
+  <div class="central-summary__item">
+    <span>Caminhos ocultos</span>
+    <strong>{{ countHiddenSavedRoutes() }}</strong>
+  </div>
+
+  <div class="central-summary__item">
+    <span>Caminhos protegidos</span>
+    <strong>{{ countLockedSavedRoutes() }}</strong>
+  </div>
+
+  <div class="central-summary__item">
+    <span>Tubos marcados em circuitos</span>
+    <strong>{{ pipeStats.total }}</strong>
+  </div>
+
+  <div class="central-summary__item">
+      <span>Bloqueios ativos</span>
+      <strong>{{ blockedCount }}</strong>
+    </div>
+  </div>
+</template>
         </div>
       </section>
     </div>
@@ -815,6 +890,7 @@ const pendingWaterCycleCount = ref(3);
 const cycleNames = reactive<Record<string, string>>({});
 const isCycleNamesPanelOpen = ref(false);
 const isSavedRoutesPanelOpen = ref(true);
+const isCentralSummaryOpen = ref(false);
 const selectedCount = ref(0);
 const selectedMepElementInfo = ref("Nenhum elemento classificado selecionado.");
 const hasLoadedModel = ref(false);
@@ -2766,6 +2842,33 @@ function countDefinedMepElements() {
   return Object.keys(mepElements).length;
 }
 
+function countLockedSavedRoutes() {
+  return savedRoutes.filter((route) => route.locked).length;
+}
+
+function countHiddenSavedRoutes() {
+  return savedRoutes.filter((route) => route.hidden).length;
+}
+
+function countVisibleSavedRoutes() {
+  return savedRoutes.filter((route) => !route.hidden).length;
+}
+
+function countValveElements() {
+  return (
+    countMepElementsByType("isolationValve") +
+    countMepElementsByType("normallyOpenValve") +
+    countMepElementsByType("normallyClosedValve")
+  );
+}
+
+function countReservoirElements() {
+  return (
+    countMepElementsByType("reservoirWithResistance") +
+    countMepElementsByType("reservoirWithoutResistance")
+  );
+}
+
 function getMepElementIdsByType(elementType: MepElementType) {
   const idsByModel = new Map<string, number[]>();
 
@@ -3291,6 +3394,10 @@ function toggleCycleNamesPanel() {
 
 function toggleSavedRoutesPanel() {
   isSavedRoutesPanelOpen.value = !isSavedRoutesPanelOpen.value;
+}
+
+function toggleCentralSummary() {
+  isCentralSummaryOpen.value = !isCentralSummaryOpen.value;
 }
 
 function saveCycleNames() {
@@ -4742,6 +4849,35 @@ function chunk<T>(items: T[], size: number) {
   display: grid;
   gap: 6px;
   margin-top: 8px;
+}
+
+.central-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.central-summary__item {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.central-summary__item span {
+  color: #b8c9d3;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.central-summary__item strong {
+  color: #f7fbff;
+  font-size: 1rem;
+  font-weight: 900;
 }
 
 @media (max-width: 820px) {
