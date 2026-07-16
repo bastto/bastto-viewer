@@ -1194,17 +1194,18 @@ function createBimPanel(components: OBC.Components, viewport: HTMLElement) {
   updatePropertiesTable({ modelIdMap });
 
   await showSelectedMepElementInfo();
-await syncSelectedValveAssociationRoute();
 addSelectedNodeToManualRoute();
 
-  if (isManualRouteRecording.value && manualRouteNodes.length > 0) {
-    await updateManualRoutePreviewHighlight();
-    return;
-  }
+if (isManualRouteRecording.value && manualRouteNodes.length > 0) {
+  await updateManualRoutePreviewHighlight();
+  return;
+}
 
-  if (countAssignments() > 0) {
-    await rebuildManualFlowLayer();
-  }
+if (countAssignments() > 0) {
+  await rebuildManualFlowLayer();
+}
+
+await syncSelectedValveAssociationRoute();
 });
 
   highlighter.events.select.onClear.add(async () => {
@@ -3319,6 +3320,8 @@ async function syncSelectedValveAssociationRoute() {
     return;
   }
 
+  selectedValveForPipeLink.value = valveNode;
+
   const linkedPipes = getLinkedPipesForValveNode(valveNode);
   const associatedRouteId = linkedPipes[0]?.routeId;
 
@@ -3332,12 +3335,15 @@ async function syncSelectedValveAssociationRoute() {
     (route) => route.id === associatedRouteId,
   );
 
-  if (
-    associatedRoute &&
-    highlightedSavedRouteId.value !== associatedRoute.id
-  ) {
-    await toggleSavedRouteHighlight(associatedRoute);
+  if (!associatedRoute) {
+    return;
   }
+
+  if (highlightedSavedRouteId.value === associatedRoute.id) {
+    highlightedSavedRouteId.value = null;
+  }
+
+  await toggleSavedRouteHighlight(associatedRoute);
 }
 
 function getSelectedValveStateLabel() {
@@ -3394,7 +3400,7 @@ function prepareSelectedValvePipeLink() {
   selectedValveForPipeLink.value = valveNode;
 
   flowMessage.value =
-    `Válvula ${formatNodeLabel(valveNode)} preparada. Agora seleciona o primeiro tubo a bloquear.`;
+    `Válvula ${formatNodeLabel(valveNode)} preparada. Escolhe o caminho e seleciona o primeiro tubo a bloquear.`;
 }
 
 async function linkSelectedPipesToPreparedValve() {
