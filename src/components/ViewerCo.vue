@@ -684,6 +684,31 @@
   Válvula em associação: {{ getSelectedValveForPipeLinkLabel() }}
 </p>
 
+<p class="connection-note">
+  Estado da associação: {{ getSelectedValveAssociationStatusLabel() }}
+</p>
+
+<label class="flow-cycle-config">
+  <span>Caminho controlado pela válvula</span>
+
+  <select
+    v-model="selectedValveAssociationRouteId"
+    @change="highlightSelectedValveAssociationRoute"
+  >
+    <option value="">
+      Selecionar caminho...
+    </option>
+
+    <option
+      v-for="route in savedRoutes"
+      :key="`valve-route-${route.id}`"
+      :value="route.id"
+    >
+      {{ route.name }} - {{ getRouteCircuitDisplayLabel(route) }}
+    </option>
+  </select>
+</label>
+
           <div class="flow-section-title">
             Animação
           </div>
@@ -979,6 +1004,7 @@ const valveBlockedPipeLinks = new Map<string, ValveControlledPipeLink[]>();
 const valveControlledPipeLinks = new Map<string, ValveControlledPipeLink[]>();
 const blockedRoutePipes = new Set<string>();
 const selectedValveForPipeLink = ref<FlowNode | null>(null);
+const selectedValveAssociationRouteId = ref("");
 const manualAssignments = reactive<Record<string, SelectionMap>>({});
 const reversedPipeDirections: SelectionMap = new Map();
 const syncedPipeDirections: SelectionMap = new Map();
@@ -3179,7 +3205,39 @@ function updateBlockedCount() {
   blockedCount.value = blockedRoutePipes.size;
 }
 
+async function highlightSelectedValveAssociationRoute() {
+  const selectedRoute = savedRoutes.find(
+    (route) => route.id === selectedValveAssociationRouteId.value,
+  );
+
+  if (!selectedRoute) {
+    const highlightedRoute = savedRoutes.find(
+      (route) => route.id === highlightedSavedRouteId.value,
+    );
+
+    if (highlightedRoute) {
+      await toggleSavedRouteHighlight(highlightedRoute);
+    }
+
+    return;
+  }
+
+  if (highlightedSavedRouteId.value === selectedRoute.id) {
+    return;
+  }
+
+  await toggleSavedRouteHighlight(selectedRoute);
+}
+
 function getHighlightedRouteForValveAssociation() {
+  const selectedRoute = savedRoutes.find(
+    (route) => route.id === selectedValveAssociationRouteId.value,
+  );
+
+  if (selectedRoute) {
+    return selectedRoute;
+  }
+
   if (!highlightedSavedRouteId.value) {
     return null;
   }
@@ -3195,6 +3253,33 @@ function getSelectedValveForPipeLinkLabel() {
   }
 
   return formatNodeLabel(selectedValveForPipeLink.value);
+}
+
+function getSelectedValveAssociationStatusLabel() {
+  const valveNode = getFirstSelectedValveNode();
+
+  if (!valveNode) {
+    return "nenhuma válvula selecionada";
+  }
+
+  const valveKey = nodeKey(valveNode);
+
+  if (valveControlledPipeLinks.has(valveKey)) {
+    return "válvula associada";
+  }
+
+  const hasAssociationByLocalId = [...valveControlledPipeLinks.keys()].some(
+    (storedValveKey) => {
+      const [, storedLocalId] = storedValveKey.split(":");
+      return Number(storedLocalId) === valveNode.localId;
+    },
+  );
+
+  if (hasAssociationByLocalId) {
+    return "válvula associada";
+  }
+
+  return "sem associação";
 }
 
 function getFirstSelectedValveNode() {
@@ -3239,10 +3324,10 @@ async function linkSelectedPipesToPreparedValve() {
   const highlightedRoute = getHighlightedRouteForValveAssociation();
 
   if (!highlightedRoute) {
-    flowMessage.value =
-      "Realça primeiro o caminho correto e só depois associa a válvula.";
-    return;
-  }
+  flowMessage.value =
+    "Seleciona primeiro o caminho que esta válvula deve controlar.";
+  return;
+}
 
   if (!selectedCount.value) {
     flowMessage.value =
@@ -5265,7 +5350,8 @@ function chunk<T>(items: T[], size: number) {
   color: #dbe9f1;
 }
 
-.flow-cycle-config input {
+.flow-cycle-config input,
+.flow-cycle-config select {
   width: 100%;
   min-height: 36px;
   border: 0;
