@@ -1194,8 +1194,8 @@ function createBimPanel(components: OBC.Components, viewport: HTMLElement) {
   updatePropertiesTable({ modelIdMap });
 
   await showSelectedMepElementInfo();
-
-  addSelectedNodeToManualRoute();
+await syncSelectedValveAssociationRoute();
+addSelectedNodeToManualRoute();
 
   if (isManualRouteRecording.value && manualRouteNodes.length > 0) {
     await updateManualRoutePreviewHighlight();
@@ -3292,6 +3292,52 @@ function getSelectedValveAssociationStatusLabel() {
   }
 
   return "sem associação";
+}
+
+function getLinkedPipesForValveNode(valveNode: FlowNode) {
+  const valveKey = nodeKey(valveNode);
+
+  const exactLinkedPipes = valveControlledPipeLinks.get(valveKey);
+
+  if (exactLinkedPipes) {
+    return exactLinkedPipes;
+  }
+
+  return (
+    [...valveControlledPipeLinks.entries()]
+      .find(([storedValveKey]) => {
+        const [, storedLocalId] = storedValveKey.split(":");
+        return Number(storedLocalId) === valveNode.localId;
+      })?.[1] ?? []
+  );
+}
+
+async function syncSelectedValveAssociationRoute() {
+  const valveNode = getFirstSelectedValveNode();
+
+  if (!valveNode) {
+    return;
+  }
+
+  const linkedPipes = getLinkedPipesForValveNode(valveNode);
+  const associatedRouteId = linkedPipes[0]?.routeId;
+
+  if (!associatedRouteId) {
+    return;
+  }
+
+  selectedValveAssociationRouteId.value = associatedRouteId;
+
+  const associatedRoute = savedRoutes.find(
+    (route) => route.id === associatedRouteId,
+  );
+
+  if (
+    associatedRoute &&
+    highlightedSavedRouteId.value !== associatedRoute.id
+  ) {
+    await toggleSavedRouteHighlight(associatedRoute);
+  }
 }
 
 function getSelectedValveStateLabel() {
