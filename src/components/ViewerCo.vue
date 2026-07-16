@@ -661,8 +661,12 @@
     {{ getSelectedValveInverseButtonLabel() }}
   </button>
 
+  <button type="button" @click="resetSelectedValvesToNormal">
+    Repor válvula selecionada
+  </button>
+
   <button type="button" @click="clearBlockedPipes">
-    Repor válvulas ao normal
+    Repor todas as válvulas
   </button>
 </div>
 
@@ -686,6 +690,10 @@
 
 <p class="connection-note">
   Estado da associação: {{ getSelectedValveAssociationStatusLabel() }}
+</p>
+
+<p class="connection-note">
+  Estado da válvula: {{ getSelectedValveStateLabel() }}
 </p>
 
 <label class="flow-cycle-config">
@@ -3286,6 +3294,33 @@ function getSelectedValveAssociationStatusLabel() {
   return "sem associação";
 }
 
+function getSelectedValveStateLabel() {
+  const valveNode = getFirstSelectedValveNode();
+
+  if (!valveNode) {
+    return "nenhuma válvula selecionada";
+  }
+
+  const element = mepElements[elementKey(
+    valveNode.modelId,
+    valveNode.localId,
+  )];
+
+  if (!element || !isValveElementType(element.elementType)) {
+    return "nenhuma válvula selecionada";
+  }
+
+  if (element.state === "closed") {
+    return "fechada";
+  }
+
+  if (element.state === "open") {
+    return "aberta";
+  }
+
+  return "estado desconhecido";
+}
+
 function getFirstSelectedValveNode() {
   for (const [modelId, ids] of selectedItems) {
     for (const localId of ids) {
@@ -3672,6 +3707,85 @@ if (lockedRouteNames.length) {
 
   flowMessage.value =
     `${changedCount} tubo(s) sincronizado(s) com o sentido do caminho.`;
+}
+
+async function resetSelectedValvesToNormal() {
+  if (!selectedCount.value) {
+    flowMessage.value = "Seleciona primeiro uma ou mais válvulas.";
+    return;
+  }
+
+  if (!flowConnections.length && savedRoutes.length && loadedModels.size) {
+    await applyAllSavedRoutes();
+  }
+
+  let changedCount = 0;
+
+  for (const [modelId, ids] of selectedItems) {
+    for (const localId of ids) {
+      if (!isIsolationValve(modelId, localId)) {
+        continue;
+      }
+
+      const key = elementKey(modelId, localId);
+      const element = mepElements[key];
+
+      if (!element || !isValveElementType(element.elementType)) {
+        continue;
+      }
+
+      const normalState = getNormalValveState(element.elementType);
+
+      const valveNode: FlowNode = {
+        modelId,
+        localId,
+      };
+
+      const valveKey = nodeKey(valveNode);
+
+      const previouslyBlockedPipes =
+        valveBlockedPipeLinks.get(valveKey) ?? [];
+
+      for (const pipeNode of previouslyBlockedPipes) {
+        unblockPipeForRoute(pipeNode.routeId, pipeNode);
+      }
+
+      valveBlockedPipeLinks.delete(valveKey);
+
+      mepElements[key] = {
+        ...element,
+        state: normalState,
+      };
+
+      if (normalState === "closed") {
+        const linkedPipes =
+          valveControlledPipeLinks.get(valveKey) ?? [];
+
+        for (const pipeNode of linkedPipes) {
+          blockPipeForRoute(pipeNode.routeId, pipeNode);
+        }
+
+        valveBlockedPipeLinks.set(valveKey, linkedPipes);
+      }
+
+      changedCount++;
+    }
+  }
+
+  updateBlockedCount();
+
+  if (!changedCount) {
+    flowMessage.value =
+      "Nenhuma válvula selecionada. Define primeiro o elemento como Válvula NA ou Válvula NF.";
+    return;
+  }
+
+  await rebuildManualFlowLayer();
+
+  saveMepElementsToStorage();
+
+  flowMessage.value =
+    `${changedCount} válvula(s) selecionada(s) reposta(s) ao estado normal.`;
 }
 
 async function clearBlockedPipes() {
