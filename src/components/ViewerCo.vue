@@ -653,16 +653,31 @@
           <p class="selection-count">Selecionados: {{ selectedCount }}</p>
 
           <div class="flow-section-title">
-            Válvulas e bloqueios
-          </div>
+  Válvulas e bloqueios
+</div>
 
-          <div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="applyInverseNormalStateToSelectedValves">
-    {{ getSelectedValveInverseButtonLabel() }}
-  </button>
+<p class="connection-note">
+  Estado da válvula: {{ getSelectedValveStateLabel() }}
+</p>
 
-  <button type="button" @click="resetSelectedValvesToNormal">
-    Repor válvula selecionada
+<p class="connection-note">
+  Estado da associação: {{ getSelectedValveAssociationStatusLabel() }}
+</p>
+
+<div class="flow-section-title">
+  Ações da válvula
+</div>
+
+<div class="flow-actions flow-actions--secondary">
+  <button
+    type="button"
+    :class="[
+      'valve-switch-button',
+      isSelectedValveInInverseState() ? 'valve-switch-button--active' : ''
+    ]"
+    @click="toggleSelectedValvesNormalInverseState"
+  >
+    {{ getSelectedValveSwitchLabel() }}
   </button>
 
   <button type="button" @click="clearBlockedPipes">
@@ -670,31 +685,9 @@
   </button>
 </div>
 
-<div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="prepareSelectedValvePipeLink">
-    Preparar associação
-  </button>
-
-  <button type="button" @click="linkSelectedPipesToPreparedValve">
-    Associar tubo à válvula
-  </button>
-
-  <button type="button" class="flow-button--danger" @click="removeSelectedValvePipeLink">
-    Remover associação
-  </button>
+<div class="flow-section-title">
+  Associação da válvula
 </div>
-
-<p class="connection-note">
-  Válvula em associação: {{ getSelectedValveForPipeLinkLabel() }}
-</p>
-
-<p class="connection-note">
-  Estado da associação: {{ getSelectedValveAssociationStatusLabel() }}
-</p>
-
-<p class="connection-note">
-  Estado da válvula: {{ getSelectedValveStateLabel() }}
-</p>
 
 <label class="flow-cycle-config">
   <span>Caminho controlado pela válvula</span>
@@ -716,6 +709,20 @@
     </option>
   </select>
 </label>
+
+<div class="flow-actions flow-actions--secondary">
+  <button type="button" @click="linkSelectedPipesToPreparedValve">
+    Associar tubo à válvula
+  </button>
+
+  <button
+    type="button"
+    class="flow-button--danger"
+    @click="removeSelectedValvePipeLink"
+  >
+    Remover associação
+  </button>
+</div>
 
           <div class="flow-section-title">
             Animação
@@ -3260,14 +3267,6 @@ function getHighlightedRouteForValveAssociation() {
   ) ?? null;
 }
 
-function getSelectedValveForPipeLinkLabel() {
-  if (!selectedValveForPipeLink.value) {
-    return "nenhuma";
-  }
-
-  return formatNodeLabel(selectedValveForPipeLink.value);
-}
-
 function getSelectedValveAssociationStatusLabel() {
   const valveNode = getFirstSelectedValveNode();
 
@@ -3373,6 +3372,68 @@ function getSelectedValveStateLabel() {
   return "estado desconhecido";
 }
 
+function isValveAtNormalState(element: MepElement) {
+  return element.state === getNormalValveState(element.elementType);
+}
+
+function isSelectedValveInInverseState() {
+  const selectedValves = getSelectedValveElements();
+
+  if (!selectedValves.length) {
+    return false;
+  }
+
+  return selectedValves.some(
+    (valve) => !isValveAtNormalState(valve),
+  );
+}
+
+function getSelectedValveSwitchLabel() {
+  const selectedValves = getSelectedValveElements();
+
+  if (!selectedValves.length) {
+    return "Alternar válvula";
+  }
+
+  const firstValve = selectedValves[0];
+
+  if (isSelectedValveInInverseState()) {
+    return "Repor estado normal";
+  }
+
+  if (firstValve.elementType === "normallyClosedValve") {
+    return "Abrir válvula NF";
+  }
+
+  if (firstValve.elementType === "normallyOpenValve") {
+    return "Fechar válvula NA";
+  }
+
+  return "Inverter estado normal";
+}
+
+async function toggleSelectedValvesNormalInverseState() {
+  const selectedValves = getSelectedValveElements();
+
+  if (!selectedValves.length) {
+  alert("Seleciona primeiro a válvula que queres alternar.");
+
+  flowMessage.value =
+    "Seleciona primeiro a válvula que queres alternar.";
+
+  return;
+}
+
+  const shouldResetToNormal = isSelectedValveInInverseState();
+
+  if (shouldResetToNormal) {
+    await resetSelectedValvesToNormal();
+    return;
+  }
+
+  await applyInverseNormalStateToSelectedValves();
+}
+
 function getFirstSelectedValveNode() {
   for (const [modelId, ids] of selectedItems) {
     for (const localId of ids) {
@@ -3386,21 +3447,6 @@ function getFirstSelectedValveNode() {
   }
 
   return null;
-}
-
-function prepareSelectedValvePipeLink() {
-  const valveNode = getFirstSelectedValveNode();
-
-  if (!valveNode) {
-    flowMessage.value =
-      "Seleciona primeiro uma válvula NA ou NF para preparar a associação.";
-    return;
-  }
-
-  selectedValveForPipeLink.value = valveNode;
-
-  flowMessage.value =
-    `Válvula ${formatNodeLabel(valveNode)} preparada. Escolhe o caminho e seleciona o primeiro tubo a bloquear.`;
 }
 
 async function linkSelectedPipesToPreparedValve() {
@@ -5715,6 +5761,17 @@ function chunk<T>(items: T[], size: number) {
 
 .saved-route-item--blocked .saved-route-text small {
   color: #ffd6d6;
+}
+
+.valve-switch-button {
+  background: #f7fbff !important;
+  color: #111820 !important;
+}
+
+.valve-switch-button--active {
+  background: #8fd3ff !important;
+  color: #07131a !important;
+  box-shadow: 0 0 0 2px rgba(143, 211, 255, 0.35);
 }
 
 @media (max-width: 820px) {
