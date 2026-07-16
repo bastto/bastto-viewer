@@ -503,8 +503,9 @@
       :key="route.id"
       class="saved-route-item"
       :class="{
-  'saved-route-item--locked': route.locked,
-  'saved-route-item--highlighted': highlightedSavedRouteId === route.id
+  'saved-route-item--locked': route.locked,  
+  'saved-route-item--highlighted': highlightedSavedRouteId === route.id,
+  'saved-route-item--blocked': isSavedRouteBlocked(route)
 }"
     >
       <div class="saved-route-select saved-route-select--details">
@@ -516,9 +517,10 @@
 
           <small>
             {{ getRouteCircuitDisplayLabel(route) }} ·
-            {{ getRoutePipeCount(route) }} tubo(s) ·
-            {{ getRouteVisibilityLabel(route) }} ·
-            {{ getRouteProtectionLabel(route) }}
+{{ getRoutePipeCount(route) }} tubo(s) ·
+{{ getRouteVisibilityLabel(route) }} ·
+{{ getRouteProtectionLabel(route) }} ·
+{{ getRouteBlockedLabel(route) }}
           </small>
         </span>
       </div>
@@ -3878,6 +3880,16 @@ function getRouteProtectionLabel(route: SavedRoute) {
   return route.locked ? "protegido" : "editável";
 }
 
+function isSavedRouteBlocked(route: SavedRoute) {
+  return route.path.some((node) =>
+    blockedRoutePipes.has(routeBlockedPipeKey(route.id, node)),
+  );
+}
+
+function getRouteBlockedLabel(route: SavedRoute) {
+  return isSavedRouteBlocked(route) ? "bloqueado" : "ativo";
+}
+
 function getRouteCircuitDisplayLabel(route: SavedRoute) {
   return capitalizeFirstLetter(getCircuitLabel(route.temperature));
 }
@@ -5335,6 +5347,19 @@ function chunk<T>(items: T[], size: number) {
 
 .saved-route-item--highlighted .saved-route-text strong {
   color: #00e5ff;
+}
+
+.saved-route-item--blocked {
+  border: 1px solid rgba(229, 57, 53, 0.85);
+  background: rgba(229, 57, 53, 0.14);
+}
+
+.saved-route-item--blocked .saved-route-text strong {
+  color: #ff8a80;
+}
+
+.saved-route-item--blocked .saved-route-text small {
+  color: #ffd6d6;
 }
 
 @media (max-width: 820px) {
