@@ -694,8 +694,21 @@
     Nome original: {{ selectedValveOriginalDesignation || 'nenhuma válvula selecionada' }}
   </p>
 
+  <div class="flow-section-title flow-section-title--button valve-rename-title">
+  <span>Renomear válvula</span>
+
+  <button
+    type="button"
+    class="section-collapse-button"
+    @click="toggleValveRenamePanel"
+  >
+    {{ isValveRenamePanelOpen ? '−' : '+' }}
+  </button>
+</div>
+
+<div v-if="isValveRenamePanelOpen">
   <label class="flow-cycle-config">
-    <span>Renomear válvula</span>
+    <span>Novo nome da válvula</span>
 
     <input
       v-model="pendingValveDesignation"
@@ -722,6 +735,7 @@
     Se deixares o campo vazio e guardares, a válvula volta ao nome original.
   </p>
 </div>
+</div>
 
 <p class="connection-note">
   Estado da válvula: {{ getSelectedValveStateLabel() }}
@@ -735,21 +749,27 @@
   Ações da válvula
 </div>
 
-<div class="flow-actions flow-actions--secondary">
-  <button
-    type="button"
-    :class="[
-      'valve-switch-button',
-      isSelectedValveInInverseState() ? 'valve-switch-button--active' : ''
-    ]"
-    @click="toggleSelectedValvesNormalInverseState"
-  >
-    {{ getSelectedValveSwitchLabel() }}
-  </button>
+<div class="valve-actions-layout">
+  <div class="valve-normal-state-badge">
+    {{ getSelectedValveNormalTypeLabel() }}
+  </div>
 
-  <button type="button" @click="clearBlockedPipes">
-    Repor todas as válvulas
-  </button>
+  <div class="flow-actions flow-actions--secondary valve-actions-buttons">
+    <button
+      type="button"
+      :class="[
+        'valve-switch-button',
+        isSelectedValveInInverseState() ? 'valve-switch-button--active' : ''
+      ]"
+      @click="toggleSelectedValvesNormalInverseState"
+    >
+      {{ getSelectedValveSwitchLabel() }}
+    </button>
+
+    <button type="button" @click="clearBlockedPipes">
+      Repor todas as válvulas
+    </button>
+  </div>
 </div>
 
 <div class="flow-section-title">
@@ -1038,6 +1058,7 @@ const selectedValveOriginalDesignation = ref("");
 const selectedValveDesignationKey = ref("");
 const highlightedValveFromDropdown = ref<FlowNode | null>(null);
 const isValveDesignationPanelOpen = ref(false);
+const isValveRenamePanelOpen = ref(false);
 const valveOriginalDesignations = reactive<Record<string, string>>({});
 const hasLoadedModel = ref(false);
 const isElementPanelMinimized = ref(true);
@@ -3597,6 +3618,33 @@ function getSelectedValveStateLabel() {
   return "estado desconhecido";
 }
 
+function getSelectedValveNormalTypeLabel() {
+  const valveNode = getValveNodeForControl();
+
+  if (!valveNode) {
+    return "Nenhuma válvula selecionada";
+  }
+
+  const element = mepElements[elementKey(
+    valveNode.modelId,
+    valveNode.localId,
+  )];
+
+  if (!element || !isValveElementType(element.elementType)) {
+    return "Nenhuma válvula selecionada";
+  }
+
+  if (element.elementType === "normallyClosedValve") {
+    return "Normalmente fechada";
+  }
+
+  if (element.elementType === "normallyOpenValve") {
+    return "Normalmente aberta";
+  }
+
+  return "Válvula de corte";
+}
+
 async function saveSelectedValveDesignation() {
   const valveNode = getValveNodeForDesignationEditing();
 
@@ -4496,6 +4544,11 @@ function toggleCentralSummary() {
 function toggleValveDesignationPanel() {
   isValveDesignationPanelOpen.value = !isValveDesignationPanelOpen.value;
 }
+
+function toggleValveRenamePanel() {
+  isValveRenamePanelOpen.value = !isValveRenamePanelOpen.value;
+}
+``
 
 function saveCycleNames() {
   ensureCycleNames();
@@ -6147,6 +6200,50 @@ function chunk<T>(items: T[], size: number) {
   background: #8fd3ff !important;
   color: #07131a !important;
   box-shadow: 0 0 0 2px rgba(143, 211, 255, 0.35);
+}
+
+.valve-actions-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 12px;
+  width: 100%;
+  overflow: hidden;
+}
+
+.valve-normal-state-badge {
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 4px;
+  background: rgba(143, 211, 255, 0.14);
+  border: 1px solid rgba(143, 211, 255, 0.45);
+  color: #8fd3ff;
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.valve-actions-buttons {
+  margin-top: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  width: 100%;
+}
+
+.valve-actions-buttons button {
+  min-width: 0;
+  min-height: 38px;
+  padding: 6px 7px;
+  border-radius: 4px;
+  font-size: 0.76rem;
+  line-height: 1.1;
+}
+
+.valve-rename-title {
+  margin-top: 12px;
+  padding-top: 10px;
 }
 
 @media (max-width: 820px) {
