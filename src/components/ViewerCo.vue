@@ -943,6 +943,8 @@ const HIDDEN_FLOW_ARROWS_STORAGE_KEY =
   "bastto-viewer-hidden-flow-arrows";
 const SYNCED_PIPE_DIRECTIONS_STORAGE_KEY =
   "bastto-viewer-synced-pipe-directions";
+const VALVE_PIPE_LINKS_STORAGE_KEY =
+  "bastto-viewer-valve-pipe-links";
 
 let world: any;
 let serializer: FRAGS.IfcImporter;
@@ -1092,11 +1094,12 @@ onMounted(async () => {
   await fragmentManager.core.update(true);
 
   if (savedRoutes.length) {
-    await applyAllSavedRoutes();
-  } else {
-    flowMessage.value =
-      `Modelo carregado: ${model.modelId}. Seleciona tubos e atribui os circuitos.`;
-  }
+  await applyAllSavedRoutes();
+  await clearBlockedPipes();
+} else {
+  flowMessage.value =
+    `Modelo carregado: ${model.modelId}. Seleciona tubos e atribui os circuitos.`;
+}
 });
 
   loadWaterCycleCountFromStorage();
@@ -1106,6 +1109,7 @@ loadRoutesFromStorage();
 loadReversedDirectionsFromStorage();
 loadSyncedPipeDirectionsFromStorage();
 loadHiddenFlowArrowsFromStorage();
+loadValvePipeLinksFromStorage();
 
 localStorage.removeItem("bastto-viewer-route-groups");
 
@@ -2609,6 +2613,43 @@ function loadReversedDirectionsFromStorage() {
   }
 }
 
+function saveValvePipeLinksToStorage() {
+  const data = [...valveControlledPipeLinks.entries()].map(
+    ([valveKey, linkedPipes]) => ({
+      valveKey,
+      linkedPipes,
+    }),
+  );
+
+  localStorage.setItem(
+    VALVE_PIPE_LINKS_STORAGE_KEY,
+    JSON.stringify(data),
+  );
+}
+
+function loadValvePipeLinksFromStorage() {
+  const saved = localStorage.getItem(VALVE_PIPE_LINKS_STORAGE_KEY);
+
+  if (!saved) {
+    return;
+  }
+
+  try {
+    const parsed = JSON.parse(saved) as {
+      valveKey: string;
+      linkedPipes: ValveControlledPipeLink[];
+    }[];
+
+    valveControlledPipeLinks.clear();
+
+    for (const item of parsed) {
+      valveControlledPipeLinks.set(item.valveKey, item.linkedPipes);
+    }
+  } catch (error) {
+    console.error("Erro ao carregar associações de válvulas:", error);
+  }
+}
+
 function saveHiddenFlowArrowsToStorage() {
   const data: SavedReversedDirection[] = [];
 
@@ -2801,6 +2842,9 @@ async function deleteAllElementDefinitions() {
   }
 
   valveBlockedPipeLinks.clear();
+  valveControlledPipeLinks.clear();
+blockedRoutePipes.clear();
+localStorage.removeItem(VALVE_PIPE_LINKS_STORAGE_KEY);
 
   for (const [modelId, ids] of idsByModel) {
     const model = loadedModels.get(modelId);
@@ -3237,6 +3281,7 @@ async function linkSelectedPipesToPreparedValve() {
   }
 
   valveControlledPipeLinks.set(valveKey, linkedPipes);
+  saveValvePipeLinksToStorage();
 
   const valveElement = mepElements[elementKey(
     valveNode.modelId,
