@@ -652,8 +652,75 @@
         <div class="flow-panel__content">
           <p class="selection-count">Selecionados: {{ selectedCount }}</p>
 
-          <div class="flow-section-title">
-  Válvulas e bloqueios
+      <div class="flow-section-title flow-section-title--button">
+  <span>Designação</span>
+
+  <button
+    type="button"
+    class="section-collapse-button"
+    @click="toggleValveDesignationPanel"
+  >
+    {{ isValveDesignationPanelOpen ? '−' : '+' }}
+  </button>
+</div>
+
+<p class="connection-note">
+  Nome da válvula: {{ selectedValveDesignation }}
+</p>
+
+<div v-if="isValveDesignationPanelOpen">
+  <label class="flow-cycle-config">
+    <span>Selecionar válvula para editar</span>
+
+    <select
+      v-model="selectedValveDesignationKey"
+      @change="selectValveDesignationFromDropdown"
+    >
+      <option value="">
+        Selecionar válvula...
+      </option>
+
+      <option
+        v-for="option in getValveDesignationOptions()"
+        :key="option.key"
+        :value="option.key"
+      >
+        {{ option.label }}
+      </option>
+    </select>
+  </label>
+
+  <p class="connection-note">
+    Nome original: {{ selectedValveOriginalDesignation || 'nenhuma válvula selecionada' }}
+  </p>
+
+  <label class="flow-cycle-config">
+    <span>Renomear válvula</span>
+
+    <input
+      v-model="pendingValveDesignation"
+      type="text"
+      placeholder="Ex: Válvula 1"
+    />
+  </label>
+
+  <div class="flow-actions flow-actions--secondary">
+    <button type="button" @click="saveSelectedValveDesignation">
+      Guardar nome
+    </button>
+
+    <button
+      type="button"
+      class="flow-button--danger"
+      @click="resetSelectedValveDesignationToOriginal"
+    >
+      Repor nome original
+    </button>
+  </div>
+
+  <p class="connection-note">
+    Se deixares o campo vazio e guardares, a válvula volta ao nome original.
+  </p>
 </div>
 
 <p class="connection-note">
@@ -662,7 +729,7 @@
 
 <p class="connection-note">
   Estado da associação: {{ getSelectedValveAssociationStatusLabel() }}
-</p>
+</p> 
 
 <div class="flow-section-title">
   Ações da válvula
@@ -965,6 +1032,13 @@ const highlightedSavedRouteId = ref<string | null>(null);
 const isCentralSummaryOpen = ref(false);
 const selectedCount = ref(0);
 const selectedMepElementInfo = ref("Nenhum elemento classificado selecionado.");
+const selectedValveDesignation = ref("nenhuma válvula selecionada");
+const pendingValveDesignation = ref("");
+const selectedValveOriginalDesignation = ref("");
+const selectedValveDesignationKey = ref("");
+const highlightedValveFromDropdown = ref<FlowNode | null>(null);
+const isValveDesignationPanelOpen = ref(false);
+const valveOriginalDesignations = reactive<Record<string, string>>({});
 const hasLoadedModel = ref(false);
 const isElementPanelMinimized = ref(true);
 const isFlowControlsPanelMinimized = ref(true);
@@ -1198,18 +1272,15 @@ function createBimPanel(components: OBC.Components, viewport: HTMLElement) {
 
   highlighter.events.select.onHighlight.add(async (modelIdMap) => {
   replaceSelection(modelIdMap);
-  updatePropertiesTable({ modelIdMap });
+updatePropertiesTable({ modelIdMap });
 
-  await showSelectedMepElementInfo();
+await showSelectedMepElementInfo();
+
 addSelectedNodeToManualRoute();
 
 if (isManualRouteRecording.value && manualRouteNodes.length > 0) {
   await updateManualRoutePreviewHighlight();
   return;
-}
-
-if (countAssignments() > 0) {
-  await rebuildManualFlowLayer();
 }
 
 await syncSelectedValveAssociationRoute();
@@ -2979,6 +3050,152 @@ function getItemNameFromData(data: any) {
   return "";
 }
 
+function getValveDesignationOptions() {
+  return Object.values(mepElements)
+    .filter((element) => isValveElementType(element.elementType))
+    .map((element) => {
+      const key = elementKey(element.modelId, element.localId);
+      const originalName =
+        valveOriginalDesignations[key] || `Válvula #${element.localId}`;
+
+      return {
+        key,
+        label: element.name || originalName,
+      };
+    });
+}
+
+function getValveNodeFromDesignationKey(key: string): FlowNode | null {
+  const separatorIndex = key.lastIndexOf(":");
+
+  if (separatorIndex === -1) {
+    return null;
+  }
+
+  const modelId = key.slice(0, separatorIndex);
+  const localId = Number(key.slice(separatorIndex + 1));
+
+  if (!modelId || !Number.isFinite(localId)) {
+    return null;
+  }
+
+  return {
+    modelId,
+    localId,
+  };
+}
+
+async function getOriginalDesignationForNode(node: FlowNode) {
+  const key = elementKey(node.modelId, node.localId);
+
+  if (valveOriginalDesignations[key]) {
+    return valveOriginalDesignations[key];
+  }
+
+  const model = loadedModels.get(node.modelId);
+  let originalName = "";
+
+  if (model) {
+    const [itemData] = await model.getItemsData([node.localId], {
+      attributesDefault: true,
+      relationsDefault: {
+        attributes: true,
+        relations: false,
+      },
+    });
+
+    originalName = getItemNameFromData(itemData);
+  }
+
+  const fallbackName = originalName || `Válvula #${node.localId}`;
+
+  valveOriginalDesignations[key] = fallbackName;
+
+  return fallbackName;
+}
+
+async function syncValveDesignationPanelFromNode(node: FlowNode) {
+  const key = elementKey(node.modelId, node.localId);
+  const element = mepElements[key];
+
+  if (!element || !isValveElementType(element.elementType)) {
+    selectedValveDesignation.value = "nenhuma válvula selecionada";
+    selectedValveOriginalDesignation.value = "";
+    pendingValveDesignation.value = "";
+    selectedValveDesignationKey.value = "";
+    return;
+  }
+
+  const originalName = await getOriginalDesignationForNode(node);
+
+  selectedValveDesignationKey.value = key;
+  selectedValveOriginalDesignation.value = originalName;
+  selectedValveDesignation.value = element.name || originalName;
+  pendingValveDesignation.value = element.name || "";
+}
+
+async function selectValveDesignationFromDropdown() {
+  const valveNode = getValveNodeFromDesignationKey(
+    selectedValveDesignationKey.value,
+  );
+
+  if (!valveNode) {
+  selectedValveDesignation.value = "nenhuma válvula selecionada";
+  selectedValveOriginalDesignation.value = "";
+  pendingValveDesignation.value = "";
+  selectedValveForPipeLink.value = null;
+
+  if (highlightedValveFromDropdown.value) {
+    const previousModel = loadedModels.get(
+      highlightedValveFromDropdown.value.modelId,
+    );
+
+    if (previousModel) {
+      await previousModel.resetHighlight([
+        highlightedValveFromDropdown.value.localId,
+      ]);
+    }
+
+    highlightedValveFromDropdown.value = null;
+
+    await fragmentManager.core.update(true);
+  }
+
+  return;
+}
+
+  await syncValveDesignationPanelFromNode(valveNode);
+
+  selectedValveForPipeLink.value = valveNode;
+
+  await highlightValveFromDropdown(valveNode);
+
+  const linkedPipes = getLinkedPipesForValveNode(valveNode);
+  const associatedRouteId = linkedPipes[0]?.routeId;
+
+  if (associatedRouteId) {
+    selectedValveAssociationRouteId.value = associatedRouteId;
+
+    const associatedRoute = savedRoutes.find(
+      (route) => route.id === associatedRouteId,
+    );
+
+    if (
+      associatedRoute &&
+      highlightedSavedRouteId.value !== associatedRoute.id
+    ) {
+      await toggleSavedRouteHighlight(associatedRoute);
+    }
+  }
+
+  flowMessage.value =
+    "Válvula selecionada no dropdown e destacada no modelo.";
+}
+
+function getValveNodeForDesignationEditing() {
+  return getValveNodeForControl();
+}
+
 async function showSelectedMepElementInfo() {
   const selectedNode = getFirstSelectedNode();
 
@@ -2996,8 +3213,7 @@ async function showSelectedMepElementInfo() {
   }
 
   const model = loadedModels.get(selectedNode.modelId);
-
-  let elementName = "";
+  let originalElementName = "";
 
   if (model) {
     const [itemData] = await model.getItemsData([selectedNode.localId], {
@@ -3008,16 +3224,24 @@ async function showSelectedMepElementInfo() {
       },
     });
 
-    elementName = getItemNameFromData(itemData);
+    originalElementName = getItemNameFromData(itemData);
   }
 
   const typeLabel = getElementTypeLabel(definedElement.elementType);
+  const fallbackOriginalName =
+    originalElementName || `elemento #${selectedNode.localId}`;
 
-  if (elementName) {
-    selectedMepElementInfo.value = `${typeLabel}: ${elementName}`;
-  } else {
-    selectedMepElementInfo.value = `${typeLabel}: elemento #${selectedNode.localId}`;
+  const displayName =
+    definedElement.name || fallbackOriginalName;
+
+  if (isValveElementType(definedElement.elementType)) {
+    valveOriginalDesignations[key] =
+      originalElementName || `Válvula #${selectedNode.localId}`;
+
+    await syncValveDesignationPanelFromNode(selectedNode);
   }
+
+  selectedMepElementInfo.value = `${typeLabel}: ${displayName}`;
 }
 
 function getElementTypeLabel(elementType: MepElementType) {
@@ -3171,16 +3395,17 @@ function getInverseValveState(elementType: MepElementType) {
 function getSelectedValveElements() {
   const selectedValves: MepElement[] = [];
 
-  for (const [modelId, ids] of selectedItems) {
-    for (const localId of ids) {
-      const element = mepElements[elementKey(modelId, localId)];
+  for (const valveNode of getValveNodesForControl()) {
+    const element = mepElements[elementKey(
+      valveNode.modelId,
+      valveNode.localId,
+    )];
 
-      if (!element || !isValveElementType(element.elementType)) {
-        continue;
-      }
-
-      selectedValves.push(element);
+    if (!element || !isValveElementType(element.elementType)) {
+      continue;
     }
+
+    selectedValves.push(element);
   }
 
   return selectedValves;
@@ -3268,7 +3493,7 @@ function getHighlightedRouteForValveAssociation() {
 }
 
 function getSelectedValveAssociationStatusLabel() {
-  const valveNode = getFirstSelectedValveNode();
+  const valveNode = getValveNodeForControl();
 
   if (!valveNode) {
     return "nenhuma válvula selecionada";
@@ -3346,7 +3571,7 @@ async function syncSelectedValveAssociationRoute() {
 }
 
 function getSelectedValveStateLabel() {
-  const valveNode = getFirstSelectedValveNode();
+  const valveNode = getValveNodeForControl();
 
   if (!valveNode) {
     return "nenhuma válvula selecionada";
@@ -3370,6 +3595,100 @@ function getSelectedValveStateLabel() {
   }
 
   return "estado desconhecido";
+}
+
+async function saveSelectedValveDesignation() {
+  const valveNode = getValveNodeForDesignationEditing();
+
+  if (!valveNode) {
+    alert("Seleciona primeiro a válvula que queres renomear.");
+
+    flowMessage.value =
+      "Seleciona primeiro a válvula que queres renomear.";
+
+    return;
+  }
+
+  const key = elementKey(valveNode.modelId, valveNode.localId);
+  const element = mepElements[key];
+
+  if (!element || !isValveElementType(element.elementType)) {
+    alert("Seleciona primeiro uma válvula NA ou NF.");
+
+    flowMessage.value =
+      "Seleciona primeiro uma válvula NA ou NF.";
+
+    return;
+  }
+
+  const trimmedName = pendingValveDesignation.value.trim();
+
+  if (!trimmedName) {
+    const { name, ...elementWithoutCustomName } = element;
+
+    mepElements[key] = {
+      ...elementWithoutCustomName,
+    };
+
+    saveMepElementsToStorage();
+
+    await syncValveDesignationPanelFromNode(valveNode);
+
+    flowMessage.value =
+      "Nome personalizado removido. A válvula voltou ao nome original.";
+
+    return;
+  }
+
+  mepElements[key] = {
+    ...element,
+    name: trimmedName,
+  };
+
+  saveMepElementsToStorage();
+
+  await syncValveDesignationPanelFromNode(valveNode);
+
+  flowMessage.value =
+    `Nome da válvula guardado: ${trimmedName}.`;
+}
+
+async function resetSelectedValveDesignationToOriginal() {
+  const valveNode = getValveNodeForDesignationEditing();
+
+  if (!valveNode) {
+    alert("Seleciona primeiro a válvula que queres repor.");
+
+    flowMessage.value =
+      "Seleciona primeiro a válvula que queres repor.";
+
+    return;
+  }
+
+  const key = elementKey(valveNode.modelId, valveNode.localId);
+  const element = mepElements[key];
+
+  if (!element || !isValveElementType(element.elementType)) {
+    alert("Seleciona primeiro uma válvula NA ou NF.");
+
+    flowMessage.value =
+      "Seleciona primeiro uma válvula NA ou NF.";
+
+    return;
+  }
+
+  const { name, ...elementWithoutCustomName } = element;
+
+  mepElements[key] = {
+    ...elementWithoutCustomName,
+  };
+
+  saveMepElementsToStorage();
+
+  await syncValveDesignationPanelFromNode(valveNode);
+
+  flowMessage.value =
+    "Nome original da válvula reposto.";
 }
 
 function isValveAtNormalState(element: MepElement) {
@@ -3416,13 +3735,13 @@ async function toggleSelectedValvesNormalInverseState() {
   const selectedValves = getSelectedValveElements();
 
   if (!selectedValves.length) {
-  alert("Seleciona primeiro a válvula que queres alternar.");
+    alert("Seleciona primeiro a válvula que queres alternar.");
 
-  flowMessage.value =
-    "Seleciona primeiro a válvula que queres alternar.";
+    flowMessage.value =
+      "Seleciona primeiro a válvula que queres alternar.";
 
-  return;
-}
+    return;
+  }
 
   const shouldResetToNormal = isSelectedValveInInverseState();
 
@@ -3449,12 +3768,73 @@ function getFirstSelectedValveNode() {
   return null;
 }
 
+function getValveNodesForControl() {
+  const dropdownValveNode = getValveNodeFromDesignationKey(
+    selectedValveDesignationKey.value,
+  );
+
+  if (dropdownValveNode) {
+    return [dropdownValveNode];
+  }
+
+  const selectedValveNodes: FlowNode[] = [];
+
+  for (const [modelId, ids] of selectedItems) {
+    for (const localId of ids) {
+      if (isIsolationValve(modelId, localId)) {
+        selectedValveNodes.push({
+          modelId,
+          localId,
+        });
+      }
+    }
+  }
+
+  return selectedValveNodes;
+}
+
+function getValveNodeForControl() {
+  return (
+    getValveNodeFromDesignationKey(selectedValveDesignationKey.value) ??
+    getFirstSelectedValveNode()
+  );
+}
+
+async function highlightValveFromDropdown(node: FlowNode) {
+  if (highlightedValveFromDropdown.value) {
+    const previousModel = loadedModels.get(
+      highlightedValveFromDropdown.value.modelId,
+    );
+
+    if (previousModel) {
+      await previousModel.resetHighlight([
+        highlightedValveFromDropdown.value.localId,
+      ]);
+    }
+  }
+
+  const model = loadedModels.get(node.modelId);
+
+  if (!model) {
+    return;
+  }
+
+  await model.highlight(
+    [node.localId],
+    createHighlight(0xff00ff, "valve-dropdown-selected"),
+  );
+
+  highlightedValveFromDropdown.value = node;
+
+  await fragmentManager.core.update(true);
+}
+
 async function linkSelectedPipesToPreparedValve() {
-  const valveNode = selectedValveForPipeLink.value;
+  const valveNode = getValveNodeForControl();
 
   if (!valveNode) {
     flowMessage.value =
-      "Prepara primeiro uma válvula antes de associar tubos.";
+      "Seleciona uma válvula no dropdown ou no modelo antes de associar tubos.";
     return;
   }
 
@@ -3536,11 +3916,11 @@ async function linkSelectedPipesToPreparedValve() {
 }
 
 async function removeSelectedValvePipeLink() {
-  const valveNode = getFirstSelectedValveNode();
+  const valveNode = getValveNodeForControl();
 
   if (!valveNode) {
     flowMessage.value =
-      "Seleciona primeiro uma válvula para remover a associação.";
+      "Seleciona uma válvula no dropdown ou no modelo para remover a associação.";
     return;
   }
 
@@ -3574,8 +3954,10 @@ async function removeSelectedValvePipeLink() {
 }
 
 async function setSelectedValvesState(state: "open" | "closed") {
-  if (!selectedCount.value) {
-    flowMessage.value = "Seleciona primeiro uma ou mais válvulas.";
+  const valveNodes = getValveNodesForControl();
+
+  if (!valveNodes.length) {
+    flowMessage.value = "Seleciona primeiro uma válvula.";
     return;
   }
 
@@ -3585,58 +3967,55 @@ async function setSelectedValvesState(state: "open" | "closed") {
 
   let changedCount = 0;
 
-  for (const [modelId, ids] of selectedItems) {
-    for (const localId of ids) {
-      if (!isIsolationValve(modelId, localId)) {
-        continue;
-      }
+  for (const valveNode of valveNodes) {
+    const { modelId, localId } = valveNode;
 
-      const key = elementKey(modelId, localId);
-      const existingElement = mepElements[key];
-
-      mepElements[key] = {
-        ...existingElement,
-        modelId,
-        localId,
-        elementType: existingElement?.elementType ?? "isolationValve",
-        circuitType: existingElement?.circuitType ?? "unknown",
-        state,
-      };
-
-      const valveNode: FlowNode = {
-        modelId,
-        localId,
-      };
-
-      const valveKey = nodeKey(valveNode);
-
-      if (state === "closed") {
-        const linkedPipes = valveControlledPipeLinks.get(valveKey) ?? [];
-
-        for (const pipeNode of linkedPipes) {
-          blockPipeForRoute(pipeNode.routeId, pipeNode);
-        }
-
-        valveBlockedPipeLinks.set(valveKey, linkedPipes);
-      } else {
-        const linkedPipes = valveBlockedPipeLinks.get(valveKey) ?? [];
-
-        for (const pipeNode of linkedPipes) {
-          unblockPipeForRoute(pipeNode.routeId, pipeNode);
-        }
-
-        valveBlockedPipeLinks.delete(valveKey);
-      }
-
-      changedCount++;
+    if (!isIsolationValve(modelId, localId)) {
+      continue;
     }
+
+    const key = elementKey(modelId, localId);
+    const existingElement = mepElements[key];
+
+    if (!existingElement || !isValveElementType(existingElement.elementType)) {
+      continue;
+    }
+
+    mepElements[key] = {
+      ...existingElement,
+      modelId,
+      localId,
+      state,
+    };
+
+    const valveKey = nodeKey(valveNode);
+
+    if (state === "closed") {
+      const linkedPipes = valveControlledPipeLinks.get(valveKey) ?? [];
+
+      for (const pipeNode of linkedPipes) {
+        blockPipeForRoute(pipeNode.routeId, pipeNode);
+      }
+
+      valveBlockedPipeLinks.set(valveKey, linkedPipes);
+    } else {
+      const linkedPipes = valveBlockedPipeLinks.get(valveKey) ?? [];
+
+      for (const pipeNode of linkedPipes) {
+        unblockPipeForRoute(pipeNode.routeId, pipeNode);
+      }
+
+      valveBlockedPipeLinks.delete(valveKey);
+    }
+
+    changedCount++;
   }
 
   updateBlockedCount();
 
   if (!changedCount) {
     flowMessage.value =
-      "Nenhuma válvula selecionada. Define primeiro o elemento como Válvula NA ou Válvula NF.";
+      "Nenhuma válvula válida encontrada para alterar.";
     return;
   }
 
@@ -3651,16 +4030,12 @@ async function setSelectedValvesState(state: "open" | "closed") {
 }
 
 async function applyInverseNormalStateToSelectedValves() {
-  if (!selectedCount.value) {
-    flowMessage.value = "Seleciona primeiro uma ou mais válvulas.";
-    return;
-  }
-
   const selectedValves = getSelectedValveElements();
 
   if (!selectedValves.length) {
     flowMessage.value =
-      "Nenhuma válvula selecionada. Define primeiro o elemento como Válvula NA ou Válvula NF.";
+      "Seleciona uma válvula no dropdown ou no modelo antes de alternar.";
+
     return;
   }
 
@@ -3808,8 +4183,10 @@ if (lockedRouteNames.length) {
 }
 
 async function resetSelectedValvesToNormal() {
-  if (!selectedCount.value) {
-    flowMessage.value = "Seleciona primeiro uma ou mais válvulas.";
+  const valveNodes = getValveNodesForControl();
+
+  if (!valveNodes.length) {
+    flowMessage.value = "Seleciona primeiro uma válvula.";
     return;
   }
 
@@ -3819,62 +4196,56 @@ async function resetSelectedValvesToNormal() {
 
   let changedCount = 0;
 
-  for (const [modelId, ids] of selectedItems) {
-    for (const localId of ids) {
-      if (!isIsolationValve(modelId, localId)) {
-        continue;
-      }
+  for (const valveNode of valveNodes) {
+    const { modelId, localId } = valveNode;
 
-      const key = elementKey(modelId, localId);
-      const element = mepElements[key];
-
-      if (!element || !isValveElementType(element.elementType)) {
-        continue;
-      }
-
-      const normalState = getNormalValveState(element.elementType);
-
-      const valveNode: FlowNode = {
-        modelId,
-        localId,
-      };
-
-      const valveKey = nodeKey(valveNode);
-
-      const previouslyBlockedPipes =
-        valveBlockedPipeLinks.get(valveKey) ?? [];
-
-      for (const pipeNode of previouslyBlockedPipes) {
-        unblockPipeForRoute(pipeNode.routeId, pipeNode);
-      }
-
-      valveBlockedPipeLinks.delete(valveKey);
-
-      mepElements[key] = {
-        ...element,
-        state: normalState,
-      };
-
-      if (normalState === "closed") {
-        const linkedPipes =
-          valveControlledPipeLinks.get(valveKey) ?? [];
-
-        for (const pipeNode of linkedPipes) {
-          blockPipeForRoute(pipeNode.routeId, pipeNode);
-        }
-
-        valveBlockedPipeLinks.set(valveKey, linkedPipes);
-      }
-
-      changedCount++;
+    if (!isIsolationValve(modelId, localId)) {
+      continue;
     }
+
+    const key = elementKey(modelId, localId);
+    const element = mepElements[key];
+
+    if (!element || !isValveElementType(element.elementType)) {
+      continue;
+    }
+
+    const normalState = getNormalValveState(element.elementType);
+    const valveKey = nodeKey(valveNode);
+
+    const previouslyBlockedPipes =
+      valveBlockedPipeLinks.get(valveKey) ?? [];
+
+    for (const pipeNode of previouslyBlockedPipes) {
+      unblockPipeForRoute(pipeNode.routeId, pipeNode);
+    }
+
+    valveBlockedPipeLinks.delete(valveKey);
+
+    mepElements[key] = {
+      ...element,
+      state: normalState,
+    };
+
+    if (normalState === "closed") {
+      const linkedPipes =
+        valveControlledPipeLinks.get(valveKey) ?? [];
+
+      for (const pipeNode of linkedPipes) {
+        blockPipeForRoute(pipeNode.routeId, pipeNode);
+      }
+
+      valveBlockedPipeLinks.set(valveKey, linkedPipes);
+    }
+
+    changedCount++;
   }
 
   updateBlockedCount();
 
   if (!changedCount) {
     flowMessage.value =
-      "Nenhuma válvula selecionada. Define primeiro o elemento como Válvula NA ou Válvula NF.";
+      "Nenhuma válvula válida encontrada para repor.";
     return;
   }
 
@@ -3883,7 +4254,7 @@ async function resetSelectedValvesToNormal() {
   saveMepElementsToStorage();
 
   flowMessage.value =
-    `${changedCount} válvula(s) selecionada(s) reposta(s) ao estado normal.`;
+    `${changedCount} válvula(s) reposta(s) ao estado normal.`;
 }
 
 async function clearBlockedPipes() {
@@ -4120,6 +4491,10 @@ function toggleSavedRoutesPanel() {
 
 function toggleCentralSummary() {
   isCentralSummaryOpen.value = !isCentralSummaryOpen.value;
+}
+
+function toggleValveDesignationPanel() {
+  isValveDesignationPanelOpen.value = !isValveDesignationPanelOpen.value;
 }
 
 function saveCycleNames() {
