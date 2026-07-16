@@ -521,6 +521,9 @@
 {{ getRouteVisibilityLabel(route) }} ·
 {{ getRouteProtectionLabel(route) }} ·
 {{ getRouteBlockedLabel(route) }}
+<span v-if="isSavedRouteBlocked(route)">
+  · {{ getValveLabelForBlockedRoute(route) }}
+</span>
           </small>
         </span>
       </div>
@@ -3929,6 +3932,15 @@ function isSavedRouteBlocked(route: SavedRoute) {
   return route.path.some((node) =>
     blockedRoutePipes.has(routeBlockedPipeKey(route.id, node)),
   );
+}
+
+function getValveLabelForBlockedRoute(route: SavedRoute) {
+  const hasAssociatedValve = [...valveControlledPipeLinks.values()].some(
+    (linkedPipes) =>
+      linkedPipes.some((pipeNode) => pipeNode.routeId === route.id),
+  );
+
+  return hasAssociatedValve ? "bloqueado por válvula" : "";
 }
 
 function getRouteBlockedLabel(route: SavedRoute) {
