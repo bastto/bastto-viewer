@@ -1483,6 +1483,10 @@ if (!ids.length) continue;
 
       const localId = ids[index];
 
+if (shouldHidePipeForCircuit(modelId, localId, temperature)) {
+  continue;
+}
+
 if (isFlowArrowHidden(modelId, localId)) {
   continue;
 }
@@ -3357,9 +3361,9 @@ async function linkSelectedPipesToPreparedValve() {
 
       for (const pipeNode of downstreamPipes) {
         linkedPipesByKey.set(
-          `${pipeNode.temperature}|${nodeKey(pipeNode)}`,
-          pipeNode,
-        );
+  `${pipeNode.routeId}|${nodeKey(pipeNode)}`,
+  pipeNode,
+);
       }
     }
   }
