@@ -674,6 +674,10 @@
   <button type="button" @click="linkSelectedPipesToPreparedValve">
     Associar tubo à válvula
   </button>
+
+  <button type="button" class="flow-button--danger" @click="removeSelectedValvePipeLink">
+    Remover associação
+  </button>
 </div>
 
 <p class="connection-note">
@@ -3307,6 +3311,44 @@ async function linkSelectedPipesToPreparedValve() {
 
   flowMessage.value =
     `${linkedPipes.length} tubo(s) associados à válvula no caminho "${highlightedRoute.name}".`;
+}
+
+async function removeSelectedValvePipeLink() {
+  const valveNode = getFirstSelectedValveNode();
+
+  if (!valveNode) {
+    flowMessage.value =
+      "Seleciona primeiro uma válvula para remover a associação.";
+    return;
+  }
+
+  const valveKey = nodeKey(valveNode);
+
+  const linkedPipes =
+    valveControlledPipeLinks.get(valveKey) ??
+    valveBlockedPipeLinks.get(valveKey) ??
+    [];
+
+  if (!linkedPipes.length) {
+    flowMessage.value =
+      "A válvula selecionada não tem associação guardada.";
+    return;
+  }
+
+  for (const pipeNode of linkedPipes) {
+    unblockPipeForRoute(pipeNode.routeId, pipeNode);
+  }
+
+  valveControlledPipeLinks.delete(valveKey);
+  valveBlockedPipeLinks.delete(valveKey);
+
+  saveValvePipeLinksToStorage();
+  updateBlockedCount();
+
+  await rebuildManualFlowLayer();
+
+  flowMessage.value =
+    "Associação da válvula removida.";
 }
 
 async function setSelectedValvesState(state: "open" | "closed") {
