@@ -1174,6 +1174,7 @@ const valveControlledPipeLinks = new Map<string, ValveControlledPipeLink[]>();
 const blockedRoutePipes = new Set<string>();
 const selectedValveForPipeLink = ref<FlowNode | null>(null);
 const selectedValveAssociationRouteId = ref("");
+const selectedHydraulicTransitionNode = ref<FlowNode | null>(null);
 const manualAssignments = reactive<Record<string, SelectionMap>>({});
 const reversedPipeDirections: SelectionMap = new Map();
 const syncedPipeDirections: SelectionMap = new Map();
@@ -1636,15 +1637,33 @@ if (hiddenIds.length) {
 
 if (!ids.length) continue;
 
-    await model.highlight(
-  ids,
-  createHighlight(
-    getCircuitColor(temperature),
-    temperature,
-  ),
-);
+    const idsByEffectiveCircuit = new Map<PipeCircuit, number[]>();
 
-    const boxes = await model.getBoxes(ids);
+for (const localId of ids) {
+  const effectiveCircuit = getEffectiveCircuitForPipe(
+    modelId,
+    localId,
+    temperature,
+  );
+
+  if (!idsByEffectiveCircuit.has(effectiveCircuit)) {
+    idsByEffectiveCircuit.set(effectiveCircuit, []);
+  }
+
+  idsByEffectiveCircuit.get(effectiveCircuit)?.push(localId);
+}
+
+for (const [effectiveCircuit, effectiveIds] of idsByEffectiveCircuit) {
+  await model.highlight(
+    effectiveIds,
+    createHighlight(
+      getCircuitColor(effectiveCircuit),
+      effectiveCircuit,
+    ),
+  );
+}
+
+const boxes = await model.getBoxes(ids);
     for (let index = 0; index < boxes.length; index++) {
       const box = boxes[index];
       if (!box) continue;
@@ -1659,11 +1678,17 @@ if (isFlowArrowHidden(modelId, localId)) {
   continue;
 }
 
+const effectiveCircuit = getEffectiveCircuitForPipe(
+  modelId,
+  localId,
+  temperature,
+);
+
 const hints = await getPipeDirectionHints({ modelId, localId });
 
 addPipeParticles(
   box,
-  temperature,
+  effectiveCircuit,
   hints,
   { modelId, localId },
 );
@@ -3319,6 +3344,10 @@ async function showSelectedMepElementInfo() {
   const displayName =
     definedElement.name || fallbackOriginalName;
 
+  if (canElementHaveHydraulicTransition(definedElement.elementType)) {
+    selectedHydraulicTransitionNode.value = selectedNode;
+  }
+
   if (isValveElementType(definedElement.elementType)) {
     valveOriginalDesignations[key] =
       originalElementName || `Válvula #${selectedNode.localId}`;
@@ -3792,12 +3821,18 @@ async function setSelectedHydraulicTransitionMode(
     return;
   }
 
+  selectedHydraulicTransitionNode.value = transitionNode;
+
   mepElements[key] = {
     ...element,
     hydraulicTransitionMode: mode,
   };
 
   saveMepElementsToStorage();
+
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  }
 
   flowMessage.value =
     mode === "none"
@@ -4049,6 +4084,20 @@ function getHydraulicTransitionNodeForControl() {
     }
   }
 
+  if (selectedHydraulicTransitionNode.value) {
+    const storedElement = mepElements[elementKey(
+      selectedHydraulicTransitionNode.value.modelId,
+      selectedHydraulicTransitionNode.value.localId,
+    )];
+
+    if (
+      storedElement &&
+      canElementHaveHydraulicTransition(storedElement.elementType)
+    ) {
+      return selectedHydraulicTransitionNode.value;
+    }
+  }
+
   const valveNode = getValveNodeForControl();
 
   if (!valveNode) {
@@ -4100,25 +4149,43 @@ async function highlightValveFromDropdown(node: FlowNode) {
 }
 
 async function linkSelectedPipesToPreparedValve() {
-  const valveNode = getValveNodeForControl();
+  const valveNode =
+    selectedHydraulicTransitionNode.value ??
+    getHydraulicTransitionNodeForControl();
 
   if (!valveNode) {
     flowMessage.value =
-      "Seleciona uma válvula no dropdown ou no modelo antes de associar tubos.";
+      "Seleciona primeiro uma válvula NF, booster ou permutador antes de associar tubos.";
     return;
   }
+
+  const transitionElement = mepElements[elementKey(
+    valveNode.modelId,
+    valveNode.localId,
+  )];
+
+  if (
+    !transitionElement ||
+    !canElementHaveHydraulicTransition(transitionElement.elementType)
+  ) {
+    flowMessage.value =
+      "O elemento de transição selecionado já não é válido.";
+    return;
+  }
+
+  selectedHydraulicTransitionNode.value = valveNode;
 
   const highlightedRoute = getHighlightedRouteForValveAssociation();
 
   if (!highlightedRoute) {
-  flowMessage.value =
-    "Seleciona primeiro o caminho que esta válvula deve controlar.";
-  return;
-}
+    flowMessage.value =
+      "Seleciona primeiro o caminho que este elemento deve controlar.";
+    return;
+  }
 
   if (!selectedCount.value) {
     flowMessage.value =
-      "Seleciona o primeiro tubo a partir do qual a válvula deve bloquear.";
+      "Seleciona o primeiro tubo a partir do qual a transição deve atuar.";
     return;
   }
 
@@ -4144,9 +4211,9 @@ async function linkSelectedPipesToPreparedValve() {
 
       for (const pipeNode of downstreamPipes) {
         linkedPipesByKey.set(
-  `${pipeNode.routeId}|${nodeKey(pipeNode)}`,
-  pipeNode,
-);
+          `${pipeNode.routeId}|${nodeKey(pipeNode)}`,
+          pipeNode,
+        );
       }
     }
   }
@@ -4162,12 +4229,7 @@ async function linkSelectedPipesToPreparedValve() {
   valveControlledPipeLinks.set(valveKey, linkedPipes);
   saveValvePipeLinksToStorage();
 
-  const valveElement = mepElements[elementKey(
-    valveNode.modelId,
-    valveNode.localId,
-  )];
-
-  if (valveElement?.state === "closed") {
+  if (transitionElement.state === "closed") {
     for (const pipeNode of linkedPipes) {
       blockPipeForRoute(pipeNode.routeId, pipeNode);
     }
@@ -4182,7 +4244,7 @@ async function linkSelectedPipesToPreparedValve() {
   }
 
   flowMessage.value =
-    `${linkedPipes.length} tubo(s) associados à válvula no caminho "${highlightedRoute.name}".`;
+    `${linkedPipes.length} tubo(s) associados ao elemento de transição no caminho "${highlightedRoute.name}".`;
 }
 
 async function removeSelectedValvePipeLink() {
@@ -4691,6 +4753,100 @@ function isSupplyCircuit(circuit: PipeCircuit) {
 
 function isReturnCircuit(circuit: PipeCircuit) {
   return circuit.startsWith("return");
+}
+
+function getOppositeCircuit(circuit: PipeCircuit) {
+  const cycleNumber = getCircuitCycleNumber(circuit);
+
+  if (isSupplyCircuit(circuit)) {
+    return getReturnCircuitKey(cycleNumber);
+  }
+
+  if (isReturnCircuit(circuit)) {
+    return getSupplyCircuitKey(cycleNumber);
+  }
+
+  return circuit;
+}
+
+function getCircuitAfterHydraulicTransition(
+  circuit: PipeCircuit,
+  mode: HydraulicTransitionMode,
+) {
+  if (mode === "switchSupplyToReturn" && isSupplyCircuit(circuit)) {
+    return getReturnCircuitKey(getCircuitCycleNumber(circuit));
+  }
+
+  if (mode === "switchReturnToSupply" && isReturnCircuit(circuit)) {
+    return getSupplyCircuitKey(getCircuitCycleNumber(circuit));
+  }
+
+  if (mode === "primarySecondaryExchange") {
+    return getOppositeCircuit(circuit);
+  }
+
+  return circuit;
+}
+
+function isHydraulicTransitionActive(element: MepElement) {
+  if (!element.hydraulicTransitionMode || element.hydraulicTransitionMode === "none") {
+    return false;
+  }
+
+  if (element.elementType === "normallyClosedValve") {
+    return element.state === "open";
+  }
+
+  return true;
+}
+
+function getEffectiveCircuitForPipe(
+  modelId: string,
+  localId: number,
+  originalCircuit: PipeCircuit,
+) {
+  const pipeNode: FlowNode = {
+    modelId,
+    localId,
+  };
+
+  for (const [transitionKey, linkedPipes] of valveControlledPipeLinks) {
+    const isLinkedToTransition = linkedPipes.some(
+      (linkedPipe) =>
+        isSameNode(linkedPipe, pipeNode) &&
+        linkedPipe.temperature === originalCircuit,
+    );
+
+    if (!isLinkedToTransition) {
+      continue;
+    }
+
+    const transitionNode = getValveNodeFromDesignationKey(transitionKey);
+
+    if (!transitionNode) {
+      continue;
+    }
+
+    const transitionElement = mepElements[elementKey(
+      transitionNode.modelId,
+      transitionNode.localId,
+    )];
+
+    if (
+      !transitionElement ||
+      !canElementHaveHydraulicTransition(transitionElement.elementType) ||
+      !isHydraulicTransitionActive(transitionElement)
+    ) {
+      continue;
+    }
+
+    return getCircuitAfterHydraulicTransition(
+      originalCircuit,
+      transitionElement.hydraulicTransitionMode ?? "none",
+    );
+  }
+
+  return originalCircuit;
 }
 
 function getCircuitLabel(circuit: PipeCircuit) {
