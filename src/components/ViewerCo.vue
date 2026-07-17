@@ -377,6 +377,16 @@
       Caminhos
     </div>
 
+    <div class="flow-actions flow-actions--secondary">
+  <button type="button" @click="diagnoseRoutesAndTransitions">
+    Diagnosticar caminhos
+  </button>
+
+  <button type="button" @click="cleanInvalidRouteAndTransitionLinks">
+    Limpar associações inválidas
+  </button>
+</div>
+
     <div class="flow-actions flow-actions--single">
   <button
     type="button"
@@ -5313,6 +5323,129 @@ function getRouteHydraulicTransitionLabel(route: SavedRoute) {
   }
 
   return `transição: ${[...new Set(labels)].join(", ")}`;
+}
+
+function diagnoseRoutesAndTransitions() {
+  const routeIds = new Set(savedRoutes.map((route) => route.id));
+  const elementKeys = new Set(Object.keys(mepElements));
+
+  let routesWithTransition = 0;
+  let affectedPipeCount = 0;
+  let invalidRouteLinks = 0;
+  let invalidElementLinks = 0;
+  let lockedRoutesWithTransition = 0;
+
+  for (const route of savedRoutes) {
+    const hasTransition = [...valveControlledPipeLinks.values()].some(
+      (linkedPipes) =>
+        linkedPipes.some((pipeNode) => pipeNode.routeId === route.id),
+    );
+
+    if (hasTransition) {
+      routesWithTransition++;
+    }
+
+    if (route.locked && hasTransition) {
+      lockedRoutesWithTransition++;
+    }
+  }
+
+  for (const [transitionKey, linkedPipes] of valveControlledPipeLinks) {
+    if (!elementKeys.has(transitionKey)) {
+      invalidElementLinks++;
+    }
+
+    affectedPipeCount += linkedPipes.length;
+
+    for (const pipeNode of linkedPipes) {
+      if (!routeIds.has(pipeNode.routeId)) {
+        invalidRouteLinks++;
+      }
+    }
+  }
+
+  const emptyRoutes = savedRoutes.filter(
+    (route) => route.path.length === 0,
+  ).length;
+
+  flowMessage.value =
+    `Diagnóstico: ` +
+    `${savedRoutes.length} caminho(s) guardado(s), ` +
+    `${routesWithTransition} caminho(s) com transição, ` +
+    `${affectedPipeCount} tubo(s) afetado(s), ` +
+    `${emptyRoutes} caminho(s) vazio(s), ` +
+    `${invalidRouteLinks} associação(ões) para caminhos inexistentes, ` +
+    `${invalidElementLinks} associação(ões) para elementos inexistentes, ` +
+    `${lockedRoutesWithTransition} caminho(s) protegido(s) com transição.`;
+}
+
+async function cleanInvalidRouteAndTransitionLinks() {
+  const routeIds = new Set(savedRoutes.map((route) => route.id));
+  const elementKeys = new Set(Object.keys(mepElements));
+
+  let removedLinks = 0;
+
+  for (const [transitionKey, linkedPipes] of valveControlledPipeLinks) {
+    const transitionElementExists = elementKeys.has(transitionKey);
+
+    if (!transitionElementExists) {
+      removedLinks += linkedPipes.length;
+      valveControlledPipeLinks.delete(transitionKey);
+      valveBlockedPipeLinks.delete(transitionKey);
+      continue;
+    }
+
+    const validLinkedPipes = linkedPipes.filter((pipeNode) =>
+      routeIds.has(pipeNode.routeId),
+    );
+
+    removedLinks += linkedPipes.length - validLinkedPipes.length;
+
+    if (validLinkedPipes.length) {
+      valveControlledPipeLinks.set(transitionKey, validLinkedPipes);
+    } else {
+      valveControlledPipeLinks.delete(transitionKey);
+    }
+  }
+
+  for (const [transitionKey, linkedPipes] of valveBlockedPipeLinks) {
+    const transitionElementExists = elementKeys.has(transitionKey);
+
+    if (!transitionElementExists) {
+      valveBlockedPipeLinks.delete(transitionKey);
+      continue;
+    }
+
+    const validBlockedPipes = linkedPipes.filter((pipeNode) =>
+      routeIds.has(pipeNode.routeId),
+    );
+
+    if (validBlockedPipes.length) {
+      valveBlockedPipeLinks.set(transitionKey, validBlockedPipes);
+    } else {
+      valveBlockedPipeLinks.delete(transitionKey);
+    }
+  }
+
+  for (const blockedPipeKey of [...blockedRoutePipes]) {
+    const [routeId] = blockedPipeKey.split("|");
+
+    if (!routeIds.has(routeId)) {
+      blockedRoutePipes.delete(blockedPipeKey);
+    }
+  }
+
+  saveValvePipeLinksToStorage();
+  updateBlockedCount();
+
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  }
+
+  flowMessage.value =
+    removedLinks > 0
+      ? `${removedLinks} associação(ões) inválida(s) removida(s).`
+      : "Não foram encontradas associações inválidas.";
 }
 
 function routeHasHydraulicTransition(routeId: string) {
