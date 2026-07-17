@@ -826,6 +826,43 @@
 </div>
 
           <div class="flow-section-title">
+  Transição hidráulica
+</div>
+
+<p class="connection-note">
+  Elemento: {{ getSelectedHydraulicTransitionElementLabel() }}
+</p>
+
+<label class="flow-cycle-config">
+  <span>Comportamento hidráulico</span>
+
+  <select
+    :value="getSelectedHydraulicTransitionMode()"
+    @change="updateSelectedHydraulicTransitionModeFromEvent"
+  >
+    <option value="none">
+      Sem transição
+    </option>
+
+    <option value="switchSupplyToReturn">
+      Avanço passa a retorno
+    </option>
+
+    <option value="switchReturnToSupply">
+      Retorno passa a avanço
+    </option>
+
+    <option value="primarySecondaryExchange">
+      Permutador primário/secundário
+    </option>
+  </select>
+</label>
+
+<p class="connection-note">
+  Esta opção ainda só guarda o comportamento. A mudança automática de cor fica para o próximo passo.
+</p>
+          
+          <div class="flow-section-title">
             Animação
           </div>
 
@@ -3681,6 +3718,117 @@ function getSelectedValveNormalTypeLabel() {
   return "Válvula de corte";
 }
 
+function getSelectedHydraulicTransitionMode() {
+  const transitionNode = getHydraulicTransitionNodeForControl();
+
+  if (!transitionNode) {
+    return "none";
+  }
+
+  const element = mepElements[elementKey(
+    transitionNode.modelId,
+    transitionNode.localId,
+  )];
+
+  if (
+    !element ||
+    !canElementHaveHydraulicTransition(element.elementType)
+  ) {
+    return "none";
+  }
+
+  return element.hydraulicTransitionMode ?? "none";
+}
+
+function getSelectedHydraulicTransitionElementLabel() {
+  const transitionNode = getHydraulicTransitionNodeForControl();
+
+  if (!transitionNode) {
+    return "Nenhum elemento de transição selecionado";
+  }
+
+  const element = mepElements[elementKey(
+    transitionNode.modelId,
+    transitionNode.localId,
+  )];
+
+  if (!element) {
+    return "Nenhum elemento de transição selecionado";
+  }
+
+  return getElementTypeLabel(element.elementType);
+}
+
+async function setSelectedHydraulicTransitionMode(
+  mode: HydraulicTransitionMode,
+) {
+  const transitionNode = getHydraulicTransitionNodeForControl();
+
+  if (!transitionNode) {
+    alert("Seleciona primeiro uma válvula NF, booster ou permutador.");
+
+    flowMessage.value =
+      "Seleciona primeiro uma válvula NF, booster ou permutador.";
+
+    return;
+  }
+
+  const key = elementKey(
+    transitionNode.modelId,
+    transitionNode.localId,
+  );
+
+  const element = mepElements[key];
+
+  if (
+    !element ||
+    !canElementHaveHydraulicTransition(element.elementType)
+  ) {
+    alert("Este elemento não suporta transição hidráulica.");
+
+    flowMessage.value =
+      "Este elemento não suporta transição hidráulica.";
+
+    return;
+  }
+
+  mepElements[key] = {
+    ...element,
+    hydraulicTransitionMode: mode,
+  };
+
+  saveMepElementsToStorage();
+
+  flowMessage.value =
+    mode === "none"
+      ? "Transição hidráulica desativada."
+      : `Transição hidráulica definida: ${getHydraulicTransitionModeLabel(mode)}.`;
+}
+
+function updateSelectedHydraulicTransitionModeFromEvent(event: Event) {
+  const input = event.target as HTMLSelectElement;
+
+  void setSelectedHydraulicTransitionMode(
+    input.value as HydraulicTransitionMode,
+  );
+}
+
+function getHydraulicTransitionModeLabel(mode: HydraulicTransitionMode) {
+  if (mode === "switchSupplyToReturn") {
+    return "avanço passa a retorno";
+  }
+
+  if (mode === "switchReturnToSupply") {
+    return "retorno passa a avanço";
+  }
+
+  if (mode === "primarySecondaryExchange") {
+    return "permutador primário/secundário";
+  }
+
+  return "sem transição";
+}
+
 async function saveSelectedValveDesignation() {
   const valveNode = getValveNodeForDesignationEditing();
 
@@ -3882,6 +4030,44 @@ function getValveNodeForControl() {
     getValveNodeFromDesignationKey(selectedValveDesignationKey.value) ??
     getFirstSelectedValveNode()
   );
+}
+
+function getHydraulicTransitionNodeForControl() {
+  const selectedNode = getFirstSelectedNode();
+
+  if (selectedNode) {
+    const selectedElement = mepElements[elementKey(
+      selectedNode.modelId,
+      selectedNode.localId,
+    )];
+
+    if (
+      selectedElement &&
+      canElementHaveHydraulicTransition(selectedElement.elementType)
+    ) {
+      return selectedNode;
+    }
+  }
+
+  const valveNode = getValveNodeForControl();
+
+  if (!valveNode) {
+    return null;
+  }
+
+  const valveElement = mepElements[elementKey(
+    valveNode.modelId,
+    valveNode.localId,
+  )];
+
+  if (
+    valveElement &&
+    valveElement.elementType === "normallyClosedValve"
+  ) {
+    return valveNode;
+  }
+
+  return null;
 }
 
 async function highlightValveFromDropdown(node: FlowNode) {
