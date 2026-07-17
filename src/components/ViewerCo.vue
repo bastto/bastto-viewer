@@ -530,14 +530,15 @@
           </strong>
 
           <small>
-            {{ getRouteCircuitDisplayLabel(route) }} ·
+           {{ getRouteCircuitDisplayLabel(route) }} ·
 {{ getRoutePipeCount(route) }} tubo(s) ·
 {{ getRouteVisibilityLabel(route) }} ·
 {{ getRouteProtectionLabel(route) }} ·
-{{ getRouteBlockedLabel(route) }}
+{{ getRouteBlockedLabel(route) }} ·
+{{ getRouteHydraulicTransitionLabel(route) }}
 <span v-if="isSavedRouteBlocked(route)">
   · {{ getValveLabelForBlockedRoute(route) }}
-</span>
+</span> 
           </small>
         </span>
       </div>
@@ -830,9 +831,31 @@
   Transição hidráulica
 </div>
 
-<p class="connection-note">
-  Elemento: {{ getSelectedHydraulicTransitionElementLabel() }}
-</p>
+<div class="selected-mep-info">
+  {{ getSelectedHydraulicTransitionSummaryLabel() }}
+</div>
+
+<div class="hydraulic-transition-summary">
+  <div>
+    <span>Elemento ativo</span>
+    <strong>{{ getSelectedHydraulicTransitionElementLabel() }}</strong>
+  </div>
+
+  <div>
+    <span>Modo</span>
+    <strong>{{ getHydraulicTransitionModeLabel(getSelectedHydraulicTransitionMode()) }}</strong>
+  </div>
+
+  <div>
+    <span>Caminho</span>
+    <strong>{{ getSelectedHydraulicTransitionRouteLabel() }}</strong>
+  </div>
+
+  <div>
+    <span>Tubos afetados</span>
+    <strong>{{ getSelectedHydraulicTransitionAssociationLabel() }}</strong>
+  </div>
+</div>
 
 <label class="flow-cycle-config">
   <span>Comportamento hidráulico</span>
@@ -2144,6 +2167,9 @@ if (highlightedSavedRouteId.value === routeId) {
   highlightedSavedRouteId.value = null;
 }
 
+const removedTransitionLinks =
+  removeHydraulicTransitionLinksForRoute(routeId);
+
 savedRoutes.splice(index, 1);
 
   const idsByModel = new Map<string, number[]>();
@@ -2189,7 +2215,10 @@ if (reversedPipeDirections.get(node.modelId)?.size === 0) {
     await fragmentManager.core.update(true);
   }
 
-  flowMessage.value = "Caminho apagado.";
+  flowMessage.value =
+  removedTransitionLinks > 0
+    ? `Caminho apagado. ${removedTransitionLinks} associação(ões) de transição removida(s).`
+    : "Caminho apagado.";
 }
 
 async function resetRoutePathHighlight(route: SavedRoute) {
@@ -2372,6 +2401,13 @@ async function reverseSavedRoute(routeId: string) {
   if (route.locked) {
   flowMessage.value =
     `O caminho "${route.name}" está protegido. Desprotege primeiro para inverter.`;
+  return;
+}
+
+if (routeHasHydraulicTransition(route.id)) {
+  flowMessage.value =
+    `O caminho "${route.name}" tem uma transição hidráulica associada. Remove a associação antes de inverter.`;
+
   return;
 }
 
@@ -2985,12 +3021,28 @@ async function deleteSelectedElementDefinitions() {
 
     for (const localId of ids) {
       const key = elementKey(modelId, localId);
+const element = mepElements[key];
 
-      if (!mepElements[key]) {
-        continue;
-      }
+if (!element) {
+  continue;
+}
 
-      delete mepElements[key];
+const node: FlowNode = {
+  modelId,
+  localId,
+};
+
+if (
+  canElementHaveHydraulicTransition(element.elementType) &&
+  transitionElementHasLinkedPipes(node)
+) {
+  flowMessage.value =
+    `Não é possível apagar este ${getElementTypeLabel(element.elementType)} porque tem uma transição hidráulica associada. Remove primeiro a associação.`;
+
+  return;
+}
+
+delete mepElements[key];
 
       if (blockedSet?.has(localId)) {
         blockedSet.delete(localId);
@@ -3034,6 +3086,21 @@ async function deleteAllElementDefinitions() {
     flowMessage.value = "Não existem definições de elementos para apagar.";
     return;
   }
+
+  const elementsWithTransitions = elements.filter((element) =>
+  canElementHaveHydraulicTransition(element.elementType) &&
+  transitionElementHasLinkedPipes({
+    modelId: element.modelId,
+    localId: element.localId,
+  }),
+);
+
+if (elementsWithTransitions.length) {
+  flowMessage.value =
+    `Existem ${elementsWithTransitions.length} elemento(s) com transições hidráulicas associadas. Remove primeiro essas associações antes de apagar todas as definições.`;
+
+  return;
+}
 
   const shouldContinue = confirm(
     "Esta ação vai apagar todas as definições dos elementos. Deseja continuar?",
@@ -3789,6 +3856,77 @@ function getSelectedHydraulicTransitionElementLabel() {
   return getElementTypeLabel(element.elementType);
 }
 
+function getSelectedHydraulicTransitionAssociationLabel() {
+  const transitionNode = getHydraulicTransitionNodeForControl();
+
+  if (!transitionNode) {
+    return "Sem elemento selecionado";
+  }
+
+  const transitionKey = nodeKey(transitionNode);
+  const linkedPipes = valveControlledPipeLinks.get(transitionKey) ?? [];
+
+  if (!linkedPipes.length) {
+    return "Sem tubos associados";
+  }
+
+  const route = savedRoutes.find(
+    (savedRoute) => savedRoute.id === linkedPipes[0].routeId,
+  );
+
+  if (!route) {
+    return `${linkedPipes.length} tubo(s) afetados`;
+  }
+
+  return `${linkedPipes.length} tubo(s) afetados em ${route.name}`;
+}
+
+function getSelectedHydraulicTransitionRouteLabel() {
+  const transitionNode = getHydraulicTransitionNodeForControl();
+
+  if (!transitionNode) {
+    return "Nenhum caminho associado";
+  }
+
+  const transitionKey = nodeKey(transitionNode);
+  const linkedPipes = valveControlledPipeLinks.get(transitionKey) ?? [];
+
+  if (!linkedPipes.length) {
+    return "Nenhum caminho associado";
+  }
+
+  const route = savedRoutes.find(
+    (savedRoute) => savedRoute.id === linkedPipes[0].routeId,
+  );
+
+  if (!route) {
+    return "Caminho não encontrado";
+  }
+
+  return `${route.name} - ${getRouteCircuitDisplayLabel(route)}`;
+}
+
+function getSelectedHydraulicTransitionSummaryLabel() {
+  const transitionNode = getHydraulicTransitionNodeForControl();
+
+  if (!transitionNode) {
+    return "Seleciona uma válvula NF, booster ou permutador.";
+  }
+
+  const element = mepElements[elementKey(
+    transitionNode.modelId,
+    transitionNode.localId,
+  )];
+
+  if (!element) {
+    return "Elemento de transição não encontrado.";
+  }
+
+  return `${getElementTypeLabel(element.elementType)} · ${getHydraulicTransitionModeLabel(
+    element.hydraulicTransitionMode ?? "none",
+  )}`;
+}
+
 async function setSelectedHydraulicTransitionMode(
   mode: HydraulicTransitionMode,
 ) {
@@ -4184,6 +4322,13 @@ async function linkSelectedPipesToPreparedValve() {
     return;
   }
 
+  if (highlightedRoute.locked) {
+  flowMessage.value =
+    `O caminho "${highlightedRoute.name}" está protegido. Desprotege primeiro para associar uma transição hidráulica.`;
+
+  return;
+}
+
   if (!selectedCount.value) {
     flowMessage.value =
       "Seleciona o primeiro tubo a partir do qual a transição deve atuar."
@@ -4270,8 +4415,21 @@ async function removeSelectedValvePipeLink() {
     return;
   }
 
+  const protectedRoute = savedRoutes.find(
+  (route) =>
+    route.locked &&
+    linkedPipes.some((pipeNode) => pipeNode.routeId === route.id),
+);
+
+if (protectedRoute) {
+  flowMessage.value =
+    `O caminho "${protectedRoute.name}" está protegido. Desprotege primeiro para remover a associação da transição.`;
+
+  return;
+}
+
   const shouldRemove = confirm(
-  "Tens a certeza que queres remover a associação desta válvula?",
+  "Tens a certeza que queres remover a associação desta transição hidráulica?",
 );
 
 if (!shouldRemove) {
@@ -5037,11 +5195,17 @@ async function applyWaterCycleCount() {
       }
     }
 
-    for (let index = flowConnections.length - 1; index >= 0; index--) {
-      if (removedCircuits.includes(flowConnections[index].temperature)) {
-        flowConnections.splice(index, 1);
-      }
-    }
+    let removedTransitionLinks = 0;
+
+for (let index = savedRoutes.length - 1; index >= 0; index--) {
+  if (removedCircuits.includes(savedRoutes[index].temperature)) {
+    removedTransitionLinks += removeHydraulicTransitionLinksForRoute(
+      savedRoutes[index].id,
+    );
+
+    savedRoutes.splice(index, 1);
+  }
+}
 
     for (let index = currentRouteConnections.length - 1; index >= 0; index--) {
       if (removedCircuits.includes(currentRouteConnections[index].temperature)) {
@@ -5068,7 +5232,9 @@ updateManualStats();
   }
 
   flowMessage.value =
-    `Número de ciclos de água atualizado para ${nextCount}.`;
+  removedTransitionLinks > 0
+    ? `Número de ciclos de água atualizado para ${nextCount}. ${removedTransitionLinks} associação(ões) de transição removida(s).`
+    : `Número de ciclos de água atualizado para ${nextCount}.`;
 }
 
 function capitalizeFirstLetter(text: string) {
@@ -5104,6 +5270,104 @@ function getValveLabelForBlockedRoute(route: SavedRoute) {
 
 function getRouteBlockedLabel(route: SavedRoute) {
   return isSavedRouteBlocked(route) ? "bloqueado" : "ativo";
+}
+
+function getRouteHydraulicTransitionLabel(route: SavedRoute) {
+  const transitionEntries = [...valveControlledPipeLinks.entries()].filter(
+    ([, linkedPipes]) =>
+      linkedPipes.some((pipeNode) => pipeNode.routeId === route.id),
+  );
+
+  if (!transitionEntries.length) {
+    return "sem transição";
+  }
+
+  const labels = transitionEntries
+    .map(([transitionKey]) => {
+      const transitionNode = getValveNodeFromDesignationKey(transitionKey);
+
+      if (!transitionNode) {
+        return "";
+      }
+
+      const transitionElement = mepElements[elementKey(
+        transitionNode.modelId,
+        transitionNode.localId,
+      )];
+
+      if (
+        !transitionElement ||
+        !canElementHaveHydraulicTransition(transitionElement.elementType)
+      ) {
+        return "";
+      }
+
+      return getHydraulicTransitionModeLabel(
+        transitionElement.hydraulicTransitionMode ?? "none",
+      );
+    })
+    .filter(Boolean);
+
+  if (!labels.length) {
+    return "com transição hidráulica";
+  }
+
+  return `transição: ${[...new Set(labels)].join(", ")}`;
+}
+
+function routeHasHydraulicTransition(routeId: string) {
+  return [...valveControlledPipeLinks.values()].some((linkedPipes) =>
+    linkedPipes.some((pipeNode) => pipeNode.routeId === routeId),
+  );
+}
+
+function transitionElementHasLinkedPipes(node: FlowNode) {
+  return valveControlledPipeLinks.has(nodeKey(node));
+}
+
+function removeHydraulicTransitionLinksForRoute(routeId: string) {
+  let removedCount = 0;
+
+  for (const [transitionKey, linkedPipes] of valveControlledPipeLinks) {
+    const remainingLinkedPipes = linkedPipes.filter(
+      (pipeNode) => pipeNode.routeId !== routeId,
+    );
+
+    removedCount += linkedPipes.length - remainingLinkedPipes.length;
+
+    if (remainingLinkedPipes.length) {
+      valveControlledPipeLinks.set(transitionKey, remainingLinkedPipes);
+      continue;
+    }
+
+    valveControlledPipeLinks.delete(transitionKey);
+  }
+
+  for (const [transitionKey, linkedPipes] of valveBlockedPipeLinks) {
+    const remainingBlockedPipes = linkedPipes.filter(
+      (pipeNode) => pipeNode.routeId !== routeId,
+    );
+
+    if (remainingBlockedPipes.length) {
+      valveBlockedPipeLinks.set(transitionKey, remainingBlockedPipes);
+      continue;
+    }
+
+    valveBlockedPipeLinks.delete(transitionKey);
+  }
+
+  for (const blockedPipeKey of [...blockedRoutePipes]) {
+    if (blockedPipeKey.startsWith(`${routeId}|`)) {
+      blockedRoutePipes.delete(blockedPipeKey);
+    }
+  }
+
+  if (removedCount > 0) {
+    saveValvePipeLinksToStorage();
+    updateBlockedCount();
+  }
+
+  return removedCount;
 }
 
 function getRouteCircuitDisplayLabel(route: SavedRoute) {
@@ -6632,6 +6896,36 @@ function chunk<T>(items: T[], size: number) {
 .valve-rename-title {
   margin-top: 12px;
   padding-top: 10px;
+}
+
+.hydraulic-transition-summary {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.hydraulic-transition-summary div {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.hydraulic-transition-summary span {
+  color: #b8c9d3;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.hydraulic-transition-summary strong {
+  color: #f7fbff;
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1.25;
 }
 
 @media (max-width: 820px) {
