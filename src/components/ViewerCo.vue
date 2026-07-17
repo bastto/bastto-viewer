@@ -66,19 +66,23 @@
             </button>
           </div>
 
-          <div class="flow-actions flow-actions--secondary">
-            <button type="button" @click="defineSelectedElementsAs('booster')">
-              Booster
-            </button>
+         <div class="flow-actions flow-actions--secondary">
+  <button type="button" @click="defineSelectedElementsAs('booster')">
+    Booster
+  </button>
 
-            <button type="button" @click="defineSelectedElementsAs('reservoirWithResistance')">
-              Reserv. c/ resistência
-            </button>
+  <button type="button" @click="defineSelectedElementsAs('heatExchanger')">
+    Permutador
+  </button>
 
-            <button type="button" @click="defineSelectedElementsAs('reservoirWithoutResistance')">
-              Reserv. s/ resistência
-            </button>
-          </div>
+  <button type="button" @click="defineSelectedElementsAs('reservoirWithResistance')">
+    Reserv. c/ resistência
+  </button>
+
+  <button type="button" @click="defineSelectedElementsAs('reservoirWithoutResistance')">
+    Reserv. s/ resistência
+  </button>
+</div>
 
           <div class="flow-actions flow-actions--single">
   <button
@@ -124,14 +128,17 @@
             </div>
 
             <div>
-              <dt>Booster</dt>
-              <dd>{{ countMepElementsByType('booster') }}</dd>
-            </div>
-
-            <div>
-              <dt>Res. c/ R.</dt>
-              <dd>{{ countMepElementsByType('reservoirWithResistance') }}</dd>
-            </div>
+  <dt>Booster</dt>
+  <dd>{{ countMepElementsByType('booster') }}</dd>
+</div>
+<div>
+  <dt>Permut.</dt>
+  <dd>{{ countMepElementsByType('heatExchanger') }}</dd>
+</div>
+<div>
+  <dt>Res. c/ R.</dt>
+  <dd>{{ countMepElementsByType('reservoirWithResistance') }}</dd>
+</div>
 
             <div>
               <dt>Res. s/ R.</dt>
@@ -182,6 +189,13 @@
       Mostrar
     </button>
   </div>
+
+  <div class="element-highlight-item">
+  <span>Permutadores</span>
+  <button type="button" @click="highlightMepElementsByType('heatExchanger')">
+    Mostrar
+  </button>
+</div>
 
   <div class="element-highlight-item">
     <span>Reserv. c/ resistência</span>
@@ -953,8 +967,15 @@ type MepElementType =
   | "normallyClosedValve"
   | "collector"
   | "booster"
+  | "heatExchanger"
   | "reservoirWithResistance"
   | "reservoirWithoutResistance";
+
+  type HydraulicTransitionMode =
+  | "none"
+  | "switchSupplyToReturn"
+  | "switchReturnToSupply"
+  | "primarySecondaryExchange";
 
 type CircuitType =
   | "hotWater"
@@ -976,6 +997,7 @@ type MepElement = {
   objectType?: string;
   tag?: string;
   state?: "open" | "closed" | "on" | "off";
+  hydraulicTransitionMode?: HydraulicTransitionMode;
 };
 
 type PipeParticle = {
@@ -1126,8 +1148,9 @@ const mepElementHighlightColors: Record<MepElementType, number> = {
   normallyOpenValve: 0x00ff00,
   normallyClosedValve: 0xff0000,
   collector: 0xff00ff,
-  booster: 0x00ff00,
-  reservoirWithResistance: 0xffff00,
+booster: 0x00ff00,
+heatExchanger: 0x9c27b0,
+reservoirWithResistance: 0xffff00,
   reservoirWithoutResistance: 0xff6600,
 };
 
@@ -2847,12 +2870,16 @@ async function defineSelectedElementsAs(elementType: MepElementType) {
         : mepElements[key]?.state;
 
       mepElements[key] = {
-        modelId,
-        localId,
-        elementType,
-        circuitType: mepElements[key]?.circuitType ?? "unknown",
-        state: defaultState,
-      };
+  modelId,
+  localId,
+  elementType,
+  circuitType: mepElements[key]?.circuitType ?? "unknown",
+  name: mepElements[key]?.name,
+  state: defaultState,
+  hydraulicTransitionMode: canElementHaveHydraulicTransition(elementType)
+    ? mepElements[key]?.hydraulicTransitionMode ?? "none"
+    : undefined,
+};
     }
   }
 
@@ -3272,8 +3299,9 @@ function getElementTypeLabel(elementType: MepElementType) {
   normallyOpenValve: "válvula NA",
 normallyClosedValve: "válvula NF",
   collector: "coletor",
-  booster: "booster",
-  reservoirWithResistance: "reservatório com resistência",
+booster: "booster",
+heatExchanger: "permutador",
+reservoirWithResistance: "reservatório com resistência",
   reservoirWithoutResistance: "reservatório sem resistência",
 };
 
@@ -3398,6 +3426,14 @@ function isValveElementType(elementType: MepElementType) {
     elementType === "isolationValve" ||
     elementType === "normallyOpenValve" ||
     elementType === "normallyClosedValve"
+  );
+}
+
+function canElementHaveHydraulicTransition(elementType: MepElementType) {
+  return (
+    elementType === "normallyClosedValve" ||
+    elementType === "booster" ||
+    elementType === "heatExchanger"
   );
 }
 
@@ -4558,7 +4594,6 @@ function toggleValveDesignationPanel() {
 function toggleValveRenamePanel() {
   isValveRenamePanelOpen.value = !isValveRenamePanelOpen.value;
 }
-``
 
 function saveCycleNames() {
   ensureCycleNames();
