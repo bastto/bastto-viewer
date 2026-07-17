@@ -787,11 +787,12 @@
 </div>
 
 <div class="flow-section-title">
-  Associação da válvula
+  Associação da transição hidráulica
 </div>
 
+
 <label class="flow-cycle-config">
-  <span>Caminho controlado pela válvula</span>
+  <span>Caminho controlado pela transição</span>
 
   <select
     v-model="selectedValveAssociationRouteId"
@@ -813,7 +814,7 @@
 
 <div class="flow-actions flow-actions--secondary">
   <button type="button" @click="linkSelectedPipesToPreparedValve">
-    Associar tubo à válvula
+    Associar tubo à transição
   </button>
 
   <button
@@ -4179,13 +4180,13 @@ async function linkSelectedPipesToPreparedValve() {
 
   if (!highlightedRoute) {
     flowMessage.value =
-      "Seleciona primeiro o caminho que este elemento deve controlar.";
+      "Seleciona primeiro o caminho que esta transição deve controlar."
     return;
   }
 
   if (!selectedCount.value) {
     flowMessage.value =
-      "Seleciona o primeiro tubo a partir do qual a transição deve atuar.";
+      "Seleciona o primeiro tubo a partir do qual a transição deve atuar."
     return;
   }
 
@@ -5098,7 +5099,7 @@ function getValveLabelForBlockedRoute(route: SavedRoute) {
       linkedPipes.some((pipeNode) => pipeNode.routeId === route.id),
   );
 
-  return hasAssociatedValve ? "bloqueado por válvula" : "";
+  return hasAssociatedValve ? "afetado por transição" : "";
 }
 
 function getRouteBlockedLabel(route: SavedRoute) {
