@@ -3985,6 +3985,16 @@ async function removeSelectedValvePipeLink() {
     return;
   }
 
+  const shouldRemove = confirm(
+  "Tens a certeza que queres remover a associação desta válvula?",
+);
+
+if (!shouldRemove) {
+  flowMessage.value =
+    "Remoção da associação cancelada.";
+  return;
+}
+
   for (const pipeNode of linkedPipes) {
     unblockPipeForRoute(pipeNode.routeId, pipeNode);
   }
