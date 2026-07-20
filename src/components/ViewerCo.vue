@@ -3087,12 +3087,28 @@ function getValveDesignationOptions() {
     .filter((element) => isValveElementType(element.elementType))
     .map((element) => {
       const key = elementKey(element.modelId, element.localId);
+      const valveKey = nodeKey({
+        modelId: element.modelId,
+        localId: element.localId,
+      });
+
       const originalName =
         valveOriginalDesignations[key] || `Válvula #${element.localId}`;
 
+      const displayName = element.name || originalName;
+
+      const hasAssociation =
+        valveControlledPipeLinks.has(valveKey) ||
+        [...valveControlledPipeLinks.keys()].some((storedValveKey) => {
+          const [, storedLocalId] = storedValveKey.split(":");
+          return Number(storedLocalId) === element.localId;
+        });
+
       return {
         key,
-        label: element.name || originalName,
+        label: hasAssociation
+          ? `${displayName} - associada`
+          : `${displayName} - sem associação`,
       };
     });
 }
