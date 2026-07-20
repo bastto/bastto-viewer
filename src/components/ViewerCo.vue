@@ -66,23 +66,19 @@
             </button>
           </div>
 
-         <div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="defineSelectedElementsAs('booster')">
-    Booster
-  </button>
+          <div class="flow-actions flow-actions--secondary">
+            <button type="button" @click="defineSelectedElementsAs('booster')">
+              Booster
+            </button>
 
-  <button type="button" @click="defineSelectedElementsAs('heatExchanger')">
-    Permutador
-  </button>
+            <button type="button" @click="defineSelectedElementsAs('reservoirWithResistance')">
+              Reserv. c/ resistência
+            </button>
 
-  <button type="button" @click="defineSelectedElementsAs('reservoirWithResistance')">
-    Reserv. c/ resistência
-  </button>
-
-  <button type="button" @click="defineSelectedElementsAs('reservoirWithoutResistance')">
-    Reserv. s/ resistência
-  </button>
-</div>
+            <button type="button" @click="defineSelectedElementsAs('reservoirWithoutResistance')">
+              Reserv. s/ resistência
+            </button>
+          </div>
 
           <div class="flow-actions flow-actions--single">
   <button
@@ -128,17 +124,14 @@
             </div>
 
             <div>
-  <dt>Booster</dt>
-  <dd>{{ countMepElementsByType('booster') }}</dd>
-</div>
-<div>
-  <dt>Permut.</dt>
-  <dd>{{ countMepElementsByType('heatExchanger') }}</dd>
-</div>
-<div>
-  <dt>Res. c/ R.</dt>
-  <dd>{{ countMepElementsByType('reservoirWithResistance') }}</dd>
-</div>
+              <dt>Booster</dt>
+              <dd>{{ countMepElementsByType('booster') }}</dd>
+            </div>
+
+            <div>
+              <dt>Res. c/ R.</dt>
+              <dd>{{ countMepElementsByType('reservoirWithResistance') }}</dd>
+            </div>
 
             <div>
               <dt>Res. s/ R.</dt>
@@ -189,13 +182,6 @@
       Mostrar
     </button>
   </div>
-
-  <div class="element-highlight-item">
-  <span>Permutadores</span>
-  <button type="button" @click="highlightMepElementsByType('heatExchanger')">
-    Mostrar
-  </button>
-</div>
 
   <div class="element-highlight-item">
     <span>Reserv. c/ resistência</span>
@@ -377,16 +363,6 @@
       Caminhos
     </div>
 
-    <div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="diagnoseRoutesAndTransitions">
-    Diagnosticar caminhos
-  </button>
-
-  <button type="button" @click="cleanInvalidRouteAndTransitionLinks">
-    Limpar associações inválidas
-  </button>
-</div>
-
     <div class="flow-actions flow-actions--single">
   <button
     type="button"
@@ -540,15 +516,14 @@
           </strong>
 
           <small>
-           {{ getRouteCircuitDisplayLabel(route) }} ·
+            {{ getRouteCircuitDisplayLabel(route) }} ·
 {{ getRoutePipeCount(route) }} tubo(s) ·
 {{ getRouteVisibilityLabel(route) }} ·
 {{ getRouteProtectionLabel(route) }} ·
-{{ getRouteBlockedLabel(route) }} ·
-{{ getRouteHydraulicTransitionLabel(route) }}
+{{ getRouteBlockedLabel(route) }}
 <span v-if="isSavedRouteBlocked(route)">
   · {{ getValveLabelForBlockedRoute(route) }}
-</span> 
+</span>
           </small>
         </span>
       </div>
@@ -798,12 +773,11 @@
 </div>
 
 <div class="flow-section-title">
-  Associação da transição hidráulica
+  Associação da válvula
 </div>
 
-
 <label class="flow-cycle-config">
-  <span>Caminho controlado pela transição</span>
+  <span>Caminho controlado pela válvula</span>
 
   <select
     v-model="selectedValveAssociationRouteId"
@@ -825,7 +799,7 @@
 
 <div class="flow-actions flow-actions--secondary">
   <button type="button" @click="linkSelectedPipesToPreparedValve">
-    Associar tubo à transição
+    Associar tubo à válvula
   </button>
 
   <button
@@ -837,78 +811,6 @@
   </button>
 </div>
 
-          <div class="flow-section-title">
-  Transição hidráulica
-</div>
-
-<div class="selected-mep-info">
-  {{ getSelectedHydraulicTransitionSummaryLabel() }}
-</div>
-
-<div class="hydraulic-transition-summary">
-  <div>
-    <span>Elemento ativo</span>
-    <strong>{{ getSelectedHydraulicTransitionElementLabel() }}</strong>
-  </div>
-
-  <div>
-    <span>Modo</span>
-    <strong>{{ getHydraulicTransitionModeLabel(getSelectedHydraulicTransitionMode()) }}</strong>
-  </div>
-
-  <div>
-    <span>Caminho</span>
-    <strong>{{ getSelectedHydraulicTransitionRouteLabel() }}</strong>
-  </div>
-
-  <div>
-    <span>Tubos afetados</span>
-    <strong>{{ getSelectedHydraulicTransitionAssociationLabel() }}</strong>
-  </div>
-</div>
-
-<label class="flow-cycle-config">
-  <span>Comportamento hidráulico</span>
-
-  <select
-    :value="getSelectedHydraulicTransitionMode()"
-    @change="updateSelectedHydraulicTransitionModeFromEvent"
-  >
-    <option value="none">
-      Sem transição
-    </option>
-
-    <option value="switchSupplyToReturn">
-      Avanço passa a retorno
-    </option>
-
-    <option value="switchReturnToSupply">
-      Retorno passa a avanço
-    </option>
-
-    <option value="primarySecondaryExchange">
-      Permutador primário/secundário
-    </option>
-  </select>
-</label>
-
-<div class="flow-actions flow-actions--single">
-  <button
-    type="button"
-    :class="[
-      'manual-route-mode-button',
-      isSelectedHydraulicTransitionEnabled() ? 'manual-route-mode-button--active' : ''
-    ]"
-    @click="toggleSelectedHydraulicTransitionEnabled"
-  >
-    {{ getSelectedHydraulicTransitionActivationLabel() }}
-  </button>
-</div>
-
-<p class="connection-note">
-  O comportamento escolhido só altera a cor quando a transição estiver ativada.
-</p>
-          
           <div class="flow-section-title">
             Animação
           </div>
@@ -1051,15 +953,8 @@ type MepElementType =
   | "normallyClosedValve"
   | "collector"
   | "booster"
-  | "heatExchanger"
   | "reservoirWithResistance"
   | "reservoirWithoutResistance";
-
-  type HydraulicTransitionMode =
-  | "none"
-  | "switchSupplyToReturn"
-  | "switchReturnToSupply"
-  | "primarySecondaryExchange";
 
 type CircuitType =
   | "hotWater"
@@ -1081,8 +976,6 @@ type MepElement = {
   objectType?: string;
   tag?: string;
   state?: "open" | "closed" | "on" | "off";
-  hydraulicTransitionMode?: HydraulicTransitionMode;
-  hydraulicTransitionEnabled?: boolean;
 };
 
 type PipeParticle = {
@@ -1222,7 +1115,6 @@ const valveControlledPipeLinks = new Map<string, ValveControlledPipeLink[]>();
 const blockedRoutePipes = new Set<string>();
 const selectedValveForPipeLink = ref<FlowNode | null>(null);
 const selectedValveAssociationRouteId = ref("");
-const selectedHydraulicTransitionNode = ref<FlowNode | null>(null);
 const manualAssignments = reactive<Record<string, SelectionMap>>({});
 const reversedPipeDirections: SelectionMap = new Map();
 const syncedPipeDirections: SelectionMap = new Map();
@@ -1234,9 +1126,8 @@ const mepElementHighlightColors: Record<MepElementType, number> = {
   normallyOpenValve: 0x00ff00,
   normallyClosedValve: 0xff0000,
   collector: 0xff00ff,
-booster: 0x00ff00,
-heatExchanger: 0x9c27b0,
-reservoirWithResistance: 0xffff00,
+  booster: 0x00ff00,
+  reservoirWithResistance: 0xffff00,
   reservoirWithoutResistance: 0xff6600,
 };
 
@@ -1685,33 +1576,15 @@ if (hiddenIds.length) {
 
 if (!ids.length) continue;
 
-    const idsByEffectiveCircuit = new Map<PipeCircuit, number[]>();
-
-for (const localId of ids) {
-  const effectiveCircuit = getEffectiveCircuitForPipe(
-    modelId,
-    localId,
+    await model.highlight(
+  ids,
+  createHighlight(
+    getCircuitColor(temperature),
     temperature,
-  );
+  ),
+);
 
-  if (!idsByEffectiveCircuit.has(effectiveCircuit)) {
-    idsByEffectiveCircuit.set(effectiveCircuit, []);
-  }
-
-  idsByEffectiveCircuit.get(effectiveCircuit)?.push(localId);
-}
-
-for (const [effectiveCircuit, effectiveIds] of idsByEffectiveCircuit) {
-  await model.highlight(
-    effectiveIds,
-    createHighlight(
-      getCircuitColor(effectiveCircuit),
-      effectiveCircuit,
-    ),
-  );
-}
-
-const boxes = await model.getBoxes(ids);
+    const boxes = await model.getBoxes(ids);
     for (let index = 0; index < boxes.length; index++) {
       const box = boxes[index];
       if (!box) continue;
@@ -1726,17 +1599,11 @@ if (isFlowArrowHidden(modelId, localId)) {
   continue;
 }
 
-const effectiveCircuit = getEffectiveCircuitForPipe(
-  modelId,
-  localId,
-  temperature,
-);
-
 const hints = await getPipeDirectionHints({ modelId, localId });
 
 addPipeParticles(
   box,
-  effectiveCircuit,
+  temperature,
   hints,
   { modelId, localId },
 );
@@ -2191,9 +2058,6 @@ if (highlightedSavedRouteId.value === routeId) {
   highlightedSavedRouteId.value = null;
 }
 
-const removedTransitionLinks =
-  removeHydraulicTransitionLinksForRoute(routeId);
-
 savedRoutes.splice(index, 1);
 
   const idsByModel = new Map<string, number[]>();
@@ -2239,10 +2103,7 @@ if (reversedPipeDirections.get(node.modelId)?.size === 0) {
     await fragmentManager.core.update(true);
   }
 
-  flowMessage.value =
-  removedTransitionLinks > 0
-    ? `Caminho apagado. ${removedTransitionLinks} associação(ões) de transição removida(s).`
-    : "Caminho apagado.";
+  flowMessage.value = "Caminho apagado.";
 }
 
 async function resetRoutePathHighlight(route: SavedRoute) {
@@ -2425,13 +2286,6 @@ async function reverseSavedRoute(routeId: string) {
   if (route.locked) {
   flowMessage.value =
     `O caminho "${route.name}" está protegido. Desprotege primeiro para inverter.`;
-  return;
-}
-
-if (routeHasHydraulicTransition(route.id)) {
-  flowMessage.value =
-    `O caminho "${route.name}" tem uma transição hidráulica associada. Remove a associação antes de inverter.`;
-
   return;
 }
 
@@ -2993,19 +2847,12 @@ async function defineSelectedElementsAs(elementType: MepElementType) {
         : mepElements[key]?.state;
 
       mepElements[key] = {
-  modelId,
-  localId,
-  elementType,
-  circuitType: mepElements[key]?.circuitType ?? "unknown",
-  name: mepElements[key]?.name,
-  state: defaultState,
-  hydraulicTransitionMode: canElementHaveHydraulicTransition(elementType)
-    ? mepElements[key]?.hydraulicTransitionMode ?? "none"
-    : undefined,
-  hydraulicTransitionEnabled: canElementHaveHydraulicTransition(elementType)
-    ? mepElements[key]?.hydraulicTransitionEnabled ?? false
-    : undefined,
-};
+        modelId,
+        localId,
+        elementType,
+        circuitType: mepElements[key]?.circuitType ?? "unknown",
+        state: defaultState,
+      };
     }
   }
 
@@ -3048,28 +2895,12 @@ async function deleteSelectedElementDefinitions() {
 
     for (const localId of ids) {
       const key = elementKey(modelId, localId);
-const element = mepElements[key];
 
-if (!element) {
-  continue;
-}
+      if (!mepElements[key]) {
+        continue;
+      }
 
-const node: FlowNode = {
-  modelId,
-  localId,
-};
-
-if (
-  canElementHaveHydraulicTransition(element.elementType) &&
-  transitionElementHasLinkedPipes(node)
-) {
-  flowMessage.value =
-    `Não é possível apagar este ${getElementTypeLabel(element.elementType)} porque tem uma transição hidráulica associada. Remove primeiro a associação.`;
-
-  return;
-}
-
-delete mepElements[key];
+      delete mepElements[key];
 
       if (blockedSet?.has(localId)) {
         blockedSet.delete(localId);
@@ -3113,21 +2944,6 @@ async function deleteAllElementDefinitions() {
     flowMessage.value = "Não existem definições de elementos para apagar.";
     return;
   }
-
-  const elementsWithTransitions = elements.filter((element) =>
-  canElementHaveHydraulicTransition(element.elementType) &&
-  transitionElementHasLinkedPipes({
-    modelId: element.modelId,
-    localId: element.localId,
-  }),
-);
-
-if (elementsWithTransitions.length) {
-  flowMessage.value =
-    `Existem ${elementsWithTransitions.length} elemento(s) com transições hidráulicas associadas. Remove primeiro essas associações antes de apagar todas as definições.`;
-
-  return;
-}
 
   const shouldContinue = confirm(
     "Esta ação vai apagar todas as definições dos elementos. Deseja continuar?",
@@ -3439,10 +3255,6 @@ async function showSelectedMepElementInfo() {
   const displayName =
     definedElement.name || fallbackOriginalName;
 
-  if (canElementHaveHydraulicTransition(definedElement.elementType)) {
-    selectedHydraulicTransitionNode.value = selectedNode;
-  }
-
   if (isValveElementType(definedElement.elementType)) {
     valveOriginalDesignations[key] =
       originalElementName || `Válvula #${selectedNode.localId}`;
@@ -3460,9 +3272,8 @@ function getElementTypeLabel(elementType: MepElementType) {
   normallyOpenValve: "válvula NA",
 normallyClosedValve: "válvula NF",
   collector: "coletor",
-booster: "booster",
-heatExchanger: "permutador",
-reservoirWithResistance: "reservatório com resistência",
+  booster: "booster",
+  reservoirWithResistance: "reservatório com resistência",
   reservoirWithoutResistance: "reservatório sem resistência",
 };
 
@@ -3587,14 +3398,6 @@ function isValveElementType(elementType: MepElementType) {
     elementType === "isolationValve" ||
     elementType === "normallyOpenValve" ||
     elementType === "normallyClosedValve"
-  );
-}
-
-function canElementHaveHydraulicTransition(elementType: MepElementType) {
-  return (
-    elementType === "normallyClosedValve" ||
-    elementType === "booster" ||
-    elementType === "heatExchanger"
   );
 }
 
@@ -3842,286 +3645,6 @@ function getSelectedValveNormalTypeLabel() {
   return "Válvula de corte";
 }
 
-function getSelectedHydraulicTransitionMode() {
-  const transitionNode = getHydraulicTransitionNodeForControl();
-
-  if (!transitionNode) {
-    return "none";
-  }
-
-  const element = mepElements[elementKey(
-    transitionNode.modelId,
-    transitionNode.localId,
-  )];
-
-  if (
-    !element ||
-    !canElementHaveHydraulicTransition(element.elementType)
-  ) {
-    return "none";
-  }
-
-  return element.hydraulicTransitionMode ?? "none";
-}
-
-function isSelectedHydraulicTransitionEnabled() {
-  const transitionNode = getHydraulicTransitionNodeForControl();
-
-  if (!transitionNode) {
-    return false;
-  }
-
-  const element = mepElements[elementKey(
-    transitionNode.modelId,
-    transitionNode.localId,
-  )];
-
-  if (
-    !element ||
-    !canElementHaveHydraulicTransition(element.elementType)
-  ) {
-    return false;
-  }
-
-  return element.hydraulicTransitionEnabled ?? false;
-}
-
-function getSelectedHydraulicTransitionActivationLabel() {
-  return isSelectedHydraulicTransitionEnabled()
-    ? "Desativar transição"
-    : "Ativar transição";
-}
-
-async function toggleSelectedHydraulicTransitionEnabled() {
-  const transitionNode = getHydraulicTransitionNodeForControl();
-
-  if (!transitionNode) {
-    alert("Seleciona primeiro uma válvula NF, booster ou permutador.");
-
-    flowMessage.value =
-      "Seleciona primeiro uma válvula NF, booster ou permutador.";
-
-    return;
-  }
-
-  const key = elementKey(
-    transitionNode.modelId,
-    transitionNode.localId,
-  );
-
-  const element = mepElements[key];
-
-  if (
-    !element ||
-    !canElementHaveHydraulicTransition(element.elementType)
-  ) {
-    alert("Este elemento não suporta transição hidráulica.");
-
-    flowMessage.value =
-      "Este elemento não suporta transição hidráulica.";
-
-    return;
-  }
-
-  if (
-    !element.hydraulicTransitionMode ||
-    element.hydraulicTransitionMode === "none"
-  ) {
-    alert("Escolhe primeiro um comportamento hidráulico.");
-
-    flowMessage.value =
-      "Escolhe primeiro um comportamento hidráulico antes de ativar a transição.";
-
-    return;
-  }
-
-  const nextEnabled = !(element.hydraulicTransitionEnabled ?? false);
-
-  mepElements[key] = {
-    ...element,
-    hydraulicTransitionEnabled: nextEnabled,
-  };
-
-  saveMepElementsToStorage();
-
-  if (countAssignments() > 0 || flowConnections.length > 0) {
-    await rebuildManualFlowLayer();
-  }
-
-  flowMessage.value = nextEnabled
-    ? "Transição hidráulica ativada."
-    : "Transição hidráulica desativada.";
-}
-
-function getSelectedHydraulicTransitionElementLabel() {
-  const transitionNode = getHydraulicTransitionNodeForControl();
-
-  if (!transitionNode) {
-    return "Nenhum elemento de transição selecionado";
-  }
-
-  const element = mepElements[elementKey(
-    transitionNode.modelId,
-    transitionNode.localId,
-  )];
-
-  if (!element) {
-    return "Nenhum elemento de transição selecionado";
-  }
-
-  return getElementTypeLabel(element.elementType);
-}
-
-function getSelectedHydraulicTransitionAssociationLabel() {
-  const transitionNode = getHydraulicTransitionNodeForControl();
-
-  if (!transitionNode) {
-    return "Sem elemento selecionado";
-  }
-
-  const transitionKey = nodeKey(transitionNode);
-  const linkedPipes = valveControlledPipeLinks.get(transitionKey) ?? [];
-
-  if (!linkedPipes.length) {
-    return "Sem tubos associados";
-  }
-
-  const route = savedRoutes.find(
-    (savedRoute) => savedRoute.id === linkedPipes[0].routeId,
-  );
-
-  if (!route) {
-    return `${linkedPipes.length} tubo(s) afetados`;
-  }
-
-  return `${linkedPipes.length} tubo(s) afetados em ${route.name}`;
-}
-
-function getSelectedHydraulicTransitionRouteLabel() {
-  const transitionNode = getHydraulicTransitionNodeForControl();
-
-  if (!transitionNode) {
-    return "Nenhum caminho associado";
-  }
-
-  const transitionKey = nodeKey(transitionNode);
-  const linkedPipes = valveControlledPipeLinks.get(transitionKey) ?? [];
-
-  if (!linkedPipes.length) {
-    return "Nenhum caminho associado";
-  }
-
-  const route = savedRoutes.find(
-    (savedRoute) => savedRoute.id === linkedPipes[0].routeId,
-  );
-
-  if (!route) {
-    return "Caminho não encontrado";
-  }
-
-  return `${route.name} - ${getRouteCircuitDisplayLabel(route)}`;
-}
-
-function getSelectedHydraulicTransitionSummaryLabel() {
-  const transitionNode = getHydraulicTransitionNodeForControl();
-
-  if (!transitionNode) {
-    return "Seleciona uma válvula NF, booster ou permutador.";
-  }
-
-  const element = mepElements[elementKey(
-    transitionNode.modelId,
-    transitionNode.localId,
-  )];
-
-  if (!element) {
-    return "Elemento de transição não encontrado.";
-  }
-
-  return `${getElementTypeLabel(element.elementType)} · ${getHydraulicTransitionModeLabel(
-    element.hydraulicTransitionMode ?? "none",
-  )}`;
-}
-
-async function setSelectedHydraulicTransitionMode(
-  mode: HydraulicTransitionMode,
-) {
-  const transitionNode = getHydraulicTransitionNodeForControl();
-
-  if (!transitionNode) {
-    alert("Seleciona primeiro uma válvula NF, booster ou permutador.");
-
-    flowMessage.value =
-      "Seleciona primeiro uma válvula NF, booster ou permutador.";
-
-    return;
-  }
-
-  const key = elementKey(
-    transitionNode.modelId,
-    transitionNode.localId,
-  );
-
-  const element = mepElements[key];
-
-  if (
-    !element ||
-    !canElementHaveHydraulicTransition(element.elementType)
-  ) {
-    alert("Este elemento não suporta transição hidráulica.");
-
-    flowMessage.value =
-      "Este elemento não suporta transição hidráulica.";
-
-    return;
-  }
-
-  selectedHydraulicTransitionNode.value = transitionNode;
-
-  mepElements[key] = {
-    ...element,
-    hydraulicTransitionMode: mode,
-  };
-
-  saveMepElementsToStorage();
-
-  if (
-  element.hydraulicTransitionEnabled &&
-  (countAssignments() > 0 || flowConnections.length > 0)
-) {
-  await rebuildManualFlowLayer();
-}
-
-  flowMessage.value =
-    mode === "none"
-      ? "Transição hidráulica desativada."
-      : `Transição hidráulica definida: ${getHydraulicTransitionModeLabel(mode)}.`;
-}
-
-function updateSelectedHydraulicTransitionModeFromEvent(event: Event) {
-  const input = event.target as HTMLSelectElement;
-
-  void setSelectedHydraulicTransitionMode(
-    input.value as HydraulicTransitionMode,
-  );
-}
-
-function getHydraulicTransitionModeLabel(mode: HydraulicTransitionMode) {
-  if (mode === "switchSupplyToReturn") {
-    return "avanço passa a retorno";
-  }
-
-  if (mode === "switchReturnToSupply") {
-    return "retorno passa a avanço";
-  }
-
-  if (mode === "primarySecondaryExchange") {
-    return "permutador primário/secundário";
-  }
-
-  return "sem transição";
-}
-
 async function saveSelectedValveDesignation() {
   const valveNode = getValveNodeForDesignationEditing();
 
@@ -4325,58 +3848,6 @@ function getValveNodeForControl() {
   );
 }
 
-function getHydraulicTransitionNodeForControl() {
-  const selectedNode = getFirstSelectedNode();
-
-  if (selectedNode) {
-    const selectedElement = mepElements[elementKey(
-      selectedNode.modelId,
-      selectedNode.localId,
-    )];
-
-    if (
-      selectedElement &&
-      canElementHaveHydraulicTransition(selectedElement.elementType)
-    ) {
-      return selectedNode;
-    }
-  }
-
-  if (selectedHydraulicTransitionNode.value) {
-    const storedElement = mepElements[elementKey(
-      selectedHydraulicTransitionNode.value.modelId,
-      selectedHydraulicTransitionNode.value.localId,
-    )];
-
-    if (
-      storedElement &&
-      canElementHaveHydraulicTransition(storedElement.elementType)
-    ) {
-      return selectedHydraulicTransitionNode.value;
-    }
-  }
-
-  const valveNode = getValveNodeForControl();
-
-  if (!valveNode) {
-    return null;
-  }
-
-  const valveElement = mepElements[elementKey(
-    valveNode.modelId,
-    valveNode.localId,
-  )];
-
-  if (
-    valveElement &&
-    valveElement.elementType === "normallyClosedValve"
-  ) {
-    return valveNode;
-  }
-
-  return null;
-}
-
 async function highlightValveFromDropdown(node: FlowNode) {
   if (highlightedValveFromDropdown.value) {
     const previousModel = loadedModels.get(
@@ -4407,50 +3878,25 @@ async function highlightValveFromDropdown(node: FlowNode) {
 }
 
 async function linkSelectedPipesToPreparedValve() {
-  const valveNode =
-    selectedHydraulicTransitionNode.value ??
-    getHydraulicTransitionNodeForControl();
+  const valveNode = getValveNodeForControl();
 
   if (!valveNode) {
     flowMessage.value =
-      "Seleciona primeiro uma válvula NF, booster ou permutador antes de associar tubos.";
+      "Seleciona uma válvula no dropdown ou no modelo antes de associar tubos.";
     return;
   }
-
-  const transitionElement = mepElements[elementKey(
-    valveNode.modelId,
-    valveNode.localId,
-  )];
-
-  if (
-    !transitionElement ||
-    !canElementHaveHydraulicTransition(transitionElement.elementType)
-  ) {
-    flowMessage.value =
-      "O elemento de transição selecionado já não é válido.";
-    return;
-  }
-
-  selectedHydraulicTransitionNode.value = valveNode;
 
   const highlightedRoute = getHighlightedRouteForValveAssociation();
 
   if (!highlightedRoute) {
-    flowMessage.value =
-      "Seleciona primeiro o caminho que esta transição deve controlar."
-    return;
-  }
-
-  if (highlightedRoute.locked) {
   flowMessage.value =
-    `O caminho "${highlightedRoute.name}" está protegido. Desprotege primeiro para associar uma transição hidráulica.`;
-
+    "Seleciona primeiro o caminho que esta válvula deve controlar.";
   return;
 }
 
   if (!selectedCount.value) {
     flowMessage.value =
-      "Seleciona o primeiro tubo a partir do qual a transição deve atuar."
+      "Seleciona o primeiro tubo a partir do qual a válvula deve bloquear.";
     return;
   }
 
@@ -4476,9 +3922,9 @@ async function linkSelectedPipesToPreparedValve() {
 
       for (const pipeNode of downstreamPipes) {
         linkedPipesByKey.set(
-          `${pipeNode.routeId}|${nodeKey(pipeNode)}`,
-          pipeNode,
-        );
+  `${pipeNode.routeId}|${nodeKey(pipeNode)}`,
+  pipeNode,
+);
       }
     }
   }
@@ -4494,7 +3940,12 @@ async function linkSelectedPipesToPreparedValve() {
   valveControlledPipeLinks.set(valveKey, linkedPipes);
   saveValvePipeLinksToStorage();
 
-  if (transitionElement.state === "closed") {
+  const valveElement = mepElements[elementKey(
+    valveNode.modelId,
+    valveNode.localId,
+  )];
+
+  if (valveElement?.state === "closed") {
     for (const pipeNode of linkedPipes) {
       blockPipeForRoute(pipeNode.routeId, pipeNode);
     }
@@ -4509,15 +3960,15 @@ async function linkSelectedPipesToPreparedValve() {
   }
 
   flowMessage.value =
-    `${linkedPipes.length} tubo(s) associados ao elemento de transição no caminho "${highlightedRoute.name}".`;
+    `${linkedPipes.length} tubo(s) associados à válvula no caminho "${highlightedRoute.name}".`;
 }
 
 async function removeSelectedValvePipeLink() {
-  const valveNode = getHydraulicTransitionNodeForControl();
+  const valveNode = getValveNodeForControl();
 
   if (!valveNode) {
     flowMessage.value =
-      "Seleciona uma válvula NF, booster ou permutador para remover a associação.";
+      "Seleciona uma válvula no dropdown ou no modelo para remover a associação.";
     return;
   }
 
@@ -4534,21 +3985,8 @@ async function removeSelectedValvePipeLink() {
     return;
   }
 
-  const protectedRoute = savedRoutes.find(
-  (route) =>
-    route.locked &&
-    linkedPipes.some((pipeNode) => pipeNode.routeId === route.id),
-);
-
-if (protectedRoute) {
-  flowMessage.value =
-    `O caminho "${protectedRoute.name}" está protegido. Desprotege primeiro para remover a associação da transição.`;
-
-  return;
-}
-
   const shouldRemove = confirm(
-  "Tens a certeza que queres remover a associação desta transição hidráulica?",
+  "Tens a certeza que queres remover a associação desta válvula?",
 );
 
 if (!shouldRemove) {
@@ -4570,7 +4008,7 @@ if (!shouldRemove) {
   await rebuildManualFlowLayer();
 
   flowMessage.value =
-  "Associação da transição hidráulica removida.";
+    "Associação da válvula removida.";
 }
 
 async function setSelectedValvesState(state: "open" | "closed") {
@@ -5033,107 +4471,6 @@ function isReturnCircuit(circuit: PipeCircuit) {
   return circuit.startsWith("return");
 }
 
-function getOppositeCircuit(circuit: PipeCircuit) {
-  const cycleNumber = getCircuitCycleNumber(circuit);
-
-  if (isSupplyCircuit(circuit)) {
-    return getReturnCircuitKey(cycleNumber);
-  }
-
-  if (isReturnCircuit(circuit)) {
-    return getSupplyCircuitKey(cycleNumber);
-  }
-
-  return circuit;
-}
-
-function getCircuitAfterHydraulicTransition(
-  circuit: PipeCircuit,
-  mode: HydraulicTransitionMode,
-) {
-  if (mode === "switchSupplyToReturn" && isSupplyCircuit(circuit)) {
-    return getReturnCircuitKey(getCircuitCycleNumber(circuit));
-  }
-
-  if (mode === "switchReturnToSupply" && isReturnCircuit(circuit)) {
-    return getSupplyCircuitKey(getCircuitCycleNumber(circuit));
-  }
-
-  if (mode === "primarySecondaryExchange") {
-    return getOppositeCircuit(circuit);
-  }
-
-  return circuit;
-}
-
-function isHydraulicTransitionActive(element: MepElement) {
-  if (
-    !element.hydraulicTransitionMode ||
-    element.hydraulicTransitionMode === "none"
-  ) {
-    return false;
-  }
-
-  if (!element.hydraulicTransitionEnabled) {
-    return false;
-  }
-
-  if (element.elementType === "normallyClosedValve") {
-    return element.state === "open";
-  }
-
-  return true;
-}
-
-function getEffectiveCircuitForPipe(
-  modelId: string,
-  localId: number,
-  originalCircuit: PipeCircuit,
-) {
-  const pipeNode: FlowNode = {
-    modelId,
-    localId,
-  };
-
-  for (const [transitionKey, linkedPipes] of valveControlledPipeLinks) {
-    const isLinkedToTransition = linkedPipes.some(
-      (linkedPipe) =>
-        isSameNode(linkedPipe, pipeNode) &&
-        linkedPipe.temperature === originalCircuit,
-    );
-
-    if (!isLinkedToTransition) {
-      continue;
-    }
-
-    const transitionNode = getValveNodeFromDesignationKey(transitionKey);
-
-    if (!transitionNode) {
-      continue;
-    }
-
-    const transitionElement = mepElements[elementKey(
-      transitionNode.modelId,
-      transitionNode.localId,
-    )];
-
-    if (
-      !transitionElement ||
-      !canElementHaveHydraulicTransition(transitionElement.elementType) ||
-      !isHydraulicTransitionActive(transitionElement)
-    ) {
-      continue;
-    }
-
-    return getCircuitAfterHydraulicTransition(
-      originalCircuit,
-      transitionElement.hydraulicTransitionMode ?? "none",
-    );
-  }
-
-  return originalCircuit;
-}
-
 function getCircuitLabel(circuit: PipeCircuit) {
   const cycleNumber = getCircuitCycleNumber(circuit);
   const cycleName = getCycleDisplayName(cycleNumber);
@@ -5221,6 +4558,7 @@ function toggleValveDesignationPanel() {
 function toggleValveRenamePanel() {
   isValveRenamePanelOpen.value = !isValveRenamePanelOpen.value;
 }
+``
 
 function saveCycleNames() {
   ensureCycleNames();
@@ -5315,15 +4653,17 @@ async function applyWaterCycleCount() {
       delete manualAssignments[circuit];
     }
 
-for (let index = savedRoutes.length - 1; index >= 0; index--) {
-  if (removedCircuits.includes(savedRoutes[index].temperature)) {
-    removedTransitionLinks += removeHydraulicTransitionLinksForRoute(
-      savedRoutes[index].id,
-    );
+    for (let index = savedRoutes.length - 1; index >= 0; index--) {
+      if (removedCircuits.includes(savedRoutes[index].temperature)) {
+        savedRoutes.splice(index, 1);
+      }
+    }
 
-    savedRoutes.splice(index, 1);
-  }
-}
+    for (let index = flowConnections.length - 1; index >= 0; index--) {
+      if (removedCircuits.includes(flowConnections[index].temperature)) {
+        flowConnections.splice(index, 1);
+      }
+    }
 
     for (let index = currentRouteConnections.length - 1; index >= 0; index--) {
       if (removedCircuits.includes(currentRouteConnections[index].temperature)) {
@@ -5350,9 +4690,7 @@ updateManualStats();
   }
 
   flowMessage.value =
-  removedTransitionLinks > 0
-    ? `Número de ciclos de água atualizado para ${nextCount}. ${removedTransitionLinks} associação(ões) de transição removida(s).`
-    : `Número de ciclos de água atualizado para ${nextCount}.`;
+    `Número de ciclos de água atualizado para ${nextCount}.`;
 }
 
 function capitalizeFirstLetter(text: string) {
@@ -5383,232 +4721,11 @@ function getValveLabelForBlockedRoute(route: SavedRoute) {
       linkedPipes.some((pipeNode) => pipeNode.routeId === route.id),
   );
 
-  return hasAssociatedValve ? "afetado por transição" : "";
+  return hasAssociatedValve ? "bloqueado por válvula" : "";
 }
 
 function getRouteBlockedLabel(route: SavedRoute) {
   return isSavedRouteBlocked(route) ? "bloqueado" : "ativo";
-}
-
-function getRouteHydraulicTransitionLabel(route: SavedRoute) {
-  const transitionEntries = [...valveControlledPipeLinks.entries()].filter(
-    ([, linkedPipes]) =>
-      linkedPipes.some((pipeNode) => pipeNode.routeId === route.id),
-  );
-
-  if (!transitionEntries.length) {
-    return "sem transição";
-  }
-
-  const labels = transitionEntries
-    .map(([transitionKey]) => {
-      const transitionNode = getValveNodeFromDesignationKey(transitionKey);
-
-      if (!transitionNode) {
-        return "";
-      }
-
-      const transitionElement = mepElements[elementKey(
-        transitionNode.modelId,
-        transitionNode.localId,
-      )];
-
-      if (
-        !transitionElement ||
-        !canElementHaveHydraulicTransition(transitionElement.elementType)
-      ) {
-        return "";
-      }
-
-      return getHydraulicTransitionModeLabel(
-        transitionElement.hydraulicTransitionMode ?? "none",
-      );
-    })
-    .filter(Boolean);
-
-  if (!labels.length) {
-    return "com transição hidráulica";
-  }
-
-  return `transição: ${[...new Set(labels)].join(", ")}`;
-}
-
-function diagnoseRoutesAndTransitions() {
-  const routeIds = new Set(savedRoutes.map((route) => route.id));
-  const elementKeys = new Set(Object.keys(mepElements));
-
-  let routesWithTransition = 0;
-  let affectedPipeCount = 0;
-  let invalidRouteLinks = 0;
-  let invalidElementLinks = 0;
-  let lockedRoutesWithTransition = 0;
-
-  for (const route of savedRoutes) {
-    const hasTransition = [...valveControlledPipeLinks.values()].some(
-      (linkedPipes) =>
-        linkedPipes.some((pipeNode) => pipeNode.routeId === route.id),
-    );
-
-    if (hasTransition) {
-      routesWithTransition++;
-    }
-
-    if (route.locked && hasTransition) {
-      lockedRoutesWithTransition++;
-    }
-  }
-
-  for (const [transitionKey, linkedPipes] of valveControlledPipeLinks) {
-    if (!elementKeys.has(transitionKey)) {
-      invalidElementLinks++;
-    }
-
-    affectedPipeCount += linkedPipes.length;
-
-    for (const pipeNode of linkedPipes) {
-      if (!routeIds.has(pipeNode.routeId)) {
-        invalidRouteLinks++;
-      }
-    }
-  }
-
-  const emptyRoutes = savedRoutes.filter(
-    (route) => route.path.length === 0,
-  ).length;
-
-  flowMessage.value =
-    `Diagnóstico: ` +
-    `${savedRoutes.length} caminho(s) guardado(s), ` +
-    `${routesWithTransition} caminho(s) com transição, ` +
-    `${affectedPipeCount} tubo(s) afetado(s), ` +
-    `${emptyRoutes} caminho(s) vazio(s), ` +
-    `${invalidRouteLinks} associação(ões) para caminhos inexistentes, ` +
-    `${invalidElementLinks} associação(ões) para elementos inexistentes, ` +
-    `${lockedRoutesWithTransition} caminho(s) protegido(s) com transição.`;
-}
-
-async function cleanInvalidRouteAndTransitionLinks() {
-  const routeIds = new Set(savedRoutes.map((route) => route.id));
-  const elementKeys = new Set(Object.keys(mepElements));
-
-  let removedLinks = 0;
-
-  for (const [transitionKey, linkedPipes] of valveControlledPipeLinks) {
-    const transitionElementExists = elementKeys.has(transitionKey);
-
-    if (!transitionElementExists) {
-      removedLinks += linkedPipes.length;
-      valveControlledPipeLinks.delete(transitionKey);
-      valveBlockedPipeLinks.delete(transitionKey);
-      continue;
-    }
-
-    const validLinkedPipes = linkedPipes.filter((pipeNode) =>
-      routeIds.has(pipeNode.routeId),
-    );
-
-    removedLinks += linkedPipes.length - validLinkedPipes.length;
-
-    if (validLinkedPipes.length) {
-      valveControlledPipeLinks.set(transitionKey, validLinkedPipes);
-    } else {
-      valveControlledPipeLinks.delete(transitionKey);
-    }
-  }
-
-  for (const [transitionKey, linkedPipes] of valveBlockedPipeLinks) {
-    const transitionElementExists = elementKeys.has(transitionKey);
-
-    if (!transitionElementExists) {
-      valveBlockedPipeLinks.delete(transitionKey);
-      continue;
-    }
-
-    const validBlockedPipes = linkedPipes.filter((pipeNode) =>
-      routeIds.has(pipeNode.routeId),
-    );
-
-    if (validBlockedPipes.length) {
-      valveBlockedPipeLinks.set(transitionKey, validBlockedPipes);
-    } else {
-      valveBlockedPipeLinks.delete(transitionKey);
-    }
-  }
-
-  for (const blockedPipeKey of [...blockedRoutePipes]) {
-    const [routeId] = blockedPipeKey.split("|");
-
-    if (!routeIds.has(routeId)) {
-      blockedRoutePipes.delete(blockedPipeKey);
-    }
-  }
-
-  saveValvePipeLinksToStorage();
-  updateBlockedCount();
-
-  if (countAssignments() > 0 || flowConnections.length > 0) {
-    await rebuildManualFlowLayer();
-  }
-
-  flowMessage.value =
-    removedLinks > 0
-      ? `${removedLinks} associação(ões) inválida(s) removida(s).`
-      : "Não foram encontradas associações inválidas.";
-}
-
-function routeHasHydraulicTransition(routeId: string) {
-  return [...valveControlledPipeLinks.values()].some((linkedPipes) =>
-    linkedPipes.some((pipeNode) => pipeNode.routeId === routeId),
-  );
-}
-
-function transitionElementHasLinkedPipes(node: FlowNode) {
-  return valveControlledPipeLinks.has(nodeKey(node));
-}
-
-function removeHydraulicTransitionLinksForRoute(routeId: string) {
-  let removedCount = 0;
-
-  for (const [transitionKey, linkedPipes] of valveControlledPipeLinks) {
-    const remainingLinkedPipes = linkedPipes.filter(
-      (pipeNode) => pipeNode.routeId !== routeId,
-    );
-
-    removedCount += linkedPipes.length - remainingLinkedPipes.length;
-
-    if (remainingLinkedPipes.length) {
-      valveControlledPipeLinks.set(transitionKey, remainingLinkedPipes);
-      continue;
-    }
-
-    valveControlledPipeLinks.delete(transitionKey);
-  }
-
-  for (const [transitionKey, linkedPipes] of valveBlockedPipeLinks) {
-    const remainingBlockedPipes = linkedPipes.filter(
-      (pipeNode) => pipeNode.routeId !== routeId,
-    );
-
-    if (remainingBlockedPipes.length) {
-      valveBlockedPipeLinks.set(transitionKey, remainingBlockedPipes);
-      continue;
-    }
-
-    valveBlockedPipeLinks.delete(transitionKey);
-  }
-
-  for (const blockedPipeKey of [...blockedRoutePipes]) {
-    if (blockedPipeKey.startsWith(`${routeId}|`)) {
-      blockedRoutePipes.delete(blockedPipeKey);
-    }
-  }
-
-  if (removedCount > 0) {
-    saveValvePipeLinksToStorage();
-    updateBlockedCount();
-  }
-
-  return removedCount;
 }
 
 function getRouteCircuitDisplayLabel(route: SavedRoute) {
@@ -7137,36 +6254,6 @@ function chunk<T>(items: T[], size: number) {
 .valve-rename-title {
   margin-top: 12px;
   padding-top: 10px;
-}
-
-.hydraulic-transition-summary {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.hydraulic-transition-summary div {
-  display: grid;
-  gap: 4px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.hydraulic-transition-summary span {
-  color: #b8c9d3;
-  font-size: 0.68rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.hydraulic-transition-summary strong {
-  color: #f7fbff;
-  font-size: 0.78rem;
-  font-weight: 900;
-  line-height: 1.25;
 }
 
 @media (max-width: 820px) {
