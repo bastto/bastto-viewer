@@ -4404,11 +4404,11 @@ async function linkSelectedPipesToPreparedValve() {
 }
 
 async function removeSelectedValvePipeLink() {
-  const valveNode = getValveNodeForControl();
+  const valveNode = getHydraulicTransitionNodeForControl();
 
   if (!valveNode) {
     flowMessage.value =
-      "Seleciona uma válvula no dropdown ou no modelo para remover a associação.";
+      "Seleciona uma válvula NF, booster ou permutador para remover a associação.";
     return;
   }
 
@@ -4461,7 +4461,7 @@ if (!shouldRemove) {
   await rebuildManualFlowLayer();
 
   flowMessage.value =
-    "Associação da válvula removida.";
+  "Associação da transição hidráulica removida.";
 }
 
 async function setSelectedValvesState(state: "open" | "closed") {
@@ -5198,14 +5198,6 @@ async function applyWaterCycleCount() {
     for (const circuit of removedCircuits) {
       delete manualAssignments[circuit];
     }
-
-    for (let index = savedRoutes.length - 1; index >= 0; index--) {
-      if (removedCircuits.includes(savedRoutes[index].temperature)) {
-        savedRoutes.splice(index, 1);
-      }
-    }
-
-    let removedTransitionLinks = 0;
 
 for (let index = savedRoutes.length - 1; index >= 0; index--) {
   if (removedCircuits.includes(savedRoutes[index].temperature)) {
