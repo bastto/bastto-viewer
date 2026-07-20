@@ -754,31 +754,26 @@
     {{ getSelectedValveNormalTypeLabel() }}
   </div>
 
-  <div class="flow-actions flow-actions--secondary valve-actions-buttons">
-    <button
-      type="button"
-      :class="[
-        'valve-switch-button',
-        isSelectedValveInInverseState() ? 'valve-switch-button--active' : ''
-      ]"
-      @click="toggleSelectedValvesNormalInverseState"
-    >
-      {{ getSelectedValveSwitchLabel() }}
-    </button>
-
-    <button type="button" @click="clearBlockedPipes">
-      Repor todas as válvulas
-    </button>
-  </div>
+  <div class="flow-actions flow-actions--single valve-actions-buttons">
+  <button
+    type="button"
+    :class="[
+      'valve-switch-button',
+      isSelectedValveInInverseState() ? 'valve-switch-button--active' : ''
+    ]"
+    @click="toggleSelectedValvesNormalInverseState"
+  >
+    {{ getSelectedValveSwitchLabel() }}
+  </button>
+</div>
 </div>
 
 <div class="flow-section-title">
-  Associação da válvula
+  Associação da válvula ao caminho
 </div>
 
 <label class="flow-cycle-config">
   <span>Caminho controlado pela válvula</span>
-
   <select
     v-model="selectedValveAssociationRouteId"
     @change="highlightSelectedValveAssociationRoute"
@@ -799,7 +794,7 @@
 
 <div class="flow-actions flow-actions--secondary">
   <button type="button" @click="linkSelectedPipesToPreparedValve">
-    Associar tubo à válvula
+    Associar tubo a jusante
   </button>
 
   <button
@@ -1590,6 +1585,10 @@ if (!ids.length) continue;
       if (!box) continue;
 
       const localId = ids[index];
+
+if (isPipeBlocked(modelId, localId)) {
+  continue;
+}
 
 if (shouldHidePipeForCircuit(modelId, localId, temperature)) {
   continue;
@@ -3192,7 +3191,7 @@ async function selectValveDesignationFromDropdown() {
   await highlightValveFromDropdown(valveNode);
 
   const linkedPipes = getLinkedPipesForValveNode(valveNode);
-  const associatedRouteId = linkedPipes[0]?.routeId;
+const associatedRouteId = linkedPipes[0]?.routeId;
 
   if (associatedRouteId) {
     selectedValveAssociationRouteId.value = associatedRouteId;
@@ -3468,7 +3467,12 @@ function isIsolationValve(modelId: string, localId: number) {
 }
 
 function updateBlockedCount() {
-  blockedCount.value = blockedRoutePipes.size;
+  const directlyBlockedPipes = [...blockedPipes.values()].reduce(
+    (total, ids) => total + ids.size,
+    0,
+  );
+
+  blockedCount.value = directlyBlockedPipes + blockedRoutePipes.size;
 }
 
 async function highlightSelectedValveAssociationRoute() {
@@ -4019,10 +4023,6 @@ async function setSelectedValvesState(state: "open" | "closed") {
     return;
   }
 
-  if (!flowConnections.length && savedRoutes.length && loadedModels.size) {
-    await applyAllSavedRoutes();
-  }
-
   let changedCount = 0;
 
   for (const valveNode of valveNodes) {
@@ -4047,9 +4047,17 @@ async function setSelectedValvesState(state: "open" | "closed") {
     };
 
     const valveKey = nodeKey(valveNode);
+    const linkedPipes = getLinkedPipesForValveNode(valveNode);
+
+    let blockedSet = blockedPipes.get(modelId);
 
     if (state === "closed") {
-      const linkedPipes = valveControlledPipeLinks.get(valveKey) ?? [];
+      if (!blockedSet) {
+        blockedSet = new Set<number>();
+        blockedPipes.set(modelId, blockedSet);
+      }
+
+      blockedSet.add(localId);
 
       for (const pipeNode of linkedPipes) {
         blockPipeForRoute(pipeNode.routeId, pipeNode);
@@ -4057,7 +4065,11 @@ async function setSelectedValvesState(state: "open" | "closed") {
 
       valveBlockedPipeLinks.set(valveKey, linkedPipes);
     } else {
-      const linkedPipes = valveBlockedPipeLinks.get(valveKey) ?? [];
+      blockedSet?.delete(localId);
+
+      if (blockedSet && blockedSet.size === 0) {
+        blockedPipes.delete(modelId);
+      }
 
       for (const pipeNode of linkedPipes) {
         unblockPipeForRoute(pipeNode.routeId, pipeNode);
@@ -4069,22 +4081,25 @@ async function setSelectedValvesState(state: "open" | "closed") {
     changedCount++;
   }
 
-  updateBlockedCount();
-
   if (!changedCount) {
-    flowMessage.value =
-      "Nenhuma válvula válida encontrada para alterar.";
+    flowMessage.value = "Nenhuma válvula válida encontrada para alterar.";
     return;
   }
 
-  await rebuildManualFlowLayer();
-
+  updateBlockedCount();
+  updateManualStats();
   saveMepElementsToStorage();
+
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  }
+
+  await showSelectedMepElementInfo();
 
   flowMessage.value =
     state === "closed"
-      ? `${changedCount} válvula(s) fechada(s).`
-      : `${changedCount} válvula(s) aberta(s).`;
+      ? `${changedCount} válvula(s) fechada(s). Fluxo bloqueado a jusante.`
+      : `${changedCount} válvula(s) aberta(s). Fluxo reposto a jusante.`;
 }
 
 async function applyInverseNormalStateToSelectedValves() {
@@ -4248,19 +4263,10 @@ async function resetSelectedValvesToNormal() {
     return;
   }
 
-  if (!flowConnections.length && savedRoutes.length && loadedModels.size) {
-    await applyAllSavedRoutes();
-  }
-
   let changedCount = 0;
 
   for (const valveNode of valveNodes) {
     const { modelId, localId } = valveNode;
-
-    if (!isIsolationValve(modelId, localId)) {
-      continue;
-    }
-
     const key = elementKey(modelId, localId);
     const element = mepElements[key];
 
@@ -4269,50 +4275,63 @@ async function resetSelectedValvesToNormal() {
     }
 
     const normalState = getNormalValveState(element.elementType);
-    const valveKey = nodeKey(valveNode);
-
-    const previouslyBlockedPipes =
-      valveBlockedPipeLinks.get(valveKey) ?? [];
-
-    for (const pipeNode of previouslyBlockedPipes) {
-      unblockPipeForRoute(pipeNode.routeId, pipeNode);
-    }
-
-    valveBlockedPipeLinks.delete(valveKey);
 
     mepElements[key] = {
       ...element,
       state: normalState,
     };
 
+    const valveKey = nodeKey(valveNode);
+    const linkedPipes = getLinkedPipesForValveNode(valveNode);
+
+    let blockedSet = blockedPipes.get(modelId);
+
     if (normalState === "closed") {
-      const linkedPipes =
-        valveControlledPipeLinks.get(valveKey) ?? [];
+      if (!blockedSet) {
+        blockedSet = new Set<number>();
+        blockedPipes.set(modelId, blockedSet);
+      }
+
+      blockedSet.add(localId);
 
       for (const pipeNode of linkedPipes) {
         blockPipeForRoute(pipeNode.routeId, pipeNode);
       }
 
       valveBlockedPipeLinks.set(valveKey, linkedPipes);
+    } else {
+      blockedSet?.delete(localId);
+
+      if (blockedSet && blockedSet.size === 0) {
+        blockedPipes.delete(modelId);
+      }
+
+      for (const pipeNode of linkedPipes) {
+        unblockPipeForRoute(pipeNode.routeId, pipeNode);
+      }
+
+      valveBlockedPipeLinks.delete(valveKey);
     }
 
     changedCount++;
   }
 
-  updateBlockedCount();
-
   if (!changedCount) {
-    flowMessage.value =
-      "Nenhuma válvula válida encontrada para repor.";
+    flowMessage.value = "Nenhuma válvula válida encontrada para repor.";
     return;
   }
 
-  await rebuildManualFlowLayer();
-
+  updateBlockedCount();
+  updateManualStats();
   saveMepElementsToStorage();
 
-  flowMessage.value =
-    `${changedCount} válvula(s) reposta(s) ao estado normal.`;
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  }
+
+  await showSelectedMepElementInfo();
+
+  flowMessage.value = `${changedCount} válvula(s) reposta(s) ao estado normal.`;
 }
 
 async function clearBlockedPipes() {
