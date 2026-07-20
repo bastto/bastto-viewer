@@ -892,8 +892,21 @@
   </select>
 </label>
 
+<div class="flow-actions flow-actions--single">
+  <button
+    type="button"
+    :class="[
+      'manual-route-mode-button',
+      isSelectedHydraulicTransitionEnabled() ? 'manual-route-mode-button--active' : ''
+    ]"
+    @click="toggleSelectedHydraulicTransitionEnabled"
+  >
+    {{ getSelectedHydraulicTransitionActivationLabel() }}
+  </button>
+</div>
+
 <p class="connection-note">
-  Esta opção ainda só guarda o comportamento. A mudança automática de cor fica para o próximo passo.
+  O comportamento escolhido só altera a cor quando a transição estiver ativada.
 </p>
           
           <div class="flow-section-title">
@@ -1069,6 +1082,7 @@ type MepElement = {
   tag?: string;
   state?: "open" | "closed" | "on" | "off";
   hydraulicTransitionMode?: HydraulicTransitionMode;
+  hydraulicTransitionEnabled?: boolean;
 };
 
 type PipeParticle = {
@@ -2988,6 +3002,9 @@ async function defineSelectedElementsAs(elementType: MepElementType) {
   hydraulicTransitionMode: canElementHaveHydraulicTransition(elementType)
     ? mepElements[key]?.hydraulicTransitionMode ?? "none"
     : undefined,
+  hydraulicTransitionEnabled: canElementHaveHydraulicTransition(elementType)
+    ? mepElements[key]?.hydraulicTransitionEnabled ?? false
+    : undefined,
 };
     }
   }
@@ -3847,6 +3864,95 @@ function getSelectedHydraulicTransitionMode() {
   return element.hydraulicTransitionMode ?? "none";
 }
 
+function isSelectedHydraulicTransitionEnabled() {
+  const transitionNode = getHydraulicTransitionNodeForControl();
+
+  if (!transitionNode) {
+    return false;
+  }
+
+  const element = mepElements[elementKey(
+    transitionNode.modelId,
+    transitionNode.localId,
+  )];
+
+  if (
+    !element ||
+    !canElementHaveHydraulicTransition(element.elementType)
+  ) {
+    return false;
+  }
+
+  return element.hydraulicTransitionEnabled ?? false;
+}
+
+function getSelectedHydraulicTransitionActivationLabel() {
+  return isSelectedHydraulicTransitionEnabled()
+    ? "Desativar transição"
+    : "Ativar transição";
+}
+
+async function toggleSelectedHydraulicTransitionEnabled() {
+  const transitionNode = getHydraulicTransitionNodeForControl();
+
+  if (!transitionNode) {
+    alert("Seleciona primeiro uma válvula NF, booster ou permutador.");
+
+    flowMessage.value =
+      "Seleciona primeiro uma válvula NF, booster ou permutador.";
+
+    return;
+  }
+
+  const key = elementKey(
+    transitionNode.modelId,
+    transitionNode.localId,
+  );
+
+  const element = mepElements[key];
+
+  if (
+    !element ||
+    !canElementHaveHydraulicTransition(element.elementType)
+  ) {
+    alert("Este elemento não suporta transição hidráulica.");
+
+    flowMessage.value =
+      "Este elemento não suporta transição hidráulica.";
+
+    return;
+  }
+
+  if (
+    !element.hydraulicTransitionMode ||
+    element.hydraulicTransitionMode === "none"
+  ) {
+    alert("Escolhe primeiro um comportamento hidráulico.");
+
+    flowMessage.value =
+      "Escolhe primeiro um comportamento hidráulico antes de ativar a transição.";
+
+    return;
+  }
+
+  const nextEnabled = !(element.hydraulicTransitionEnabled ?? false);
+
+  mepElements[key] = {
+    ...element,
+    hydraulicTransitionEnabled: nextEnabled,
+  };
+
+  saveMepElementsToStorage();
+
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  }
+
+  flowMessage.value = nextEnabled
+    ? "Transição hidráulica ativada."
+    : "Transição hidráulica desativada.";
+}
+
 function getSelectedHydraulicTransitionElementLabel() {
   const transitionNode = getHydraulicTransitionNodeForControl();
 
@@ -3979,9 +4085,12 @@ async function setSelectedHydraulicTransitionMode(
 
   saveMepElementsToStorage();
 
-  if (countAssignments() > 0 || flowConnections.length > 0) {
-    await rebuildManualFlowLayer();
-  }
+  if (
+  element.hydraulicTransitionEnabled &&
+  (countAssignments() > 0 || flowConnections.length > 0)
+) {
+  await rebuildManualFlowLayer();
+}
 
   flowMessage.value =
     mode === "none"
@@ -4958,7 +5067,14 @@ function getCircuitAfterHydraulicTransition(
 }
 
 function isHydraulicTransitionActive(element: MepElement) {
-  if (!element.hydraulicTransitionMode || element.hydraulicTransitionMode === "none") {
+  if (
+    !element.hydraulicTransitionMode ||
+    element.hydraulicTransitionMode === "none"
+  ) {
+    return false;
+  }
+
+  if (!element.hydraulicTransitionEnabled) {
     return false;
   }
 
