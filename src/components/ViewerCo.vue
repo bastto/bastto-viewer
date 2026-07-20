@@ -745,6 +745,18 @@
   Estado da associação: {{ getSelectedValveAssociationStatusLabel() }}
 </p> 
 
+<p class="connection-note">
+  Caminho controlado: {{ getSelectedValveControlledRouteLabel() }}
+</p>
+
+<p class="connection-note">
+  Tubo inicial controlado: {{ getSelectedValveStartPipeLabel() }}
+</p>
+
+<p class="connection-note">
+  Tubos controlados: {{ getSelectedValveControlledPipeCountLabel() }}
+</p>
+
 <div class="flow-section-title">
   Ações da válvula
 </div>
@@ -3544,6 +3556,58 @@ function getSelectedValveAssociationStatusLabel() {
   return "sem associação";
 }
 
+function getSelectedValveControlledRouteLabel() {
+  const valveNode = getValveNodeForControl();
+
+  if (!valveNode) {
+    return "nenhum";
+  }
+
+  const linkedPipes = getLinkedPipesForValveNode(valveNode);
+  const routeId = linkedPipes[0]?.routeId;
+
+  if (!routeId) {
+    return "nenhum";
+  }
+
+  const route = savedRoutes.find((savedRoute) => savedRoute.id === routeId);
+
+  if (!route) {
+    return "caminho não encontrado";
+  }
+
+  return `${route.name} - ${getRouteCircuitDisplayLabel(route)}`;
+}
+
+function getSelectedValveStartPipeLabel() {
+  const valveNode = getValveNodeForControl();
+
+  if (!valveNode) {
+    return "nenhum";
+  }
+
+  const linkedPipes = getLinkedPipesForValveNode(valveNode);
+  const firstPipe = linkedPipes[0];
+
+  if (!firstPipe) {
+    return "nenhum";
+  }
+
+  return `#${firstPipe.localId}`;
+}
+
+function getSelectedValveControlledPipeCountLabel() {
+  const valveNode = getValveNodeForControl();
+
+  if (!valveNode) {
+    return "0";
+  }
+
+  const linkedPipes = getLinkedPipesForValveNode(valveNode);
+
+  return String(linkedPipes.length);
+}
+
 function getLinkedPipesForValveNode(valveNode: FlowNode) {
   const valveKey = nodeKey(valveNode);
 
@@ -3964,7 +4028,9 @@ async function linkSelectedPipesToPreparedValve() {
   }
 
   flowMessage.value =
-    `${linkedPipes.length} tubo(s) associados à válvula no caminho "${highlightedRoute.name}".`;
+  `Válvula associada ao caminho "${highlightedRoute.name}" ` +
+  `a partir do tubo #${linkedPipes[0]?.localId}. ` +
+  `${linkedPipes.length} tubo(s) serão controlados.`;
 }
 
 async function removeSelectedValvePipeLink() {
