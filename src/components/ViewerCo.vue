@@ -4867,11 +4867,23 @@ function selectedItemsHaveLockedRouteNodes() {
 }
 
 function isNodeHiddenBySavedRouteVisibility(node: FlowNode) {
-  return savedRoutes.some(
-    (route) =>
-      route.hidden &&
-      routeContainsNode(route, node),
+  const routesWithNode = savedRoutes.filter((route) =>
+    routeContainsAdaptedNode(route, node),
   );
+
+  if (!routesWithNode.length) {
+    return false;
+  }
+
+  const hasVisibleRouteWithNode = routesWithNode.some(
+    (route) => !route.hidden,
+  );
+
+  if (hasVisibleRouteWithNode) {
+    return false;
+  }
+
+  return routesWithNode.some((route) => route.hidden);
 }
 
 function getNextRouteNumberForCircuit(circuit: PipeCircuit) {
