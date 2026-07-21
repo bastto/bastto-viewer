@@ -247,7 +247,6 @@
 
 <div class="flow-section-title flow-section-title--button">
   <span>Renomear ciclos</span>
-
   <button
     type="button"
     class="section-collapse-button"
@@ -264,7 +263,6 @@
     class="cycle-name-item"
   >
     <span>Ciclo {{ cycleNumber }}</span>
-
     <input
       v-model="cycleNames[cycleNumber]"
       type="text"
@@ -280,29 +278,150 @@
 </div>
 
 <div class="flow-section-title">
-  Circuitos
+  1. Escolher ciclo e caminho
 </div>
 
-<div class="flow-actions">
-  <button
-    v-for="cycleNumber in waterCycleCount"
-    :key="`supply-${cycleNumber}`"
-    type="button"
-    @click="assignSelectedPipes(getSupplyCircuitKey(cycleNumber))"
+
+<label class="flow-cycle-config">
+  <span>Ciclo onde vou trabalhar</span>
+  <select
+    v-model.number="activeCycleNumber"
+    @change="selectDefaultCircuitForActiveCycle"
   >
-    Avanço {{ getCycleDisplayName(cycleNumber) }}
+    <option
+      v-for="cycleNumber in waterCycleCount"
+      :key="`active-cycle-${cycleNumber}`"
+      :value="cycleNumber"
+    >
+      {{ getCycleDisplayName(cycleNumber) }}
+    </option>
+  </select>
+</label>
+
+<label
+  v-if="getActiveCycleCircuitDefinitions().length"
+  class="flow-cycle-config"
+>
+  <span>Caminho que vou criar</span>
+  <select v-model="selectedCycleCircuitKey">
+    <option
+      v-for="circuit in getActiveCycleCircuitDefinitions()"
+      :key="`selected-cycle-circuit-${circuit.key}`"
+      :value="circuit.key"
+    >
+      {{ circuit.name }}
+    </option>
+  </select>
+</label>
+
+<p
+  v-else
+  class="connection-note workflow-help-note"
+>
+  Este ciclo ainda não tem caminhos. Cria uma ida, retorno ou extra em baixo.
+</p>
+
+<div class="flow-section-title flow-section-title--button">
+  <span>Criar ou editar caminhos deste ciclo</span>
+  <button
+    type="button"
+    class="section-collapse-button"
+    @click="toggleCycleCircuitPanel"
+  >
+    {{ isCycleCircuitPanelOpen ? '−' : '+' }}
   </button>
 </div>
 
-<div class="flow-actions flow-actions--secondary">
-  <button
-    v-for="cycleNumber in waterCycleCount"
-    :key="`return-${cycleNumber}`"
-    type="button"
-    @click="assignSelectedPipes(getReturnCircuitKey(cycleNumber))"
-  >
-    Retorno {{ getCycleDisplayName(cycleNumber) }}
-  </button>
+<div v-if="isCycleCircuitPanelOpen" class="cycle-circuit-panel">
+  <label class="flow-cycle-config">
+    <span>Tipo de caminho</span>
+    <select
+  v-model="pendingCycleCircuitKind"
+  @change="updatePendingCycleCircuitColorFromKind"
+>
+  <option value="supply">Ida</option>
+  <option value="return">Retorno</option>
+  <option value="extra">Extra</option>
+</select>
+  </label>
+
+  <label class="flow-cycle-config">
+    <span>Nome do caminho</span>
+    <input
+  v-model="pendingCycleCircuitName"
+  type="text"
+  placeholder="Ex: Água fria, By-pass, Ida apoio, Retorno secundário..."
+/>
+  </label>
+
+  <label class="flow-cycle-config">
+    <span>Cor</span>
+    <input
+      v-model="pendingCycleCircuitColor"
+      type="color"
+    />
+  </label>
+
+  <div class="flow-actions flow-actions--single">
+    <button type="button" @click="createCycleCircuitDefinition">
+      Criar e selecionar caminho
+    </button>
+
+    <button type="button" @click="saveCycleCircuitDefinitionChanges">
+      Guardar alterações
+    </button>
+  </div>
+
+  <p
+  v-if="!getActiveCycleCircuitDefinitions().length"
+  class="connection-note workflow-help-note"
+>
+  Este ciclo ainda não tem caminhos. Cria uma ida, retorno ou extra para começar.
+</p>
+
+  <div class="cycle-circuit-list">
+    <div
+      v-for="circuit in getActiveCycleCircuitDefinitions()"
+      :key="circuit.key"
+      class="cycle-circuit-item cycle-circuit-item--simple"
+    >
+      <span
+        class="cycle-color-dot"
+        :style="{ backgroundColor: circuit.color }"
+      ></span>
+
+      <select v-model="circuit.kind">
+        <option value="supply">Ida</option>
+        <option value="return">Retorno</option>
+        <option value="extra">Extra</option>
+      </select>
+
+      <input
+        v-model="circuit.name"
+        type="text"
+      />
+
+      <input
+        v-model="circuit.color"
+        type="color"
+      />
+
+      <button
+        type="button"
+        @click="resetCycleCircuitColor(circuit.key)"
+      >
+        Repor cor
+      </button>
+
+      <button
+  type="button"
+  class="flow-button--danger"
+  @click="deleteCycleCircuitDefinition(circuit.key)"
+>
+  Apagar
+</button>
+    </div>
+  </div>
 </div>
 
 <div class="flow-section-title">
@@ -311,26 +430,16 @@
 
 <div class="cycle-color-legend">
   <div
-    v-for="cycleNumber in waterCycleCount"
-    :key="`legend-cycle-${cycleNumber}`"
+    v-for="circuit in getActiveCycleCircuitDefinitions()"
+    :key="`legend-cycle-circuit-${circuit.key}`"
     class="cycle-color-legend__row"
   >
     <div class="cycle-color-legend__item">
       <span
         class="cycle-color-dot"
-        :style="{ backgroundColor: getCircuitColorStyle(getSupplyCircuitKey(cycleNumber)) }"
+        :style="{ backgroundColor: circuit.color }"
       ></span>
-
-      <span>Avanço {{ getCycleDisplayName(cycleNumber) }}</span>
-    </div>
-
-    <div class="cycle-color-legend__item">
-      <span
-        class="cycle-color-dot"
-        :style="{ backgroundColor: getCircuitColorStyle(getReturnCircuitKey(cycleNumber)) }"
-      ></span>
-
-      <span>Retorno {{ getCycleDisplayName(cycleNumber) }}</span>
+      <span>{{ circuit.name }}</span>
     </div>
   </div>
 </div>
@@ -360,8 +469,8 @@
     </div>
 
     <div class="flow-section-title">
-      Caminhos
-    </div>
+  2. Criar percurso
+</div>
 
     <div class="flow-actions flow-actions--single">
   <button
@@ -377,7 +486,7 @@
 </div>
 
 <p v-if="isManualRouteRecording" class="manual-route-status">
-  Modo manual ativo, selecione os tubos pela ordem do percurso.
+  Modo manual ativo: seleciona os tubos pela ordem do percurso.
 </p>
 
 <p class="connection-note">
@@ -393,35 +502,22 @@
 </button>
 </div>
 
+<p v-if="!isManualRouteRecording" class="connection-note workflow-help-note">
+  Para criar automaticamente: seleciona o tubo inicial, define início, seleciona o tubo final, define fim e cria o percurso.
+</p>
+
 <div v-if="!isManualRouteRecording" class="flow-actions flow-actions--secondary">
   <button type="button" @click="setRouteStart">
-    Definir início
+    1. Definir início
   </button>
-
   <button type="button" @click="setRouteEnd">
-    Definir fim
+    2. Definir fim
   </button>
 </div>
 
-<div v-if="!isManualRouteRecording" class="flow-actions">
-  <button
-    v-for="cycleNumber in waterCycleCount"
-    :key="`auto-supply-${cycleNumber}`"
-    type="button"
-    @click="createAutoRoute(getSupplyCircuitKey(cycleNumber))"
-  >
-    Caminho Avanço {{ getCycleDisplayName(cycleNumber) }}
-  </button>
-</div>
-
-<div v-if="!isManualRouteRecording" class="flow-actions flow-actions--secondary">
-  <button
-    v-for="cycleNumber in waterCycleCount"
-    :key="`auto-return-${cycleNumber}`"
-    type="button"
-    @click="createAutoRoute(getReturnCircuitKey(cycleNumber))"
-  >
-    Caminho Retorno {{ getCycleDisplayName(cycleNumber) }}
+<div v-if="!isManualRouteRecording" class="flow-actions flow-actions--single">
+  <button type="button" @click="createAutoRouteForSelectedCycleCircuit">
+    3. Criar caminho automático
   </button>
 </div>
 
@@ -429,38 +525,29 @@
   v-if="isManualRouteRecording && manualRouteNodes.length >= 2"
   class="flow-section-title"
 >
-  Selecionar tipo do caminho manual
+  Criar percurso manual
 </div>
 
-<div
+  <div
   v-if="isManualRouteRecording && manualRouteNodes.length >= 2"
-  class="flow-actions"
+  class="flow-actions flow-actions--single"
 >
-  <button
-    v-for="cycleNumber in waterCycleCount"
-    :key="`manual-supply-${cycleNumber}`"
-    type="button"
-    @click="createManualRouteFromSelection(getSupplyCircuitKey(cycleNumber))"
-  >
-    Manual Avanço {{ getCycleDisplayName(cycleNumber) }}
+  <button type="button" @click="createManualRouteForSelectedCycleCircuit">
+    Criar caminho manual
   </button>
 </div>
 
-<div
-  v-if="isManualRouteRecording && manualRouteNodes.length >= 2"
-  class="flow-actions flow-actions--secondary"
+    <div
+  v-if="currentRouteConnections.length || manualRouteNodes.length"
+  class="flow-section-title"
 >
-  <button
-    v-for="cycleNumber in waterCycleCount"
-    :key="`manual-return-${cycleNumber}`"
-    type="button"
-    @click="createManualRouteFromSelection(getReturnCircuitKey(cycleNumber))"
-  >
-    Manual Retorno {{ getCycleDisplayName(cycleNumber) }}
-  </button>
+  3. Guardar ou descartar
 </div>
 
-    <div class="flow-actions flow-actions--single">
+<div
+  v-if="currentRouteConnections.length || manualRouteNodes.length"
+  class="flow-actions flow-actions--single"
+>
   <button
     type="button"
     class="flow-button--primary"
@@ -509,7 +596,7 @@
 }"
     >
       <div class="saved-route-select saved-route-select--details">
-        <span class="saved-route-text">
+  <span class="saved-route-text">
           <strong>
             <span v-if="route.locked" class="route-lock-icon">🔒</span>
             {{ route.name }}
@@ -590,19 +677,14 @@
 
     <dl class="flow-stats">
   <template
-    v-for="cycleNumber in waterCycleCount"
-    :key="`stats-cycle-${cycleNumber}`"
-  >
-    <div>
-      <dt>Av. {{ getCycleDisplayName(cycleNumber) }}</dt>
-      <dd>{{ getPipeStat(getSupplyCircuitKey(cycleNumber)) }}</dd>
-    </div>
-
-    <div>
-      <dt>Ret. {{ getCycleDisplayName(cycleNumber) }}</dt>
-      <dd>{{ getPipeStat(getReturnCircuitKey(cycleNumber)) }}</dd>
-    </div>
-  </template>
+  v-for="circuit in getActiveCycleCircuitDefinitions()"
+  :key="`stats-active-circuit-${circuit.key}`"
+>
+  <div>
+    <dt>{{ circuit.name }}</dt>
+    <dd>{{ getPipeStat(circuit.key) }}</dd>
+  </div>
+</template>
 
   <div>
     <dt>Total</dt>
@@ -664,8 +746,8 @@
   </button>
 </div>
 
-<p class="connection-note">
-  Nome da válvula: {{ selectedValveDesignation }}
+<p class="connection-note valve-name-line">
+  Válvula: {{ selectedValveDesignation }}
 </p>
 
 <div v-if="isValveDesignationPanelOpen">
@@ -738,24 +820,42 @@
 </div>
 
 <p class="connection-note">
-  Estado da válvula: {{ getSelectedValveStateLabel() }}
+  Estado: {{ getSelectedValveStateLabel() }} · {{ getSelectedValveAssociationStatusLabel() }}
 </p>
 
-<p class="connection-note">
-  Estado da associação: {{ getSelectedValveAssociationStatusLabel() }}
-</p> 
+<div class="flow-section-title flow-section-title--button valve-details-title">
+  <span>Detalhes da associação</span>
+  <button
+    type="button"
+    class="section-collapse-button"
+    @click="toggleValveAssociationDetails"
+  >
+    {{ isValveAssociationDetailsOpen ? '−' : '+' }}
+  </button>
+</div>
 
-<p class="connection-note">
-  Caminho controlado: {{ getSelectedValveControlledRouteLabel() }}
-</p>
+<div v-if="isValveAssociationDetailsOpen" class="valve-association-summary">
+  <p>
+    <strong>Caminho:</strong>
+    {{ getSelectedValveControlledRouteLabel() }}
+  </p>
 
-<p class="connection-note">
-  Tubo inicial controlado: {{ getSelectedValveStartPipeLabel() }}
-</p>
+  <p>
+    <strong>Tubo inicial:</strong>
+    {{ getSelectedValveStartPipeLabel() }}
+  </p>
 
-<p class="connection-note">
-  Tubos controlados: {{ getSelectedValveControlledPipeCountLabel() }}
-</p>
+  <p>
+    <strong>Tubos:</strong>
+    {{ getSelectedValveControlledPipeCountLabel() }}
+  </p>
+
+  <p>
+    <strong>Troca:</strong>
+    {{ getSelectedValveSwitchModeStatusLabel() }}
+  </p>
+</div>
+
 
 <div class="flow-section-title">
   Ações da válvula
@@ -800,6 +900,21 @@
       :value="route.id"
     >
       {{ route.name }} - {{ getRouteCircuitDisplayLabel(route) }}
+    </option>
+  </select>
+</label>
+
+<label class="flow-cycle-config">
+  <span>Troca de circuito a jusante</span>
+  <select v-model="selectedValveSwitchMode">
+    <option value="none">
+      Não trocar
+    </option>
+    <option value="switchToSupply">
+      Trocar para ida
+    </option>
+    <option value="switchToReturn">
+      Trocar para retorno
     </option>
   </select>
 </label>
@@ -952,6 +1067,16 @@ import * as BUIC from "@thatopen/ui-obc";
 import * as OBCF from "@thatopen/components-front";
 
 type PipeCircuit = string;
+type CycleCircuitKind = "supply" | "return" | "extra";
+
+type CycleCircuitDefinition = {
+  key: PipeCircuit;
+  cycleNumber: number;
+  kind: CycleCircuitKind;
+  name: string;
+  color: string;
+  lockedDefault?: boolean;
+};
 type SelectionMap = Map<string, Set<number>>;
 type MepElementType =
   | "pipe"
@@ -1018,9 +1143,16 @@ type FlowConnection = {
   temperature: PipeCircuit;
 };
 
+type ValveSwitchMode =
+  | "none"
+  | "switchToSupply"
+  | "switchToReturn";
+
 type ValveControlledPipeLink = FlowNode & {
   temperature: PipeCircuit;
   routeId: string;
+  switchMode?: ValveSwitchMode;
+  targetTemperature?: PipeCircuit;
 };
 
 type StaticFlowObject = {
@@ -1053,6 +1185,16 @@ const discardRouteMessage = ref("");
 const waterCycleCount = ref(3);
 const pendingWaterCycleCount = ref(3);
 const cycleNames = reactive<Record<string, string>>({});
+const activeCycleNumber = ref(1);
+const cycleCircuitDefinitions = reactive<CycleCircuitDefinition[]>([]);
+const isCycleCircuitPanelOpen = ref(false);
+const pendingCycleCircuitKind = ref<CycleCircuitKind>("extra");
+const pendingCycleCircuitName = ref("");
+const pendingCycleCircuitColor = ref("#0077ff");
+const selectedCycleCircuitKey = ref("");
+const cycleColors = reactive<Record<string, string>>({});
+const isCycleColorsPanelOpen = ref(false);
+const selectedCycleColorResetNumbers = reactive<Set<number>>(new Set());
 const isCycleNamesPanelOpen = ref(false);
 const isSavedRoutesPanelOpen = ref(true);
 const highlightedSavedRouteId = ref<string | null>(null);
@@ -1066,6 +1208,7 @@ const selectedValveDesignationKey = ref("");
 const highlightedValveFromDropdown = ref<FlowNode | null>(null);
 const isValveDesignationPanelOpen = ref(false);
 const isValveRenamePanelOpen = ref(false);
+const isValveAssociationDetailsOpen = ref(false);
 const valveOriginalDesignations = reactive<Record<string, string>>({});
 const hasLoadedModel = ref(false);
 const isElementPanelMinimized = ref(true);
@@ -1086,6 +1229,10 @@ const WATER_CYCLE_COUNT_STORAGE_KEY =
   "bastto-viewer-water-cycle-count";
 const WATER_CYCLE_NAMES_STORAGE_KEY =
   "bastto-viewer-water-cycle-names";
+const CYCLE_CIRCUITS_STORAGE_KEY =
+  "bastto-viewer-cycle-circuits";
+const WATER_CYCLE_COLORS_STORAGE_KEY =
+  "bastto-viewer-water-cycle-colors";
 const REVERSED_DIRECTIONS_STORAGE_KEY =
   "bastto-viewer-reversed-directions";
 const HIDDEN_FLOW_ARROWS_STORAGE_KEY =
@@ -1122,6 +1269,7 @@ const valveControlledPipeLinks = new Map<string, ValveControlledPipeLink[]>();
 const blockedRoutePipes = new Set<string>();
 const selectedValveForPipeLink = ref<FlowNode | null>(null);
 const selectedValveAssociationRouteId = ref("");
+const selectedValveSwitchMode = ref<ValveSwitchMode>("none");
 const manualAssignments = reactive<Record<string, SelectionMap>>({});
 const reversedPipeDirections: SelectionMap = new Map();
 const syncedPipeDirections: SelectionMap = new Map();
@@ -1141,29 +1289,23 @@ const mepElementHighlightColors: Record<MepElementType, number> = {
 const circuitMaterialCache = new Map<string, THREE.MeshBasicMaterial>();
 
 function getCircuitColor(circuit: PipeCircuit) {
+  const definition = getCycleCircuitDefinition(circuit);
+
+  if (definition) {
+    return Number(definition.color.replace("#", "0x"));
+  }
+
   const cycleNumber = getCircuitCycleNumber(circuit);
 
-  const supplyColors = [
-    0xff0000,
-    0xff5252,
-    0xff8a80,
-    0xd50000,
-    0xff1744,
-    0xb71c1c,
-  ];
+  if (isSupplyCircuit(circuit)) {
+    return Number(getDefaultSupplyColor(cycleNumber).replace("#", "0x"));
+  }
 
-  const returnColors = [
-    0xff8c00,
-    0xffa726,
-    0xffc107,
-    0xff6d00,
-    0xffb300,
-    0xe65100,
-  ];
+  if (isReturnCircuit(circuit)) {
+    return Number(getDefaultReturnColor(cycleNumber).replace("#", "0x"));
+  }
 
-  const palette = isSupplyCircuit(circuit) ? supplyColors : returnColors;
-
-  return palette[(cycleNumber - 1) % palette.length];
+  return Number(getDefaultExtraColor(cycleNumber).replace("#", "0x"));
 }
 
 function getCircuitMaterial(circuit: PipeCircuit) {
@@ -1252,8 +1394,10 @@ onMounted(async () => {
 }
 });
 
-  loadWaterCycleCountFromStorage();
+loadWaterCycleCountFromStorage();
 loadCycleNamesFromStorage();
+loadCycleCircuitDefinitionsFromStorage();
+loadCycleColorsFromStorage();
 loadMepElementsFromStorage();
 loadRoutesFromStorage();
 loadReversedDirectionsFromStorage();
@@ -1432,7 +1576,7 @@ async function analyseLoadedModels() {
 
     isFlowing.value = false;
     flowMessage.value =
-  "Modelo carregado. Define manualmente os circuitos de avanço e retorno.";
+  "Modelo carregado. Define manualmente os circuitos de ida e retorno.";
     await fragmentManager.core.update(true);
   } catch (error) {
     console.error("Pipe analysis failed:", error);
@@ -1831,7 +1975,7 @@ function setRouteStart() {
 
   routeStart = node;
   routeStartLabel.value = formatNodeLabel(node);
-  flowMessage.value = "Inicio definido. Seleciona o ponto final e carrega em Definir fim.";
+  flowMessage.value = "Início definido. Agora seleciona o tubo final e clica em 2. Definir fim.";
 }
 
 function setRouteEnd() {
@@ -1846,7 +1990,7 @@ function setRouteEnd() {
   routeEnd = node;
   routeEndLabel.value = formatNodeLabel(node);
   flowMessage.value =
-  "Fim definido. Agora calcula o caminho de avanço ou retorno.";
+  "Fim definido. Agora clica em 3. Criar caminho automático.";
 }
 
 async function createManualRouteFromSelection(temperature: PipeCircuit) {
@@ -3220,6 +3364,7 @@ async function selectValveDesignationFromDropdown() {
 
   const linkedPipes = getLinkedPipesForValveNode(valveNode);
 const associatedRouteId = linkedPipes[0]?.routeId;
+selectedValveSwitchMode.value = linkedPipes[0]?.switchMode ?? "none";
 
   if (associatedRouteId) {
     selectedValveAssociationRouteId.value = associatedRouteId;
@@ -3642,6 +3787,19 @@ function getLinkedPipesForValveNode(valveNode: FlowNode) {
   );
 }
 
+function getSelectedValveSwitchModeStatusLabel() {
+  const valveNode = getValveNodeForControl();
+
+  if (!valveNode) {
+    return "nenhuma";
+  }
+
+  const linkedPipes = getLinkedPipesForValveNode(valveNode);
+  const switchMode = linkedPipes[0]?.switchMode ?? "none";
+
+  return getValveSwitchModeLabel(switchMode);
+}
+
 async function syncSelectedValveAssociationRoute() {
   const valveNode = getFirstSelectedValveNode();
 
@@ -4013,7 +4171,14 @@ async function linkSelectedPipesToPreparedValve() {
     }
   }
 
-  const linkedPipes = [...linkedPipesByKey.values()];
+  const linkedPipes = [...linkedPipesByKey.values()].map((pipeNode) => ({
+  ...pipeNode,
+  switchMode: selectedValveSwitchMode.value,
+  targetTemperature: getTargetCircuitForValveSwitch(
+    pipeNode.temperature,
+    selectedValveSwitchMode.value,
+  ),
+}));
 
   if (!linkedPipes.length) {
     flowMessage.value =
@@ -4046,7 +4211,9 @@ async function linkSelectedPipesToPreparedValve() {
   flowMessage.value =
   `Válvula associada ao caminho "${highlightedRoute.name}" ` +
   `a partir do tubo #${linkedPipes[0]?.localId}. ` +
-  `${linkedPipes.length} tubo(s) serão controlados.`;
+  `${linkedPipes.length} tubo(s) serão controlados. ` +
+  `Troca: ${getValveSwitchModeLabel(selectedValveSwitchMode.value)}.`;
+
 }
 
 async function removeSelectedValvePipeLink() {
@@ -4080,6 +4247,8 @@ if (!shouldRemove) {
     "Remoção da associação cancelada.";
   return;
 }
+
+restoreValveLinkedPipesToOriginalCircuit(linkedPipes);
 
   for (const pipeNode of linkedPipes) {
     unblockPipeForRoute(pipeNode.routeId, pipeNode);
@@ -4134,6 +4303,8 @@ async function setSelectedValvesState(state: "open" | "closed") {
     let blockedSet = blockedPipes.get(modelId);
 
     if (state === "closed") {
+      restoreValveLinkedPipesToOriginalCircuit(linkedPipes);
+
       if (!blockedSet) {
         blockedSet = new Set<number>();
         blockedPipes.set(modelId, blockedSet);
@@ -4158,6 +4329,12 @@ async function setSelectedValvesState(state: "open" | "closed") {
       }
 
       valveBlockedPipeLinks.delete(valveKey);
+
+      if (existingElement.elementType === "normallyClosedValve") {
+        applyValveSwitchToLinkedPipes(linkedPipes);
+      } else {
+        restoreValveLinkedPipesToOriginalCircuit(linkedPipes);
+      }
     }
 
     changedCount++;
@@ -4366,6 +4543,8 @@ async function resetSelectedValvesToNormal() {
     const valveKey = nodeKey(valveNode);
     const linkedPipes = getLinkedPipesForValveNode(valveNode);
 
+    restoreValveLinkedPipesToOriginalCircuit(linkedPipes);
+
     let blockedSet = blockedPipes.get(modelId);
 
     if (normalState === "closed") {
@@ -4439,21 +4618,23 @@ async function clearBlockedPipes() {
       state: normalState,
     };
 
-    if (normalState === "closed") {
-      const valveNode: FlowNode = {
-        modelId: element.modelId,
-        localId: element.localId,
-      };
+    const valveNode: FlowNode = {
+  modelId: element.modelId,
+  localId: element.localId,
+};
 
-      const valveKey = nodeKey(valveNode);
-      const linkedPipes = valveControlledPipeLinks.get(valveKey) ?? [];
+const valveKey = nodeKey(valveNode);
+const linkedPipes = valveControlledPipeLinks.get(valveKey) ?? [];
 
-      for (const pipeNode of linkedPipes) {
-        blockPipeForRoute(pipeNode.routeId, pipeNode);
-      }
+restoreValveLinkedPipesToOriginalCircuit(linkedPipes);
 
-      valveBlockedPipeLinks.set(valveKey, linkedPipes);
-    }
+if (normalState === "closed") {
+  for (const pipeNode of linkedPipes) {
+    blockPipeForRoute(pipeNode.routeId, pipeNode);
+  }
+
+  valveBlockedPipeLinks.set(valveKey, linkedPipes);
+}
   }
 
   updateBlockedCount();
@@ -4535,18 +4716,9 @@ function getReturnCircuitKey(cycleNumber: number) {
 }
 
 function getAvailableCircuits() {
-  const circuits: PipeCircuit[] = [];
+  ensureCycleCircuitDefinitions();
 
-  for (
-    let cycleNumber = 1;
-    cycleNumber <= waterCycleCount.value;
-    cycleNumber += 1
-  ) {
-    circuits.push(getSupplyCircuitKey(cycleNumber));
-    circuits.push(getReturnCircuitKey(cycleNumber));
-  }
-
-  return circuits;
+  return cycleCircuitDefinitions.map((circuit) => circuit.key);
 }
 
 function getAllKnownCircuitKeys() {
@@ -4560,24 +4732,48 @@ function getAllKnownCircuitKeys() {
 }
 
 function getCircuitCycleNumber(circuit: PipeCircuit) {
-  const match = circuit.match(/\d+$/);
+  const definition = getCycleCircuitDefinition(circuit);
+
+  if (definition) {
+    return definition.cycleNumber;
+  }
+
+  const match = circuit.match(/\d+/);
   return match ? Number(match[0]) : 1;
 }
 
 function isSupplyCircuit(circuit: PipeCircuit) {
+  const definition = getCycleCircuitDefinition(circuit);
+
+  if (definition) {
+    return definition.kind === "supply";
+  }
+
   return circuit.startsWith("supply");
 }
 
 function isReturnCircuit(circuit: PipeCircuit) {
+  const definition = getCycleCircuitDefinition(circuit);
+
+  if (definition) {
+    return definition.kind === "return";
+  }
+
   return circuit.startsWith("return");
 }
 
 function getCircuitLabel(circuit: PipeCircuit) {
+  const definition = getCycleCircuitDefinition(circuit);
+
+  if (definition) {
+    return `${definition.name} ${getCycleDisplayName(definition.cycleNumber)}`;
+  }
+
   const cycleNumber = getCircuitCycleNumber(circuit);
   const cycleName = getCycleDisplayName(cycleNumber);
 
   if (isSupplyCircuit(circuit)) {
-    return `avanço ${cycleName}`;
+    return `ida ${cycleName}`;
   }
 
   if (isReturnCircuit(circuit)) {
@@ -4607,6 +4803,594 @@ function ensureCycleNames() {
       delete cycleNames[key];
     }
   }
+}
+
+function getDefaultSupplyColor(cycleNumber: number) {
+  const supplyColors = [
+    "#ff0000",
+    "#ff5252",
+    "#ff8a80",
+    "#d50000",
+    "#ff1744",
+    "#b71c1c",
+  ];
+
+  return supplyColors[(cycleNumber - 1) % supplyColors.length];
+}
+
+function getDefaultReturnColor(cycleNumber: number) {
+  const returnColors = [
+    "#ff8c00",
+    "#ffa726",
+    "#ffc107",
+    "#ff6d00",
+    "#ffb300",
+    "#e65100",
+  ];
+
+  return returnColors[(cycleNumber - 1) % returnColors.length];
+}
+
+function getDefaultExtraColor(cycleNumber: number) {
+  const extraColors = [
+    "#0077ff",
+    "#00bcd4",
+    "#4caf50",
+    "#9c27b0",
+    "#607d8b",
+    "#795548",
+  ];
+
+  return extraColors[(cycleNumber - 1) % extraColors.length];
+}
+
+function getDefaultCircuitName(kind: CycleCircuitKind) {
+  if (kind === "supply") {
+    return "Ida";
+  }
+
+  if (kind === "return") {
+    return "Retorno";
+  }
+
+  return "Extra";
+}
+
+function getNextCircuitNameForKind(
+  kind: CycleCircuitKind,
+  cycleNumber: number,
+) {
+  const existingSameKindCount = cycleCircuitDefinitions.filter(
+    (circuit) =>
+      circuit.cycleNumber === cycleNumber &&
+      circuit.kind === kind,
+  ).length;
+
+  const nextNumber = existingSameKindCount + 1;
+
+  if (kind === "supply") {
+    return `Ida ${nextNumber}`;
+  }
+
+  if (kind === "return") {
+    return `Retorno ${nextNumber}`;
+  }
+
+  return `Extra ${nextNumber}`;
+}
+
+function getDefaultCircuitColor(
+  kind: CycleCircuitKind,
+  cycleNumber: number,
+) {
+  if (kind === "supply") {
+    return getDefaultSupplyColor(cycleNumber);
+  }
+
+  if (kind === "return") {
+    return getDefaultReturnColor(cycleNumber);
+  }
+
+  return getDefaultExtraColor(cycleNumber);
+}
+
+function getNextCircuitColorForKind(kind: CycleCircuitKind) {
+  const existingSameKindCount = cycleCircuitDefinitions.filter(
+    (circuit) => circuit.kind === kind,
+  ).length;
+
+  if (kind === "supply") {
+    const supplyColors = [
+      "#ff0000",
+      "#ff5252",
+      "#ff8a80",
+      "#d50000",
+      "#ff1744",
+      "#b71c1c",
+    ];
+
+    return supplyColors[existingSameKindCount % supplyColors.length];
+  }
+
+  if (kind === "return") {
+    const returnColors = [
+      "#ff8c00",
+      "#ffa726",
+      "#ffc107",
+      "#ff6d00",
+      "#ffb300",
+      "#e65100",
+    ];
+
+    return returnColors[existingSameKindCount % returnColors.length];
+  }
+
+  const extraColors = [
+    "#0077ff",
+    "#00bcd4",
+    "#4caf50",
+    "#4caf50",
+    "#9c27b0",
+    "#607d8b",
+    "#795548",
+  ];
+
+  return extraColors[existingSameKindCount % extraColors.length];
+}
+
+function updatePendingCycleCircuitColorFromKind() {
+  pendingCycleCircuitColor.value = getNextCircuitColorForKind(
+    pendingCycleCircuitKind.value,
+  );
+}
+
+function getDefaultCircuitKey(
+  cycleNumber: number,
+  kind: CycleCircuitKind,
+) {
+  if (kind === "supply") {
+    return getSupplyCircuitKey(cycleNumber);
+  }
+
+  if (kind === "return") {
+    return getReturnCircuitKey(cycleNumber);
+  }
+
+  return `extra${cycleNumber}-${crypto.randomUUID()}`;
+}
+
+function hasCycleCircuitUsage(circuitKey: PipeCircuit) {
+  const hasAssignments =
+    [...(manualAssignments[circuitKey]?.values() ?? [])].some(
+      (ids) => ids.size > 0,
+    );
+
+  const hasRoutes = savedRoutes.some(
+    (route) => route.temperature === circuitKey,
+  );
+
+  const hasFlowConnections = flowConnections.some(
+    (connection) => connection.temperature === circuitKey,
+  );
+
+  return hasAssignments || hasRoutes || hasFlowConnections;
+}
+
+function removeUnusedLegacyDefaultCycleCircuits() {
+  for (let index = cycleCircuitDefinitions.length - 1; index >= 0; index--) {
+    const circuit = cycleCircuitDefinitions[index];
+
+    if (!circuit.lockedDefault) {
+      continue;
+    }
+
+    if (hasCycleCircuitUsage(circuit.key)) {
+      cycleCircuitDefinitions[index] = {
+        ...circuit,
+        lockedDefault: false,
+      };
+      continue;
+    }
+
+    cycleCircuitDefinitions.splice(index, 1);
+  }
+}
+
+function ensureCycleCircuitDefinitions() {
+  removeUnusedLegacyDefaultCycleCircuits();
+
+  for (let index = cycleCircuitDefinitions.length - 1; index >= 0; index--) {
+    if (cycleCircuitDefinitions[index].cycleNumber > waterCycleCount.value) {
+      cycleCircuitDefinitions.splice(index, 1);
+    }
+  }
+
+  if (activeCycleNumber.value > waterCycleCount.value) {
+    activeCycleNumber.value = waterCycleCount.value;
+  }
+
+  if (activeCycleNumber.value < 1) {
+    activeCycleNumber.value = 1;
+  }
+
+  selectDefaultCircuitForActiveCycle();
+}
+
+function saveCycleCircuitDefinitionsToStorage() {
+  localStorage.setItem(
+    CYCLE_CIRCUITS_STORAGE_KEY,
+    JSON.stringify(cycleCircuitDefinitions),
+  );
+}
+
+function loadCycleCircuitDefinitionsFromStorage() {
+  const saved = localStorage.getItem(CYCLE_CIRCUITS_STORAGE_KEY);
+
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved) as CycleCircuitDefinition[];
+      cycleCircuitDefinitions.splice(0);
+      cycleCircuitDefinitions.push(...parsed);
+    } catch (error) {
+      console.error("Erro ao carregar circuitos dos ciclos:", error);
+    }
+  }
+
+  ensureCycleCircuitDefinitions();
+}
+
+function getCycleCircuitDefinition(circuitKey: PipeCircuit) {
+  return cycleCircuitDefinitions.find(
+    (circuit) => circuit.key === circuitKey,
+  );
+}
+
+function getCycleCircuitDefinitionsForCycle(cycleNumber: number) {
+  return cycleCircuitDefinitions.filter(
+    (circuit) => circuit.cycleNumber === cycleNumber,
+  );
+}
+
+function getActiveCycleCircuitDefinitions() {
+  return getCycleCircuitDefinitionsForCycle(activeCycleNumber.value);
+}
+
+function selectDefaultCircuitForActiveCycle() {
+  const activeCircuits = getActiveCycleCircuitDefinitions();
+
+  if (!activeCircuits.length) {
+    selectedCycleCircuitKey.value = "";
+    return;
+  }
+
+  const stillValid = activeCircuits.some(
+    (circuit) => circuit.key === selectedCycleCircuitKey.value,
+  );
+
+  if (!stillValid) {
+    selectedCycleCircuitKey.value = activeCircuits[0].key;
+  }
+}
+
+function getSelectedCycleCircuitDefinition() {
+  selectDefaultCircuitForActiveCycle();
+
+  return (
+    cycleCircuitDefinitions.find(
+      (circuit) => circuit.key === selectedCycleCircuitKey.value,
+    ) ?? null
+  );
+}
+
+async function createAutoRouteForSelectedCycleCircuit() {
+  const circuit = getSelectedCycleCircuitDefinition();
+
+  if (!circuit) {
+    flowMessage.value = "Seleciona primeiro um tipo de caminho do ciclo.";
+    return;
+  }
+
+  await createAutoRoute(circuit.key);
+}
+
+async function createManualRouteForSelectedCycleCircuit() {
+  const circuit = getSelectedCycleCircuitDefinition();
+
+  if (!circuit) {
+    flowMessage.value = "Seleciona primeiro um tipo de caminho do ciclo.";
+    return;
+  }
+
+  await createManualRouteFromSelection(circuit.key);
+}
+
+function getCycleCircuitDefinitionsByKind(
+  cycleNumber: number,
+  kind: CycleCircuitKind,
+) {
+  return cycleCircuitDefinitions.filter(
+    (circuit) =>
+      circuit.cycleNumber === cycleNumber &&
+      circuit.kind === kind,
+  );
+}
+
+function getCycleCircuitKindLabel(kind: CycleCircuitKind) {
+  if (kind === "supply") {
+    return "ida";
+  }
+
+  if (kind === "return") {
+    return "retorno";
+  }
+
+  return "extra";
+}
+
+function toggleCycleCircuitPanel() {
+  isCycleCircuitPanelOpen.value = !isCycleCircuitPanelOpen.value;
+}
+
+function createCycleCircuitDefinition() {
+  const cycleNumber = activeCycleNumber.value;
+  const kind = pendingCycleCircuitKind.value;
+  const trimmedName = pendingCycleCircuitName.value.trim();
+
+const name =
+  trimmedName ||
+  getNextCircuitNameForKind(kind, cycleNumber);
+
+  const key = `cycle${cycleNumber}-${kind}-${crypto.randomUUID()}`;
+
+  cycleCircuitDefinitions.push({
+    key,
+    cycleNumber,
+    kind,
+    name,
+    color: pendingCycleCircuitColor.value,
+  });
+
+  selectedCycleCircuitKey.value = key;
+
+  if (!manualAssignments[key]) {
+    manualAssignments[key] = new Map();
+  }
+
+  saveCycleCircuitDefinitionsToStorage();
+
+  pendingCycleCircuitName.value = "";
+pendingCycleCircuitColor.value = getNextCircuitColorForKind(kind);
+
+  flowMessage.value =
+    `${capitalizeFirstLetter(getCycleCircuitKindLabel(kind))} "${name}" criado no ciclo ${getCycleDisplayName(cycleNumber)}.`;
+}
+
+async function deleteCycleCircuitDefinition(circuitKey: PipeCircuit) {
+  const circuit = getCycleCircuitDefinition(circuitKey);
+
+  if (!circuit) {
+    return;
+  }
+
+  const hasAssignments =
+    [...(manualAssignments[circuitKey]?.values() ?? [])].some(
+      (ids) => ids.size > 0,
+    );
+
+  const hasRoutes = savedRoutes.some(
+    (route) => route.temperature === circuitKey,
+  );
+
+  if (hasAssignments || hasRoutes) {
+    const shouldContinue = confirm(
+      `O caminho "${circuit.name}" tem marcações ou caminhos guardados. Deseja apagar mesmo assim?`,
+    );
+
+    if (!shouldContinue) {
+      flowMessage.value = "Remoção do caminho do ciclo cancelada.";
+      return;
+    }
+  }
+
+  delete manualAssignments[circuitKey];
+
+  for (let index = savedRoutes.length - 1; index >= 0; index--) {
+    if (savedRoutes[index].temperature === circuitKey) {
+      savedRoutes.splice(index, 1);
+    }
+  }
+
+  for (let index = flowConnections.length - 1; index >= 0; index--) {
+    if (flowConnections[index].temperature === circuitKey) {
+      flowConnections.splice(index, 1);
+    }
+  }
+
+  const index = cycleCircuitDefinitions.findIndex(
+    (item) => item.key === circuitKey,
+  );
+
+  if (index !== -1) {
+    cycleCircuitDefinitions.splice(index, 1);
+  }
+
+  saveCycleCircuitDefinitionsToStorage();
+  saveRoutesToStorage();
+  updateManualStats();
+
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  } else {
+    clearFlowVisuals();
+    await fragmentManager.core.update(true);
+  }
+
+  flowMessage.value = `Caminho "${circuit.name}" apagado do ciclo.`;
+}
+
+async function saveCycleCircuitDefinitionChanges() {
+  saveCycleCircuitDefinitionsToStorage();
+  circuitMaterialCache.clear();
+
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+  }
+
+  flowMessage.value = "Nomes e cores dos caminhos do ciclo guardados.";
+}
+
+function resetCycleCircuitColor(circuitKey: PipeCircuit) {
+  const circuit = getCycleCircuitDefinition(circuitKey);
+
+  if (!circuit) {
+    return;
+  }
+
+  circuit.color = getDefaultCircuitColor(
+    circuit.kind,
+    circuit.cycleNumber,
+  );
+
+  saveCycleCircuitDefinitionsToStorage();
+  circuitMaterialCache.clear();
+
+  void rebuildManualFlowLayer();
+
+  flowMessage.value = `Cor de "${circuit.name}" reposta.`;
+}
+
+function ensureCycleColors() {
+  for (
+    let cycleNumber = 1;
+    cycleNumber <= waterCycleCount.value;
+    cycleNumber++
+  ) {
+    const supplyKey = getSupplyCircuitKey(cycleNumber);
+    const returnKey = getReturnCircuitKey(cycleNumber);
+
+    if (!cycleColors[supplyKey]) {
+      cycleColors[supplyKey] = getDefaultSupplyColor(cycleNumber);
+    }
+
+    if (!cycleColors[returnKey]) {
+      cycleColors[returnKey] = getDefaultReturnColor(cycleNumber);
+    }
+  }
+
+  for (const key of Object.keys(cycleColors)) {
+    const cycleNumber = getCircuitCycleNumber(key);
+
+    if (cycleNumber > waterCycleCount.value) {
+      delete cycleColors[key];
+    }
+  }
+}
+
+function saveCycleColorsToStorage() {
+  localStorage.setItem(
+    WATER_CYCLE_COLORS_STORAGE_KEY,
+    JSON.stringify(cycleColors),
+  );
+}
+
+function loadCycleColorsFromStorage() {
+  const saved = localStorage.getItem(WATER_CYCLE_COLORS_STORAGE_KEY);
+
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved) as Record<string, string>;
+
+      for (const [key, value] of Object.entries(parsed)) {
+        cycleColors[key] = value;
+      }
+    } catch (error) {
+      console.error("Erro ao carregar cores dos ciclos:", error);
+    }
+  }
+
+  ensureCycleColors();
+}
+
+async function refreshFlowColorsAfterCycleColorChange() {
+  circuitMaterialCache.clear();
+
+  if (countAssignments() > 0 || flowConnections.length > 0) {
+    await rebuildManualFlowLayer();
+    return;
+  }
+
+  await fragmentManager.core.update(true);
+}
+
+async function saveCycleColors() {
+  ensureCycleColors();
+  saveCycleColorsToStorage();
+
+  await refreshFlowColorsAfterCycleColorChange();
+
+  flowMessage.value = "Cores dos ciclos guardadas.";
+}
+
+function toggleCycleColorResetSelection(cycleNumber: number) {
+  if (selectedCycleColorResetNumbers.has(cycleNumber)) {
+    selectedCycleColorResetNumbers.delete(cycleNumber);
+    return;
+  }
+
+  selectedCycleColorResetNumbers.add(cycleNumber);
+}
+
+function clearCycleColorResetSelection() {
+  selectedCycleColorResetNumbers.clear();
+  flowMessage.value = "Seleção de ciclos limpa.";
+}
+
+async function resetSelectedCycleColorsToDefaults() {
+  if (!selectedCycleColorResetNumbers.size) {
+    flowMessage.value = "Seleciona primeiro um ou mais ciclos para repor as cores.";
+    return;
+  }
+
+  for (const cycleNumber of selectedCycleColorResetNumbers) {
+    const supplyKey = getSupplyCircuitKey(cycleNumber);
+    const returnKey = getReturnCircuitKey(cycleNumber);
+
+    cycleColors[supplyKey] = getDefaultSupplyColor(cycleNumber);
+    cycleColors[returnKey] = getDefaultReturnColor(cycleNumber);
+  }
+
+  saveCycleColorsToStorage();
+
+  await refreshFlowColorsAfterCycleColorChange();
+
+  flowMessage.value =
+    `${selectedCycleColorResetNumbers.size} ciclo(s) reposto(s) para as cores predefinidas.`;
+
+  selectedCycleColorResetNumbers.clear();
+}
+
+async function resetCycleColorsToDefaults() {
+  for (
+    let cycleNumber = 1;
+    cycleNumber <= waterCycleCount.value;
+    cycleNumber++
+  ) {
+    const supplyKey = getSupplyCircuitKey(cycleNumber);
+    const returnKey = getReturnCircuitKey(cycleNumber);
+
+    cycleColors[supplyKey] = getDefaultSupplyColor(cycleNumber);
+    cycleColors[returnKey] = getDefaultReturnColor(cycleNumber);
+  }
+
+  saveCycleColorsToStorage();
+
+  await refreshFlowColorsAfterCycleColorChange();
+
+  flowMessage.value = "Cores predefinidas dos ciclos repostas.";
+}
+
+function toggleCycleColorsPanel() {
+  isCycleColorsPanelOpen.value = !isCycleColorsPanelOpen.value;
 }
 
 function getCycleDisplayName(cycleNumber: number) {
@@ -4659,7 +5443,10 @@ function toggleValveDesignationPanel() {
 function toggleValveRenamePanel() {
   isValveRenamePanelOpen.value = !isValveRenamePanelOpen.value;
 }
-``
+
+function toggleValveAssociationDetails() {
+  isValveAssociationDetailsOpen.value = !isValveAssociationDetailsOpen.value;
+}
 
 function saveCycleNames() {
   ensureCycleNames();
@@ -4778,12 +5565,20 @@ async function applyWaterCycleCount() {
   waterCycleCount.value = nextCount;
 pendingWaterCycleCount.value = nextCount;
 
+if (activeCycleNumber.value > nextCount) {
+  activeCycleNumber.value = nextCount;
+}
+
+if (activeCycleNumber.value < 1) {
+  activeCycleNumber.value = 1;
+}
+
 ensureConfiguredAssignments();
 ensureCycleNames();
-
+ensureCycleCircuitDefinitions();
 saveWaterCycleCountToStorage();
 saveCycleNamesToStorage();
-
+saveCycleCircuitDefinitionsToStorage();
 updateManualStats();
 
   if (countAssignments() > 0 || flowConnections.length > 0) {
@@ -4831,6 +5626,96 @@ function getRouteBlockedLabel(route: SavedRoute) {
 
 function getRouteCircuitDisplayLabel(route: SavedRoute) {
   return capitalizeFirstLetter(getCircuitLabel(route.temperature));
+}
+
+function getValveSwitchModeLabel(switchMode: ValveSwitchMode) {
+  if (switchMode === "switchToSupply") {
+    return "trocar para ida";
+  }
+
+  if (switchMode === "switchToReturn") {
+    return "trocar para retorno";
+  }
+
+  return "não trocar";
+}
+
+function getTargetCircuitForValveSwitch(
+  sourceCircuit: PipeCircuit,
+  switchMode: ValveSwitchMode,
+) {
+  const cycleNumber = getCircuitCycleNumber(sourceCircuit);
+
+  if (switchMode === "switchToSupply") {
+    return getSupplyCircuitKey(cycleNumber);
+  }
+
+  if (switchMode === "switchToReturn") {
+    return getReturnCircuitKey(cycleNumber);
+  }
+
+  return sourceCircuit;
+}
+
+function assignNodeToOnlyOneCircuit(
+  node: FlowNode,
+  circuit: PipeCircuit,
+) {
+  for (const existingCircuit of getAllKnownCircuitKeys()) {
+    getAssignmentSet(existingCircuit, node.modelId).delete(node.localId);
+  }
+
+  getAssignmentSet(circuit, node.modelId).add(node.localId);
+}
+
+function isNodeSharedWithOtherVisibleRoute(
+  routeId: string,
+  node: FlowNode,
+) {
+  return savedRoutes.some(
+    (route) =>
+      route.id !== routeId &&
+      !route.hidden &&
+      routeContainsAdaptedNode(route, node),
+  );
+}
+
+function restoreValveLinkedPipesToOriginalCircuit(
+  linkedPipes: ValveControlledPipeLink[],
+) {
+  for (const pipeNode of linkedPipes) {
+    if (isNodeSharedWithOtherVisibleRoute(pipeNode.routeId, pipeNode)) {
+      continue;
+    }
+
+    assignNodeToOnlyOneCircuit(pipeNode, pipeNode.temperature);
+  }
+}
+
+function applyValveSwitchToLinkedPipes(
+  linkedPipes: ValveControlledPipeLink[],
+) {
+  for (const pipeNode of linkedPipes) {
+    if (isNodeSharedWithOtherVisibleRoute(pipeNode.routeId, pipeNode)) {
+      continue;
+    }
+
+    const switchMode = pipeNode.switchMode ?? "none";
+
+    if (switchMode === "none") {
+      assignNodeToOnlyOneCircuit(pipeNode, pipeNode.temperature);
+      continue;
+    }
+
+    const targetTemperature =
+      pipeNode.targetTemperature ??
+      getTargetCircuitForValveSwitch(
+        pipeNode.temperature,
+        switchMode,
+      );
+
+    assignNodeToOnlyOneCircuit(pipeNode, targetTemperature);
+  }
 }
 
 function routeContainsNode(route: SavedRoute, node: FlowNode) {
@@ -5676,22 +6561,27 @@ function getAssignmentSet(circuit: PipeCircuit, modelId: string) {
 function updateManualStats() {
   let supplyTotal = 0;
   let returnTotal = 0;
+  let extraTotal = 0;
 
   for (const circuit of getAllKnownCircuitKeys()) {
     pipeStats[circuit] = countAssignmentType(circuit);
 
     if (isSupplyCircuit(circuit)) {
       supplyTotal += pipeStats[circuit];
+      continue;
     }
 
     if (isReturnCircuit(circuit)) {
       returnTotal += pipeStats[circuit];
+      continue;
     }
+
+    extraTotal += pipeStats[circuit];
   }
 
   pipeStats.supply = supplyTotal;
   pipeStats.return = returnTotal;
-  pipeStats.total = supplyTotal + returnTotal;
+  pipeStats.total = supplyTotal + returnTotal + extraTotal;
 }
 
 function countAssignmentType(circuit: PipeCircuit) {
@@ -6367,6 +7257,167 @@ function chunk<T>(items: T[], size: number) {
 .valve-rename-title {
   margin-top: 12px;
   padding-top: 10px;
+}
+
+.valve-name-line {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+
+.valve-details-title {
+  margin-top: 10px;
+  padding-top: 8px;
+}
+
+.valve-association-summary {
+  display: grid;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.valve-association-summary p {
+  margin: 0;
+  color: #dbe9f1;
+  font-size: 0.76rem;
+  line-height: 1.25;
+}
+
+.valve-association-summary strong {
+  color: #8fd3ff;
+}
+
+.cycle-color-editor {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.cycle-color-editor__item {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.cycle-color-editor__item strong {
+  color: #f7fbff;
+  font-size: 0.8rem;
+}
+
+.cycle-color-editor__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cycle-color-editor__select {
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: #dbe9f1;
+}
+
+.cycle-color-editor__select input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.cycle-color-editor__item label {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  align-items: center;
+  gap: 8px;
+  color: #dbe9f1;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.cycle-color-editor__item input[type="color"] {
+  width: 100%;
+  height: 34px;
+  border: 0;
+  border-radius: 6px;
+  padding: 3px;
+  background: #f7fbff;
+  cursor: pointer;
+}
+
+.cycle-circuit-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.cycle-circuit-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.cycle-circuit-item {
+  display: grid;
+  grid-template-columns: auto 92px 1fr 42px auto auto auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.cycle-circuit-item--simple {
+  grid-template-columns: auto 92px 1fr 42px auto auto;
+}
+
+.cycle-circuit-item input,
+.cycle-circuit-item select {
+  min-width: 0;
+  min-height: 30px;
+  border: 0;
+  border-radius: 4px;
+  padding: 4px 6px;
+  background: #f7fbff;
+  color: #111820;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.cycle-circuit-item input[type="color"] {
+  width: 42px;
+  padding: 2px;
+}
+
+.cycle-circuit-item button {
+  border: 0;
+  border-radius: 4px;
+  padding: 5px 7px;
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 800;
+  background: #f7fbff;
+  color: #111820;
+}
+
+.cycle-circuit-item button:hover {
+  background: #d9f0ff;
+}
+
+.workflow-help-note {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(143, 211, 255, 0.12);
+  color: #dbe9f1;
+  font-size: 0.76rem;
+  line-height: 1.35;
 }
 
 @media (max-width: 820px) {
