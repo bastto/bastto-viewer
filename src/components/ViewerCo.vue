@@ -318,7 +318,7 @@
   v-else
   class="connection-note workflow-help-note"
 >
-  Este ciclo ainda não tem caminhos. Cria uma ida, retorno ou extra em baixo.
+  Este ciclo ainda não tem caminhos. Cria uma caminho para começar.
 </p>
 
 <div class="flow-section-title flow-section-title--button">
@@ -339,9 +339,11 @@
   v-model="pendingCycleCircuitKind"
   @change="updatePendingCycleCircuitColorFromKind"
 >
-  <option value="supply">Ida</option>
-  <option value="return">Retorno</option>
-  <option value="extra">Extra</option>
+  <option value="hotSupply">Ida quente</option>
+<option value="coldSupply">Ida fria</option>
+<option value="hotReturn">Retorno quente</option>
+<option value="coldReturn">Retorno frio</option>
+<option value="extra">Extra</option>
 </select>
   </label>
 
@@ -350,7 +352,7 @@
     <input
   v-model="pendingCycleCircuitName"
   type="text"
-  placeholder="Ex: Água fria, By-pass, Ida apoio, Retorno secundário..."
+  placeholder="Ex: Nome do caminho extra"
 />
   </label>
 
@@ -376,7 +378,7 @@
   v-if="!getActiveCycleCircuitDefinitions().length"
   class="connection-note workflow-help-note"
 >
-  Este ciclo ainda não tem caminhos. Cria uma ida, retorno ou extra para começar.
+  Este ciclo ainda não tem caminhos. Cria um caminho para começar.
 </p>
 
   <div class="cycle-circuit-list">
@@ -391,9 +393,11 @@
       ></span>
 
       <select v-model="circuit.kind">
-        <option value="supply">Ida</option>
-        <option value="return">Retorno</option>
-        <option value="extra">Extra</option>
+        <option value="hotSupply">Ida quente</option>
+<option value="coldSupply">Ida fria</option>
+<option value="hotReturn">Retorno quente</option>
+<option value="coldReturn">Retorno frio</option>
+<option value="extra">Extra</option>
       </select>
 
       <input
@@ -1067,7 +1071,12 @@ import * as BUIC from "@thatopen/ui-obc";
 import * as OBCF from "@thatopen/components-front";
 
 type PipeCircuit = string;
-type CycleCircuitKind = "supply" | "return" | "extra";
+type CycleCircuitKind =
+  | "hotSupply"
+  | "coldSupply"
+  | "hotReturn"
+  | "coldReturn"
+  | "extra";
 
 type CycleCircuitDefinition = {
   key: PipeCircuit;
@@ -1190,11 +1199,8 @@ const cycleCircuitDefinitions = reactive<CycleCircuitDefinition[]>([]);
 const isCycleCircuitPanelOpen = ref(false);
 const pendingCycleCircuitKind = ref<CycleCircuitKind>("extra");
 const pendingCycleCircuitName = ref("");
-const pendingCycleCircuitColor = ref("#0077ff");
+const pendingCycleCircuitColor = ref("#2e7d32");
 const selectedCycleCircuitKey = ref("");
-const cycleColors = reactive<Record<string, string>>({});
-const isCycleColorsPanelOpen = ref(false);
-const selectedCycleColorResetNumbers = reactive<Set<number>>(new Set());
 const isCycleNamesPanelOpen = ref(false);
 const isSavedRoutesPanelOpen = ref(true);
 const highlightedSavedRouteId = ref<string | null>(null);
@@ -1231,8 +1237,6 @@ const WATER_CYCLE_NAMES_STORAGE_KEY =
   "bastto-viewer-water-cycle-names";
 const CYCLE_CIRCUITS_STORAGE_KEY =
   "bastto-viewer-cycle-circuits";
-const WATER_CYCLE_COLORS_STORAGE_KEY =
-  "bastto-viewer-water-cycle-colors";
 const REVERSED_DIRECTIONS_STORAGE_KEY =
   "bastto-viewer-reversed-directions";
 const HIDDEN_FLOW_ARROWS_STORAGE_KEY =
@@ -1397,7 +1401,6 @@ onMounted(async () => {
 loadWaterCycleCountFromStorage();
 loadCycleNamesFromStorage();
 loadCycleCircuitDefinitionsFromStorage();
-loadCycleColorsFromStorage();
 loadMepElementsFromStorage();
 loadRoutesFromStorage();
 loadReversedDirectionsFromStorage();
@@ -4746,7 +4749,10 @@ function isSupplyCircuit(circuit: PipeCircuit) {
   const definition = getCycleCircuitDefinition(circuit);
 
   if (definition) {
-    return definition.kind === "supply";
+    return (
+      definition.kind === "hotSupply" ||
+      definition.kind === "coldSupply"
+    );
   }
 
   return circuit.startsWith("supply");
@@ -4756,7 +4762,10 @@ function isReturnCircuit(circuit: PipeCircuit) {
   const definition = getCycleCircuitDefinition(circuit);
 
   if (definition) {
-    return definition.kind === "return";
+    return (
+      definition.kind === "hotReturn" ||
+      definition.kind === "coldReturn"
+    );
   }
 
   return circuit.startsWith("return");
@@ -4831,29 +4840,43 @@ function getDefaultReturnColor(cycleNumber: number) {
   return returnColors[(cycleNumber - 1) % returnColors.length];
 }
 
+function getDefaultColdSupplyColor(cycleNumber: number) {
+  const coldSupplyColors = [
+    "#0077ff",
+    "#2196f3",
+    "#03a9f4",
+    "#00bcd4",
+    "#1565c0",
+    "#4fc3f7",
+  ];
+
+  return coldSupplyColors[(cycleNumber - 1) % coldSupplyColors.length];
+}
+
+function getDefaultColdReturnColor(cycleNumber: number) {
+  const coldReturnColors = [
+    "#7b1fa2",
+    "#9c27b0",
+    "#ba68c8",
+    "#673ab7",
+    "#512da8",
+    "#9575cd",
+  ];
+
+  return coldReturnColors[(cycleNumber - 1) % coldReturnColors.length];
+}
+
 function getDefaultExtraColor(cycleNumber: number) {
   const extraColors = [
-    "#0077ff",
-    "#00bcd4",
-    "#4caf50",
-    "#9c27b0",
-    "#607d8b",
-    "#795548",
+    "#2e7d32",
+    "#43a047",
+    "#66bb6a",
+    "#1b5e20",
+    "#81c784",
+    "#558b2f",
   ];
 
   return extraColors[(cycleNumber - 1) % extraColors.length];
-}
-
-function getDefaultCircuitName(kind: CycleCircuitKind) {
-  if (kind === "supply") {
-    return "Ida";
-  }
-
-  if (kind === "return") {
-    return "Retorno";
-  }
-
-  return "Extra";
 }
 
 function getNextCircuitNameForKind(
@@ -4868,12 +4891,20 @@ function getNextCircuitNameForKind(
 
   const nextNumber = existingSameKindCount + 1;
 
-  if (kind === "supply") {
-    return `Ida ${nextNumber}`;
+  if (kind === "hotSupply") {
+    return `Ida quente ${nextNumber}`;
   }
 
-  if (kind === "return") {
-    return `Retorno ${nextNumber}`;
+  if (kind === "coldSupply") {
+    return `Ida fria ${nextNumber}`;
+  }
+
+  if (kind === "hotReturn") {
+    return `Retorno quente ${nextNumber}`;
+  }
+
+  if (kind === "coldReturn") {
+    return `Retorno frio ${nextNumber}`;
   }
 
   return `Extra ${nextNumber}`;
@@ -4883,12 +4914,20 @@ function getDefaultCircuitColor(
   kind: CycleCircuitKind,
   cycleNumber: number,
 ) {
-  if (kind === "supply") {
+  if (kind === "hotSupply") {
     return getDefaultSupplyColor(cycleNumber);
   }
 
-  if (kind === "return") {
+  if (kind === "coldSupply") {
+    return getDefaultColdSupplyColor(cycleNumber);
+  }
+
+  if (kind === "hotReturn") {
     return getDefaultReturnColor(cycleNumber);
+  }
+
+  if (kind === "coldReturn") {
+    return getDefaultColdReturnColor(cycleNumber);
   }
 
   return getDefaultExtraColor(cycleNumber);
@@ -4899,8 +4938,8 @@ function getNextCircuitColorForKind(kind: CycleCircuitKind) {
     (circuit) => circuit.kind === kind,
   ).length;
 
-  if (kind === "supply") {
-    const supplyColors = [
+  if (kind === "hotSupply") {
+    const hotSupplyColors = [
       "#ff0000",
       "#ff5252",
       "#ff8a80",
@@ -4909,11 +4948,24 @@ function getNextCircuitColorForKind(kind: CycleCircuitKind) {
       "#b71c1c",
     ];
 
-    return supplyColors[existingSameKindCount % supplyColors.length];
+    return hotSupplyColors[existingSameKindCount % hotSupplyColors.length];
   }
 
-  if (kind === "return") {
-    const returnColors = [
+  if (kind === "coldSupply") {
+    const coldSupplyColors = [
+      "#0077ff",
+      "#2196f3",
+      "#03a9f4",
+      "#00bcd4",
+      "#1565c0",
+      "#4fc3f7",
+    ];
+
+    return coldSupplyColors[existingSameKindCount % coldSupplyColors.length];
+  }
+
+  if (kind === "hotReturn") {
+    const hotReturnColors = [
       "#ff8c00",
       "#ffa726",
       "#ffc107",
@@ -4922,20 +4974,32 @@ function getNextCircuitColorForKind(kind: CycleCircuitKind) {
       "#e65100",
     ];
 
-    return returnColors[existingSameKindCount % returnColors.length];
+    return hotReturnColors[existingSameKindCount % hotReturnColors.length];
+  }
+
+  if (kind === "coldReturn") {
+    const coldReturnColors = [
+      "#7b1fa2",
+      "#9c27b0",
+      "#ba68c8",
+      "#673ab7",
+      "#512da8",
+      "#9575cd",
+    ];
+
+    return coldReturnColors[existingSameKindCount % coldReturnColors.length];
   }
 
   const extraColors = [
-    "#0077ff",
-    "#00bcd4",
-    "#4caf50",
-    "#4caf50",
-    "#9c27b0",
-    "#607d8b",
-    "#795548",
-  ];
+  "#2e7d32",
+  "#43a047",
+  "#66bb6a",
+  "#1b5e20",
+  "#81c784",
+  "#558b2f",
+];
 
-  return extraColors[existingSameKindCount % extraColors.length];
+return extraColors[existingSameKindCount % extraColors.length];
 }
 
 function updatePendingCycleCircuitColorFromKind() {
@@ -4948,15 +5012,7 @@ function getDefaultCircuitKey(
   cycleNumber: number,
   kind: CycleCircuitKind,
 ) {
-  if (kind === "supply") {
-    return getSupplyCircuitKey(cycleNumber);
-  }
-
-  if (kind === "return") {
-    return getReturnCircuitKey(cycleNumber);
-  }
-
-  return `extra${cycleNumber}-${crypto.randomUUID()}`;
+  return `cycle${cycleNumber}-${kind}-${crypto.randomUUID()}`;
 }
 
 function hasCycleCircuitUsage(circuitKey: PipeCircuit) {
@@ -5116,12 +5172,20 @@ function getCycleCircuitDefinitionsByKind(
 }
 
 function getCycleCircuitKindLabel(kind: CycleCircuitKind) {
-  if (kind === "supply") {
-    return "ida";
+  if (kind === "hotSupply") {
+    return "ida quente";
   }
 
-  if (kind === "return") {
-    return "retorno";
+  if (kind === "coldSupply") {
+    return "ida fria";
+  }
+
+  if (kind === "hotReturn") {
+    return "retorno quente";
+  }
+
+  if (kind === "coldReturn") {
+    return "retorno frio";
   }
 
   return "extra";
@@ -5129,6 +5193,10 @@ function getCycleCircuitKindLabel(kind: CycleCircuitKind) {
 
 function toggleCycleCircuitPanel() {
   isCycleCircuitPanelOpen.value = !isCycleCircuitPanelOpen.value;
+
+  if (isCycleCircuitPanelOpen.value) {
+    updatePendingCycleCircuitColorFromKind();
+  }
 }
 
 function createCycleCircuitDefinition() {
@@ -5257,140 +5325,6 @@ function resetCycleCircuitColor(circuitKey: PipeCircuit) {
   void rebuildManualFlowLayer();
 
   flowMessage.value = `Cor de "${circuit.name}" reposta.`;
-}
-
-function ensureCycleColors() {
-  for (
-    let cycleNumber = 1;
-    cycleNumber <= waterCycleCount.value;
-    cycleNumber++
-  ) {
-    const supplyKey = getSupplyCircuitKey(cycleNumber);
-    const returnKey = getReturnCircuitKey(cycleNumber);
-
-    if (!cycleColors[supplyKey]) {
-      cycleColors[supplyKey] = getDefaultSupplyColor(cycleNumber);
-    }
-
-    if (!cycleColors[returnKey]) {
-      cycleColors[returnKey] = getDefaultReturnColor(cycleNumber);
-    }
-  }
-
-  for (const key of Object.keys(cycleColors)) {
-    const cycleNumber = getCircuitCycleNumber(key);
-
-    if (cycleNumber > waterCycleCount.value) {
-      delete cycleColors[key];
-    }
-  }
-}
-
-function saveCycleColorsToStorage() {
-  localStorage.setItem(
-    WATER_CYCLE_COLORS_STORAGE_KEY,
-    JSON.stringify(cycleColors),
-  );
-}
-
-function loadCycleColorsFromStorage() {
-  const saved = localStorage.getItem(WATER_CYCLE_COLORS_STORAGE_KEY);
-
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved) as Record<string, string>;
-
-      for (const [key, value] of Object.entries(parsed)) {
-        cycleColors[key] = value;
-      }
-    } catch (error) {
-      console.error("Erro ao carregar cores dos ciclos:", error);
-    }
-  }
-
-  ensureCycleColors();
-}
-
-async function refreshFlowColorsAfterCycleColorChange() {
-  circuitMaterialCache.clear();
-
-  if (countAssignments() > 0 || flowConnections.length > 0) {
-    await rebuildManualFlowLayer();
-    return;
-  }
-
-  await fragmentManager.core.update(true);
-}
-
-async function saveCycleColors() {
-  ensureCycleColors();
-  saveCycleColorsToStorage();
-
-  await refreshFlowColorsAfterCycleColorChange();
-
-  flowMessage.value = "Cores dos ciclos guardadas.";
-}
-
-function toggleCycleColorResetSelection(cycleNumber: number) {
-  if (selectedCycleColorResetNumbers.has(cycleNumber)) {
-    selectedCycleColorResetNumbers.delete(cycleNumber);
-    return;
-  }
-
-  selectedCycleColorResetNumbers.add(cycleNumber);
-}
-
-function clearCycleColorResetSelection() {
-  selectedCycleColorResetNumbers.clear();
-  flowMessage.value = "Seleção de ciclos limpa.";
-}
-
-async function resetSelectedCycleColorsToDefaults() {
-  if (!selectedCycleColorResetNumbers.size) {
-    flowMessage.value = "Seleciona primeiro um ou mais ciclos para repor as cores.";
-    return;
-  }
-
-  for (const cycleNumber of selectedCycleColorResetNumbers) {
-    const supplyKey = getSupplyCircuitKey(cycleNumber);
-    const returnKey = getReturnCircuitKey(cycleNumber);
-
-    cycleColors[supplyKey] = getDefaultSupplyColor(cycleNumber);
-    cycleColors[returnKey] = getDefaultReturnColor(cycleNumber);
-  }
-
-  saveCycleColorsToStorage();
-
-  await refreshFlowColorsAfterCycleColorChange();
-
-  flowMessage.value =
-    `${selectedCycleColorResetNumbers.size} ciclo(s) reposto(s) para as cores predefinidas.`;
-
-  selectedCycleColorResetNumbers.clear();
-}
-
-async function resetCycleColorsToDefaults() {
-  for (
-    let cycleNumber = 1;
-    cycleNumber <= waterCycleCount.value;
-    cycleNumber++
-  ) {
-    const supplyKey = getSupplyCircuitKey(cycleNumber);
-    const returnKey = getReturnCircuitKey(cycleNumber);
-
-    cycleColors[supplyKey] = getDefaultSupplyColor(cycleNumber);
-    cycleColors[returnKey] = getDefaultReturnColor(cycleNumber);
-  }
-
-  saveCycleColorsToStorage();
-
-  await refreshFlowColorsAfterCycleColorChange();
-
-  flowMessage.value = "Cores predefinidas dos ciclos repostas.";
-}
-
-function toggleCycleColorsPanel() {
-  isCycleColorsPanelOpen.value = !isCycleColorsPanelOpen.value;
 }
 
 function getCycleDisplayName(cycleNumber: number) {
@@ -7288,67 +7222,6 @@ function chunk<T>(items: T[], size: number) {
 
 .valve-association-summary strong {
   color: #8fd3ff;
-}
-
-.cycle-color-editor {
-  display: grid;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.cycle-color-editor__item {
-  display: grid;
-  gap: 8px;
-  padding: 8px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.cycle-color-editor__item strong {
-  color: #f7fbff;
-  font-size: 0.8rem;
-}
-
-.cycle-color-editor__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.cycle-color-editor__select {
-  display: flex !important;
-  grid-template-columns: none !important;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.72rem;
-  color: #dbe9f1;
-}
-
-.cycle-color-editor__select input[type="checkbox"] {
-  width: 14px;
-  height: 14px;
-  cursor: pointer;
-}
-
-.cycle-color-editor__item label {
-  display: grid;
-  grid-template-columns: 70px 1fr;
-  align-items: center;
-  gap: 8px;
-  color: #dbe9f1;
-  font-size: 0.76rem;
-  font-weight: 800;
-}
-
-.cycle-color-editor__item input[type="color"] {
-  width: 100%;
-  height: 34px;
-  border: 0;
-  border-radius: 6px;
-  padding: 3px;
-  background: #f7fbff;
-  cursor: pointer;
 }
 
 .cycle-circuit-panel {
