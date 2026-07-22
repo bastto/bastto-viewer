@@ -3552,15 +3552,115 @@ function normalizeIfcValue(value: any, depth = 0): any {
   return String(value);
 }
 
-function collectInterestingIfcValues(data: any) {
-  const results: Record<string, any[]> = {
-    diametros: [],
-    nomes: [],
-    tipos: [],
-    familias: [],
-    materiais: [],
-    propriedades: [],
+function collectRevitFamilyAndTypeValues(data: any) {
+  const results = {
+    family: "não encontrado",
+    type: "não encontrado",
+    candidatosEncontrados: [] as any[],
   };
+
+  const seen = new Set<string>();
+
+  function normalizeText(text: string) {
+    return String(text)
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, "")
+      .replace(/_/g, "")
+      .replace(/-/g, "");
+  }
+
+  function getSimpleValue(value: any): any {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+    ) {
+      return value;
+    }
+
+    if (typeof value === "object") {
+      if ("value" in value) return getSimpleValue(value.value);
+      if ("Value" in value) return getSimpleValue(value.Value);
+      if ("wrappedValue" in value) return getSimpleValue(value.wrappedValue);
+      if ("NominalValue" in value) return getSimpleValue(value.NominalValue);
+      if ("nominalValue" in value) return getSimpleValue(value.nominalValue);
+      if ("Name" in value) return getSimpleValue(value.Name);
+      if ("name" in value) return getSimpleValue(value.name);
+    }
+
+    return null;
+  }
+
+  function addCandidate(
+    category: "family" | "type",
+    pathText: string,
+    fieldName: string,
+    value: any,
+  ) {
+    const simpleValue = getSimpleValue(value);
+
+    if (
+      simpleValue === null ||
+      simpleValue === undefined ||
+      String(simpleValue).trim() === ""
+    ) {
+      return;
+    }
+
+    const uniqueKey =
+      category + "|" + pathText + "|" + fieldName + "|" + String(simpleValue);
+
+    if (seen.has(uniqueKey)) {
+      return;
+    }
+
+    seen.add(uniqueKey);
+
+    results.candidatosEncontrados.push({
+      categoria: category,
+      caminho: pathText,
+      campo: fieldName,
+      valor: simpleValue,
+    });
+
+    if (results[category] === "não encontrado") {
+      results[category] = String(simpleValue);
+    }
+  }
+
+  function classifyField(text: string): "family" | "type" | null {
+    const normalizedText = normalizeText(text);
+
+    if (
+      normalizedText.includes("family") ||
+      normalizedText.includes("SystemFamily") ||
+      normalizedText.includes("familyname") ||
+      normalizedText.includes("revitfamily")
+    ) {
+      return "family";
+    }
+
+    if (
+  normalizedText.includes("typename") ||
+  normalizedText.includes("objecttype") ||
+  normalizedText.includes("revittypename") ||
+  normalizedText.includes("revittypemark") ||
+  normalizedText.includes("familyandtype") ||
+  normalizedText.includes("familytype") ||
+  normalizedText.includes("typesymbol") ||
+  normalizedText.includes("typecatalog")
+) {
+  return "type";
+}
+
+    return null;
+  }
 
   function visit(value: any, path: string[] = []) {
     if (value === null || value === undefined) {
@@ -3568,104 +3668,44 @@ function collectInterestingIfcValues(data: any) {
     }
 
     const pathText = path.join(".");
-    const lowerPath = pathText.toLowerCase();
+    const lastKey = path[path.length - 1] || "";
 
-    if (
-      typeof value === "string" ||
-      typeof value === "number" ||
-      typeof value === "boolean"
-    ) {
-      const textValue = String(value);
-      const lowerValue = textValue.toLowerCase();
+    const pathCategory = classifyField(pathText);
+    const keyCategory = classifyField(lastKey);
 
-      if (
-        lowerPath.includes("diameter") ||
-        lowerPath.includes("diametro") ||
-        lowerPath.includes("diâmetro") ||
-        lowerPath.includes("nominaldiameter") ||
-        lowerPath.includes("outerdiameter") ||
-        lowerPath.includes("innerdiameter") ||
-        lowerPath.includes("dn")
-      ) {
-        results.diametros.push({
-          campo: pathText,
-          valor: value,
-        });
+    if (pathCategory) {
+      addCandidate(pathCategory, pathText, lastKey, value);
+    }
+
+    if (keyCategory) {
+      addCandidate(keyCategory, pathText, lastKey, value);
+    }
+
+    if (typeof value === "object" && !Array.isArray(value)) {
+      const objectName = String(
+        getSimpleValue(value.Name) ??
+        getSimpleValue(value.name) ??
+        "",
+      );
+
+      const objectCategory = classifyField(objectName);
+
+      if (objectCategory) {
+        addCandidate(objectCategory, pathText, objectName, value);
       }
-
-      if (
-        lowerPath.endsWith("name") ||
-        lowerPath.includes(".name") ||
-        lowerPath.includes("longname") ||
-        lowerPath.includes("tag") ||
-        lowerPath.includes("reference")
-      ) {
-        results.nomes.push({
-          campo: pathText,
-          valor: value,
-        });
-      }
-
-      if (
-        lowerPath.includes("type") ||
-        lowerPath.includes("objecttype") ||
-        lowerPath.includes("predefinedtype") ||
-        lowerPath.includes("ifctype")
-      ) {
-        results.tipos.push({
-          campo: pathText,
-          valor: value,
-        });
-      }
-
-      if (
-        lowerPath.includes("family") ||
-        lowerPath.includes("familia") ||
-        lowerPath.includes("família") ||
-        lowerValue.includes("family")
-      ) {
-        results.familias.push({
-          campo: pathText,
-          valor: value,
-        });
-      }
-
-      if (
-        lowerPath.includes("material") ||
-        lowerValue.includes("material")
-      ) {
-        results.materiais.push({
-          campo: pathText,
-          valor: value,
-        });
-      }
-
-      if (
-        lowerPath.includes("pset") ||
-        lowerPath.includes("property") ||
-        lowerPath.includes("properties") ||
-        lowerPath.includes("quantity") ||
-        lowerPath.includes("quantities")
-      ) {
-        results.propriedades.push({
-          campo: pathText,
-          valor: value,
-        });
-      }
-
-      return;
     }
 
     if (Array.isArray(value)) {
       value.forEach((item, index) => {
-        visit(item, [...path, String(index)]);
+        visit(item, path.concat(String(index)));
       });
+
       return;
     }
 
     if (typeof value === "object") {
       for (const [key, nestedValue] of Object.entries(value)) {
-        visit(nestedValue, [...path, key]);
+        visit(nestedValue, path.concat(key));
       }
     }
   }
@@ -3690,52 +3730,43 @@ async function extractSelectedIfcInformation() {
     return;
   }
 
-  const key = elementKey(selectedNode.modelId, selectedNode.localId);
-  const appClassification = mepElements[key] ?? null;
-  const assignedCircuit = getNodeTemperature(selectedNode);
-
-  const routesWithElement = savedRoutes
-    .filter((route) => routeContainsAdaptedNode(route, selectedNode))
-    .map((route) => ({
-      id: route.id,
-      name: route.name,
-      circuit: getCircuitLabel(route.temperature),
-      hidden: !!route.hidden,
-      locked: !!route.locked,
-    }));
-
   const itemData = await model.getItemsData([selectedNode.localId], {
-    attributesDefault: true,
-    relationsDefault: {
+  attributesDefault: true,
+  relations: {
+    IsTypedBy: {
       attributes: true,
       relations: true,
     },
-  });
+    DefinesOccurrence: {
+      attributes: true,
+      relations: true,
+    },
+    IsDefinedBy: {
+      attributes: true,
+      relations: true,
+    },
+  },
+});
 
   const rawIfcData = normalizeIfcValue(itemData[0]);
-  const interestingValues = collectInterestingIfcValues(rawIfcData);
+  const revitValues = collectRevitFamilyAndTypeValues(rawIfcData);
 
   const extractedData = {
-    elementoSelecionado: {
-      modelId: selectedNode.modelId,
-      localId: selectedNode.localId,
-    },
-    classificacaoNoPrograma: appClassification,
-    circuitoNoPrograma: assignedCircuit
-      ? getCircuitLabel(assignedCircuit)
-      : "sem circuito atribuído",
-    caminhosGuardadosOndeAparece: routesWithElement,
-    valoresProvaveisEncontrados: interestingValues,
-    dadosIfcCompletos: rawIfcData,
-  };
+  elementoSelecionado: {
+    modelId: selectedNode.modelId,
+    localId: selectedNode.localId,
+  },
+  Family: revitValues.family,
+Type: revitValues.type,
+};
 
   selectedIfcDetailsText.value = JSON.stringify(extractedData, null, 2);
   isIfcDetailsPanelOpen.value = true;
 
-  console.log("Dados IFC extraídos:", extractedData);
+  console.log("Family e Type extraídos:", extractedData);
 
   flowMessage.value =
-    "Dados IFC extraídos para o elemento #" +
+    "Family e Type extraídos para o elemento #" +
     selectedNode.localId +
     ".";
 }
