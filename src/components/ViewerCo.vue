@@ -91,6 +91,31 @@
   {{ selectedMepElementInfo }}
 </div>
 
+<div class="flow-actions flow-actions--single">
+  <button type="button" @click="extractSelectedIfcInformation">
+    Extrair dados IFC do selecionado
+  </button>
+</div>
+
+<div
+  v-if="selectedIfcDetailsText"
+  class="flow-section-title flow-section-title--button"
+>
+  <span>Dados IFC extraídos</span>
+  <button
+    type="button"
+    class="section-collapse-button"
+    @click="isIfcDetailsPanelOpen = !isIfcDetailsPanelOpen"
+  >
+    {{ isIfcDetailsPanelOpen ? '−' : '+' }}
+  </button>
+</div>
+
+<pre
+  v-if="selectedIfcDetailsText && isIfcDetailsPanelOpen"
+  class="ifc-details-output"
+>{{ selectedIfcDetailsText }}</pre>
+
           <p class="connection-note">Tipo de elemento</p>
 
           <div class="flow-actions flow-actions--secondary">
@@ -1247,6 +1272,8 @@ const highlightedSavedRouteId = ref<string | null>(null);
 const isCentralSummaryOpen = ref(false);
 const selectedCount = ref(0);
 const selectedMepElementInfo = ref("Nenhum elemento classificado selecionado.");
+const selectedIfcDetailsText = ref("");
+const isIfcDetailsPanelOpen = ref(false);
 const selectedValveDesignation = ref("nenhuma válvula selecionada");
 const pendingValveDesignation = ref("");
 const selectedValveOriginalDesignation = ref("");
@@ -3489,6 +3516,228 @@ selectedValveSwitchMode.value = linkedPipes[0]?.switchMode ?? "none";
 
 function getValveNodeForDesignationEditing() {
   return getValveNodeForControl();
+}
+
+function normalizeIfcValue(value: any, depth = 0): any {
+  if (depth > 8) {
+    return "[limite de profundidade]";
+  }
+
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeIfcValue(item, depth + 1));
+  }
+
+  if (typeof value === "object") {
+    const result: Record<string, any> = {};
+
+    for (const [key, nestedValue] of Object.entries(value)) {
+      result[key] = normalizeIfcValue(nestedValue, depth + 1);
+    }
+
+    return result;
+  }
+
+  return String(value);
+}
+
+function collectInterestingIfcValues(data: any) {
+  const results: Record<string, any[]> = {
+    diametros: [],
+    nomes: [],
+    tipos: [],
+    familias: [],
+    materiais: [],
+    propriedades: [],
+  };
+
+  function visit(value: any, path: string[] = []) {
+    if (value === null || value === undefined) {
+      return;
+    }
+
+    const pathText = path.join(".");
+    const lowerPath = pathText.toLowerCase();
+
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+    ) {
+      const textValue = String(value);
+      const lowerValue = textValue.toLowerCase();
+
+      if (
+        lowerPath.includes("diameter") ||
+        lowerPath.includes("diametro") ||
+        lowerPath.includes("diâmetro") ||
+        lowerPath.includes("nominaldiameter") ||
+        lowerPath.includes("outerdiameter") ||
+        lowerPath.includes("innerdiameter") ||
+        lowerPath.includes("dn")
+      ) {
+        results.diametros.push({
+          campo: pathText,
+          valor: value,
+        });
+      }
+
+      if (
+        lowerPath.endsWith("name") ||
+        lowerPath.includes(".name") ||
+        lowerPath.includes("longname") ||
+        lowerPath.includes("tag") ||
+        lowerPath.includes("reference")
+      ) {
+        results.nomes.push({
+          campo: pathText,
+          valor: value,
+        });
+      }
+
+      if (
+        lowerPath.includes("type") ||
+        lowerPath.includes("objecttype") ||
+        lowerPath.includes("predefinedtype") ||
+        lowerPath.includes("ifctype")
+      ) {
+        results.tipos.push({
+          campo: pathText,
+          valor: value,
+        });
+      }
+
+      if (
+        lowerPath.includes("family") ||
+        lowerPath.includes("familia") ||
+        lowerPath.includes("família") ||
+        lowerValue.includes("family")
+      ) {
+        results.familias.push({
+          campo: pathText,
+          valor: value,
+        });
+      }
+
+      if (
+        lowerPath.includes("material") ||
+        lowerValue.includes("material")
+      ) {
+        results.materiais.push({
+          campo: pathText,
+          valor: value,
+        });
+      }
+
+      if (
+        lowerPath.includes("pset") ||
+        lowerPath.includes("property") ||
+        lowerPath.includes("properties") ||
+        lowerPath.includes("quantity") ||
+        lowerPath.includes("quantities")
+      ) {
+        results.propriedades.push({
+          campo: pathText,
+          valor: value,
+        });
+      }
+
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => {
+        visit(item, [...path, String(index)]);
+      });
+      return;
+    }
+
+    if (typeof value === "object") {
+      for (const [key, nestedValue] of Object.entries(value)) {
+        visit(nestedValue, [...path, key]);
+      }
+    }
+  }
+
+  visit(data);
+
+  return results;
+}
+
+async function extractSelectedIfcInformation() {
+  const selectedNode = getFirstSelectedNode();
+
+  if (!selectedNode) {
+    flowMessage.value = "Seleciona primeiro um tubo ou elemento no modelo.";
+    return;
+  }
+
+  const model = loadedModels.get(selectedNode.modelId);
+
+  if (!model) {
+    flowMessage.value = "Modelo do elemento selecionado não encontrado.";
+    return;
+  }
+
+  const key = elementKey(selectedNode.modelId, selectedNode.localId);
+  const appClassification = mepElements[key] ?? null;
+  const assignedCircuit = getNodeTemperature(selectedNode);
+
+  const routesWithElement = savedRoutes
+    .filter((route) => routeContainsAdaptedNode(route, selectedNode))
+    .map((route) => ({
+      id: route.id,
+      name: route.name,
+      circuit: getCircuitLabel(route.temperature),
+      hidden: !!route.hidden,
+      locked: !!route.locked,
+    }));
+
+  const itemData = await model.getItemsData([selectedNode.localId], {
+    attributesDefault: true,
+    relationsDefault: {
+      attributes: true,
+      relations: true,
+    },
+  });
+
+  const rawIfcData = normalizeIfcValue(itemData[0]);
+  const interestingValues = collectInterestingIfcValues(rawIfcData);
+
+  const extractedData = {
+    elementoSelecionado: {
+      modelId: selectedNode.modelId,
+      localId: selectedNode.localId,
+    },
+    classificacaoNoPrograma: appClassification,
+    circuitoNoPrograma: assignedCircuit
+      ? getCircuitLabel(assignedCircuit)
+      : "sem circuito atribuído",
+    caminhosGuardadosOndeAparece: routesWithElement,
+    valoresProvaveisEncontrados: interestingValues,
+    dadosIfcCompletos: rawIfcData,
+  };
+
+  selectedIfcDetailsText.value = JSON.stringify(extractedData, null, 2);
+  isIfcDetailsPanelOpen.value = true;
+
+  console.log("Dados IFC extraídos:", extractedData);
+
+  flowMessage.value =
+    "Dados IFC extraídos para o elemento #" +
+    selectedNode.localId +
+    ".";
 }
 
 async function showSelectedMepElementInfo() {
@@ -7645,6 +7894,20 @@ function chunk<T>(items: T[], size: number) {
 .cycle-circuit-lock-icon {
   font-size: 0.8rem;
   line-height: 1;
+}
+
+.ifc-details-output {
+  max-height: 320px;
+  overflow: auto;
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.42);
+  color: #dbe9f1;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 @media (max-width: 820px) {
