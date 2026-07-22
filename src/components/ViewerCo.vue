@@ -41,10 +41,11 @@
       :key="`global-legend-${circuit.key}`"
       class="global-color-legend__item"
     >
+      
       <span
-        class="cycle-color-dot"
-        :style="{ backgroundColor: circuit.color }"
-      ></span>
+  class="cycle-color-dot"
+  :style="{ backgroundColor: circuit.color }"
+></span>
 
       <span class="global-color-legend__text">
         {{ circuit.name }}
@@ -342,27 +343,11 @@
   </select>
 </label>
 
-<label
-  v-if="getActiveCycleCircuitDefinitions().length"
-  class="flow-cycle-config"
->
-  <span>Caminho que vou criar</span>
-  <select v-model="selectedCycleCircuitKey">
-    <option
-      v-for="circuit in getActiveCycleCircuitDefinitions()"
-      :key="`selected-cycle-circuit-${circuit.key}`"
-      :value="circuit.key"
-    >
-      {{ circuit.name }}
-    </option>
-  </select>
-</label>
-
 <p
-  v-else
+  v-if="!getActiveCycleCircuitDefinitions().length"
   class="connection-note workflow-help-note"
 >
-  Este ciclo ainda não tem caminhos. Cria uma caminho para começar.
+  Este ciclo ainda não tem caminhos. Cria um caminho em baixo para começar.
 </p>
 
 <div class="flow-section-title flow-section-title--button">
@@ -429,39 +414,67 @@
     <div
       v-for="circuit in getActiveCycleCircuitDefinitions()"
       :key="circuit.key"
-      class="cycle-circuit-item cycle-circuit-item--simple"
+      :class="[
+  'cycle-circuit-item',
+  'cycle-circuit-item--simple',
+  circuit.locked ? 'cycle-circuit-item--locked' : ''
+]"
     >
       <span
         class="cycle-color-dot"
         :style="{ backgroundColor: circuit.color }"
       ></span>
 
-      <select v-model="circuit.kind">
-        <option value="hotSupply">Ida quente</option>
-<option value="coldSupply">Ida fria</option>
-<option value="hotReturn">Retorno quente</option>
-<option value="coldReturn">Retorno frio</option>
-<option value="extra">Extra</option>
-      </select>
+      <div class="cycle-circuit-name-wrapper">
+  <span
+    v-if="circuit.locked"
+    class="cycle-circuit-lock-icon"
+    title="Caminho protegido"
+  >
+    🔒
+  </span>
 
-      <input
-        v-model="circuit.name"
-        type="text"
-      />
-
-      <input
-        v-model="circuit.color"
-        type="color"
-      />
+  <input
+    v-model="circuit.name"
+    type="text"
+    :disabled="circuit.locked"
+  />
+</div>
 
       <button
-        type="button"
-        @click="resetCycleCircuitColor(circuit.key)"
-      >
-        Repor cor
-      </button>
+  type="button"
+  :class="[
+    'cycle-circuit-use-button',
+    selectedCycleCircuitKey === circuit.key
+      ? 'cycle-circuit-use-button--active'
+      : ''
+  ]"
+  @click="selectedCycleCircuitKey = circuit.key"
+>
+  {{ selectedCycleCircuitKey === circuit.key ? 'Selecionado' : 'Usar' }}
+</button>
+
+<button
+  type="button"
+  :class="[
+    'cycle-circuit-lock-button',
+    circuit.locked ? 'cycle-circuit-lock-button--active' : ''
+  ]"
+  @click="toggleCycleCircuitLock(circuit.key)"
+>
+  {{ circuit.locked ? 'Desproteger' : 'Proteger' }}
+</button>
+
+     <button
+  v-if="isCycleCircuitColorChanged(circuit) && !circuit.locked"
+  type="button"
+  @click="resetCycleCircuitColor(circuit.key)"
+>
+  Repor cor
+</button>
 
       <button
+  v-if="!circuit.locked"
   type="button"
   class="flow-button--danger"
   @click="deleteCycleCircuitDefinition(circuit.key)"
@@ -1108,6 +1121,8 @@ type CycleCircuitDefinition = {
   kind: CycleCircuitKind;
   name: string;
   color: string;
+  defaultColor?: string;
+  locked?: boolean;
   lockedDefault?: boolean;
 };
 type SelectionMap = Map<string, Set<number>>;
@@ -5340,13 +5355,18 @@ const name =
 
   const key = `cycle${cycleNumber}-${kind}-${crypto.randomUUID()}`;
 
-  cycleCircuitDefinitions.push({
-    key,
-    cycleNumber,
-    kind,
-    name,
-    color: pendingCycleCircuitColor.value,
-  });
+  const selectedColor =
+  pendingCycleCircuitColor.value ||
+  getNextCircuitColorForKind(kind);
+
+cycleCircuitDefinitions.push({
+  key,
+  cycleNumber,
+  kind,
+  name,
+  color: selectedColor,
+  defaultColor: selectedColor,
+});
 
   selectedCycleCircuitKey.value = key;
 
@@ -5370,6 +5390,14 @@ async function deleteCycleCircuitDefinition(circuitKey: PipeCircuit) {
     return;
   }
 
+  if (circuit.locked) {
+  flowMessage.value =
+    "O caminho \"" +
+    circuit.name +
+    "\" está protegido. Desprotege primeiro para apagar.";
+  return;
+}
+
   const hasAssignments =
     [...(manualAssignments[circuitKey]?.values() ?? [])].some(
       (ids) => ids.size > 0,
@@ -5379,15 +5407,25 @@ async function deleteCycleCircuitDefinition(circuitKey: PipeCircuit) {
     (route) => route.temperature === circuitKey,
   );
 
-  if (hasAssignments || hasRoutes) {
-    const shouldContinue = confirm(
-      `O caminho "${circuit.name}" tem marcações ou caminhos guardados. Deseja apagar mesmo assim?`,
-    );
+  const hasFlowConnections = flowConnections.some(
+    (connection) => connection.temperature === circuitKey,
+  );
 
-    if (!shouldContinue) {
-      flowMessage.value = "Remoção do caminho do ciclo cancelada.";
-      return;
-    }
+  const hasUsage = hasAssignments || hasRoutes || hasFlowConnections;
+
+  const shouldDelete = confirm(
+    hasUsage
+      ? "O caminho \"" +
+          circuit.name +
+          "\" tem marcações, ligações ou caminhos guardados. Queres apagar mesmo assim?"
+      : "Tens a certeza que queres apagar o caminho \"" +
+          circuit.name +
+          "\"?",
+  );
+
+  if (!shouldDelete) {
+    flowMessage.value = "Remoção do caminho cancelada.";
+    return;
   }
 
   delete manualAssignments[circuitKey];
@@ -5404,12 +5442,17 @@ async function deleteCycleCircuitDefinition(circuitKey: PipeCircuit) {
     }
   }
 
-  const index = cycleCircuitDefinitions.findIndex(
+  const definitionIndex = cycleCircuitDefinitions.findIndex(
     (item) => item.key === circuitKey,
   );
 
-  if (index !== -1) {
-    cycleCircuitDefinitions.splice(index, 1);
+  if (definitionIndex !== -1) {
+    cycleCircuitDefinitions.splice(definitionIndex, 1);
+  }
+
+  if (selectedCycleCircuitKey.value === circuitKey) {
+    selectedCycleCircuitKey.value = "";
+    selectDefaultCircuitForActiveCycle();
   }
 
   saveCycleCircuitDefinitionsToStorage();
@@ -5423,7 +5466,10 @@ async function deleteCycleCircuitDefinition(circuitKey: PipeCircuit) {
     await fragmentManager.core.update(true);
   }
 
-  flowMessage.value = `Caminho "${circuit.name}" apagado do ciclo.`;
+  flowMessage.value =
+    "Caminho \"" +
+    circuit.name +
+    "\" apagado.";
 }
 
 async function saveCycleCircuitDefinitionChanges() {
@@ -5437,6 +5483,34 @@ async function saveCycleCircuitDefinitionChanges() {
   flowMessage.value = "Nomes e cores dos caminhos do ciclo guardados.";
 }
 
+function getCycleCircuitDefaultColor(circuit: CycleCircuitDefinition) {
+  return (
+    circuit.defaultColor ||
+    getDefaultCircuitColor(circuit.kind, circuit.cycleNumber)
+  );
+}
+
+function isCycleCircuitColorChanged(circuit: CycleCircuitDefinition) {
+  return circuit.color.toLowerCase() !==
+    getCycleCircuitDefaultColor(circuit).toLowerCase();
+}
+
+function toggleCycleCircuitLock(circuitKey: PipeCircuit) {
+  const circuit = getCycleCircuitDefinition(circuitKey);
+
+  if (!circuit) {
+    return;
+  }
+
+  circuit.locked = !circuit.locked;
+
+  saveCycleCircuitDefinitionsToStorage();
+
+  flowMessage.value = circuit.locked
+    ? "Caminho \"" + circuit.name + "\" protegido."
+    : "Caminho \"" + circuit.name + "\" desprotegido.";
+}
+
 function resetCycleCircuitColor(circuitKey: PipeCircuit) {
   const circuit = getCycleCircuitDefinition(circuitKey);
 
@@ -5444,17 +5518,14 @@ function resetCycleCircuitColor(circuitKey: PipeCircuit) {
     return;
   }
 
-  circuit.color = getDefaultCircuitColor(
-    circuit.kind,
-    circuit.cycleNumber,
-  );
+  circuit.color = getCycleCircuitDefaultColor(circuit);
 
   saveCycleCircuitDefinitionsToStorage();
   circuitMaterialCache.clear();
 
   void rebuildManualFlowLayer();
 
-  flowMessage.value = `Cor de "${circuit.name}" reposta.`;
+  flowMessage.value = "Cor de \"" + circuit.name + "\" reposta.";
 }
 
 function getCycleDisplayName(cycleNumber: number) {
@@ -7368,7 +7439,6 @@ function chunk<T>(items: T[], size: number) {
 
 .cycle-circuit-item {
   display: grid;
-  grid-template-columns: auto 92px 1fr 42px auto auto auto auto;
   align-items: center;
   gap: 6px;
   padding: 8px;
@@ -7377,7 +7447,8 @@ function chunk<T>(items: T[], size: number) {
 }
 
 .cycle-circuit-item--simple {
-  grid-template-columns: auto 92px 1fr 42px auto auto;
+  grid-template-columns: auto minmax(120px, 1fr) auto auto auto auto;
+  column-gap: 6px;
 }
 
 .cycle-circuit-item input,
@@ -7527,6 +7598,53 @@ function chunk<T>(items: T[], size: number) {
 
 .global-color-legend--ifc-collapsed {
   left: 48px;
+}
+
+.cycle-circuit-use-button--active {
+  background: #8fd3ff !important;
+  color: #07131a !important;
+  box-shadow: 0 0 0 2px rgba(143, 211, 255, 0.35);
+}
+
+.cycle-circuit-lock-icon {
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.cycle-circuit-item--locked {
+  border: 1px solid rgba(143, 211, 255, 0.75);
+  background: rgba(143, 211, 255, 0.14);
+  box-shadow: 0 0 0 2px rgba(143, 211, 255, 0.14);
+}
+
+.cycle-circuit-item--locked input,
+.cycle-circuit-item--locked select {
+  background: rgba(143, 211, 255, 0.22);
+  color: #f7fbff;
+  border: 1px solid rgba(143, 211, 255, 0.55);
+}
+
+.cycle-circuit-lock-button--active {
+  background: #8fd3ff !important;
+  color: #07131a !important;
+  box-shadow: 0 0 0 2px rgba(143, 211, 255, 0.35);
+}
+
+.cycle-circuit-name-wrapper {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cycle-circuit-name-wrapper input {
+  width: 100%;
+}
+
+.cycle-circuit-lock-icon {
+  font-size: 0.8rem;
+  line-height: 1;
 }
 
 @media (max-width: 820px) {
