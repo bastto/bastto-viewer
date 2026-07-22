@@ -9,6 +9,50 @@
 
   <div ref="containerRef" class="full-screen">
     <bim-grid id="appGrid"></bim-grid>
+    <button
+  type="button"
+  class="ifc-panel-side-toggle"
+  :class="{ 'ifc-panel-side-toggle--collapsed': isIfcPanelCollapsed }"
+  @click="toggleIfcPanelCollapsed"
+>
+  {{ isIfcPanelCollapsed ? '›' : '‹' }}
+</button>
+    <div
+  v-if="cycleCircuitDefinitions.length"
+  class="global-color-legend"
+  :class="{ 'global-color-legend--ifc-collapsed': isIfcPanelCollapsed }"
+>
+  <div class="global-color-legend__title">
+    Legenda de cores
+  </div>
+
+  <div class="global-color-legend__list">
+  <div
+    v-for="cycleGroup in getCycleCircuitLegendGroups()"
+    :key="`legend-cycle-group-${cycleGroup.cycleNumber}`"
+    class="global-color-legend__group"
+  >
+    <div class="global-color-legend__cycle-title">
+      {{ cycleGroup.cycleName }}
+    </div>
+
+    <div
+      v-for="circuit in cycleGroup.circuits"
+      :key="`global-legend-${circuit.key}`"
+      class="global-color-legend__item"
+    >
+      <span
+        class="cycle-color-dot"
+        :style="{ backgroundColor: circuit.color }"
+      ></span>
+
+      <span class="global-color-legend__text">
+        {{ circuit.name }}
+      </span>
+    </div>
+  </div>
+</div>
+</div>
 
     <input
       ref="ifcInput"
@@ -424,26 +468,6 @@
 >
   Apagar
 </button>
-    </div>
-  </div>
-</div>
-
-<div class="flow-section-title">
-  Legenda de cores
-</div>
-
-<div class="cycle-color-legend">
-  <div
-    v-for="circuit in getActiveCycleCircuitDefinitions()"
-    :key="`legend-cycle-circuit-${circuit.key}`"
-    class="cycle-color-legend__row"
-  >
-    <div class="cycle-color-legend__item">
-      <span
-        class="cycle-color-dot"
-        :style="{ backgroundColor: circuit.color }"
-      ></span>
-      <span>{{ circuit.name }}</span>
     </div>
   </div>
 </div>
@@ -1201,6 +1225,7 @@ const pendingCycleCircuitKind = ref<CycleCircuitKind>("extra");
 const pendingCycleCircuitName = ref("");
 const pendingCycleCircuitColor = ref("#2e7d32");
 const selectedCycleCircuitKey = ref("");
+const isIfcPanelCollapsed = ref(false);
 const isCycleNamesPanelOpen = ref(false);
 const isSavedRoutesPanelOpen = ref(true);
 const highlightedSavedRouteId = ref<string | null>(null);
@@ -1249,6 +1274,8 @@ const VALVE_PIPE_LINKS_STORAGE_KEY =
 let world: any;
 let serializer: FRAGS.IfcImporter;
 let fragmentManager: OBC.FragmentsManager;
+let bimGridPanel: HTMLElement | null = null;
+let bimGridViewport: HTMLElement | null = null;
 let fragmentBytes: ArrayBuffer | null = null;
 let animationFrame = 0;
 
@@ -1419,6 +1446,49 @@ onBeforeUnmount(() => {
   clearFlowLayer();
 });
 
+function applyIfcPanelLayout() {
+  const app = document.getElementById("appGrid") as BUI.Grid<["main"]> | null;
+
+  if (!app || !bimGridViewport || !bimGridPanel) {
+    return;
+  }
+
+  bimGridPanel.style.opacity = isIfcPanelCollapsed.value ? "0" : "1";
+  bimGridPanel.style.pointerEvents = isIfcPanelCollapsed.value ? "none" : "auto";
+  bimGridPanel.style.overflow = "hidden";
+
+  app.layouts = {
+    main: {
+      template: isIfcPanelCollapsed.value
+        ? `
+          "panel viewport"
+          / 0rem 1fr
+        `
+        : `
+          "panel viewport"
+          / 23rem 1fr
+        `,
+      elements: {
+        panel: bimGridPanel,
+        viewport: bimGridViewport,
+      },
+    },
+  };
+
+  app.layout = "main";
+
+  if (fragmentManager) {
+    setTimeout(() => {
+      void fragmentManager.core.update(true);
+    }, 0);
+  }
+}
+
+function toggleIfcPanelCollapsed() {
+  isIfcPanelCollapsed.value = !isIfcPanelCollapsed.value;
+  applyIfcPanelLayout();
+}
+
 function createBimPanel(components: OBC.Components, viewport: HTMLElement) {
   const [modelsList] = BUIC.tables.modelsList({
     components,
@@ -1514,18 +1584,10 @@ await syncSelectedValveAssociationRoute();
     `;
   });
 
-  const app = document.getElementById("appGrid") as BUI.Grid<["main"]>;
-  app.layouts = {
-    main: {
-      template: `
-        "panel viewport"
-        / 23rem 1fr
-      `,
-      elements: { panel, viewport },
-    },
-  };
+  bimGridPanel = panel as HTMLElement;
+bimGridViewport = viewport;
 
-  app.layout = "main";
+applyIfcPanelLayout();
 }
 
 const openIfcDialog = () => ifcInput.value?.click();
@@ -1671,7 +1733,10 @@ async function assignSelectedPipes(circuit: PipeCircuit) {
   updateManualStats();
   await rebuildManualFlowLayer();
   flowMessage.value =
-  `${selectedCount.value} elemento(s) marcados como ${getCircuitLabel(circuit)}.`;
+  selectedCount.value +
+  " elemento(s) marcados como " +
+  getCircuitLabel(circuit) +
+  ".";
 }
 
 async function rebuildManualFlowLayer() {
@@ -1813,8 +1878,8 @@ async function clearSelectedManualAssignments() {
   }
 
   flowMessage.value = clearedCount
-    ? `${clearedCount} marca(s) selecionada(s) removida(s).`
-    : "Nenhuma marca selecionada para remover.";
+  ? clearedCount + " marca(s) selecionada(s) removida(s)."
+  : "Nenhuma marca selecionada para remover.";
 }
 
 async function clearManualAssignments() {
@@ -1906,11 +1971,12 @@ function addSelectedNodeToManualRoute() {
   }
 
   manualRouteNodes.push(node);
-
   void updateManualRoutePreviewHighlight();
 
   flowMessage.value =
-    `Ponto manual adicionado. Total: ${manualRouteNodes.length}.`;
+    "Ponto manual adicionado. Total: " +
+    manualRouteNodes.length +
+    ".";
 }
 
 async function removeLastManualRouteNode() {
@@ -1920,9 +1986,7 @@ async function removeLastManualRouteNode() {
   }
 
   const removedNode = manualRouteNodes[manualRouteNodes.length - 1];
-
   ignoredManualRouteNodeAfterRemove = removedNode;
-
   manualRouteNodes.splice(manualRouteNodes.length - 1, 1);
 
   const model = loadedModels.get(removedNode.modelId);
@@ -1938,7 +2002,9 @@ async function removeLastManualRouteNode() {
   }
 
   flowMessage.value =
-    `Último tubo removido do caminho manual. Total: ${manualRouteNodes.length}.`;
+    "Último tubo removido do caminho manual. Total: " +
+    manualRouteNodes.length +
+    ".";
 }
 
 async function updateManualRoutePreviewHighlight() {
@@ -1998,6 +2064,7 @@ function setRouteEnd() {
 
 async function createManualRouteFromSelection(temperature: PipeCircuit) {
   discardRouteMessage.value = "";
+
   if (manualRouteNodes.length < 2) {
     flowMessage.value =
       "Seleciona pelo menos dois tubos pela ordem do caminho manual.";
@@ -2006,21 +2073,20 @@ async function createManualRouteFromSelection(temperature: PipeCircuit) {
 
   const path = [...manualRouteNodes];
 
-currentRouteConnections.splice(0);
+  currentRouteConnections.splice(0);
 
-for (let index = 0; index < path.length - 1; index++) {
-  const connection: FlowConnection = {
-    from: path[index],
-    to: path[index + 1],
-    temperature,
-  };
+  for (let index = 0; index < path.length - 1; index++) {
+    const connection: FlowConnection = {
+      from: path[index],
+      to: path[index + 1],
+      temperature,
+    };
 
-  currentRouteConnections.push(connection);
-  addFlowConnectionIfMissing(connection);
-}
+    currentRouteConnections.push(connection);
+    addFlowConnectionIfMissing(connection);
+  }
 
   assignPathToTemperature(path, temperature);
-
   updateManualStats();
 
   await rebuildManualFlowLayer();
@@ -2029,7 +2095,11 @@ for (let index = 0; index < path.length - 1; index++) {
   isManualRouteRecording.value = false;
 
   flowMessage.value =
-    `Caminho manual ${getCircuitLabel(temperature)} criado com ${path.length} tubo(s).`;
+    "Caminho manual " +
+    getCircuitLabel(temperature) +
+    " criado com " +
+    path.length +
+    " tubo(s).";
 }
 
 async function createAutoRoute(temperature: PipeCircuit) {
@@ -2082,7 +2152,11 @@ for (let index = 0; index < path.length - 1; index++) {
     updateManualStats();
     await rebuildManualFlowLayer();
     flowMessage.value =
-  `Caminho ${getCircuitLabel(temperature)} criado com ${path.length} tubo(s).`;
+  "Caminho manual " +
+  getCircuitLabel(temperature) +
+  " criado com " +
+  path.length +
+  " tubo(s).";
   } catch (error) {
     console.error("Automatic route failed:", error);
     flowMessage.value = "Nao foi possivel calcular o caminho automatico.";
@@ -2123,7 +2197,10 @@ function saveCurrentRoute() {
 
   savedRoutes.push({
     id: crypto.randomUUID(),
-    name: `${capitalizeFirstLetter(circuitLabel)} - Caminho ${routeNumber}`,
+    name:
+      capitalizeFirstLetter(circuitLabel) +
+      " - Caminho " +
+      routeNumber,
     temperature,
     path,
   });
@@ -2131,7 +2208,6 @@ function saveCurrentRoute() {
   saveRoutesToStorage();
 
   discardRouteMessage.value = "";
-
   flowMessage.value = "Caminho guardado com sucesso.";
 }
 
@@ -2208,7 +2284,9 @@ async function deleteSavedRoute(routeId: string) {
 
 if (route.locked) {
   flowMessage.value =
-    `O caminho "${route.name}" está protegido. Desprotege primeiro para apagar.`;
+    "O caminho \"" +
+    route.name +
+    "\" está protegido. Desprotege primeiro para apagar.";
   return;
 }
 
@@ -2307,7 +2385,10 @@ async function toggleSavedRouteHighlight(route: SavedRoute) {
     await resetRoutePathHighlight(route);
     await restoreFlowVisualsAfterRouteHighlight();
 
-    flowMessage.value = `Realce do caminho "${route.name}" removido.`;
+    flowMessage.value =
+  "Realce do caminho \"" +
+  route.name +
+  "\" removido.";
     return;
   }
 
@@ -2352,7 +2433,7 @@ async function toggleSavedRouteHighlight(route: SavedRoute) {
 
     await model.highlight(
       ids,
-      createHighlight(0x00e5ff, `saved-route-highlight-${route.id}`),
+      createHighlight(0x00e5ff, "saved-route-highlight-" + route.id),
     );
   }
 
@@ -2360,7 +2441,10 @@ async function toggleSavedRouteHighlight(route: SavedRoute) {
 
   await fragmentManager.core.update(true);
 
-  flowMessage.value = `Caminho "${route.name}" realçado.`;
+  flowMessage.value =
+  "Caminho \"" +
+  route.name +
+  "\" realçado.";
 }
 
 async function setSavedRouteVisibility(routeId: string, shouldShow: boolean) {
@@ -4991,15 +5075,15 @@ function getNextCircuitColorForKind(kind: CycleCircuitKind) {
   }
 
   const extraColors = [
-  "#2e7d32",
-  "#43a047",
-  "#66bb6a",
-  "#1b5e20",
-  "#81c784",
-  "#558b2f",
-];
+    "#2e7d32",
+    "#43a047",
+    "#66bb6a",
+    "#1b5e20",
+    "#81c784",
+    "#558b2f",
+  ];
 
-return extraColors[existingSameKindCount % extraColors.length];
+  return extraColors[existingSameKindCount % extraColors.length];
 }
 
 function updatePendingCycleCircuitColorFromKind() {
@@ -5109,6 +5193,52 @@ function getCycleCircuitDefinitionsForCycle(cycleNumber: number) {
 
 function getActiveCycleCircuitDefinitions() {
   return getCycleCircuitDefinitionsForCycle(activeCycleNumber.value);
+}
+
+function getCycleLegendDisplayName(cycleNumber: number) {
+  const cycleName = getCycleDisplayName(cycleNumber);
+
+  if (cycleName === String(cycleNumber)) {
+    return `Ciclo ${cycleNumber}`;
+  }
+
+  return cycleName;
+}
+
+function getCycleCircuitLegendGroups() {
+  const groups = [];
+
+  for (
+    let cycleNumber = 1;
+    cycleNumber <= waterCycleCount.value;
+    cycleNumber++
+  ) {
+    const circuits = getCycleCircuitDefinitionsForCycle(cycleNumber);
+
+    if (!circuits.length) {
+      continue;
+    }
+
+    groups.push({
+      cycleNumber,
+      cycleName: getCycleLegendDisplayName(cycleNumber),
+      circuits: [...circuits].sort((firstCircuit, secondCircuit) =>
+        firstCircuit.name.localeCompare(secondCircuit.name),
+      ),
+    });
+  }
+
+  return groups;
+}
+
+function getAllCycleCircuitDefinitionsForLegend() {
+  return [...cycleCircuitDefinitions].sort((firstCircuit, secondCircuit) => {
+    if (firstCircuit.cycleNumber !== secondCircuit.cycleNumber) {
+      return firstCircuit.cycleNumber - secondCircuit.cycleNumber;
+    }
+
+    return firstCircuit.name.localeCompare(secondCircuit.name);
+  });
 }
 
 function selectDefaultCircuitForActiveCycle() {
@@ -7293,6 +7423,112 @@ function chunk<T>(items: T[], size: number) {
   line-height: 1.35;
 }
 
+.global-color-legend {
+  position: fixed;
+  top: 24px;
+  left: calc(23rem + 24px);
+  z-index: 1002;
+  width: min(260px, calc(100vw - 23rem - 48px));
+  max-height: 42vh;
+  overflow-y: auto;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(13, 22, 28, 0.88);
+  color: #f7fbff;
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(10px);
+}
+
+.global-color-legend__title {
+  margin-bottom: 10px;
+  color: #8fd3ff;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.global-color-legend__list {
+  display: grid;
+  gap: 7px;
+}
+
+.global-color-legend__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.global-color-legend__text {
+  display: grid;
+  min-width: 0;
+  color: #f7fbff;
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.global-color-legend__text small {
+  color: #b8c9d3;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.global-color-legend__group {
+  display: grid;
+  gap: 6px;
+}
+
+.global-color-legend__cycle-title {
+  margin-top: 6px;
+  color: #8fd3ff;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.global-color-legend__group:first-child .global-color-legend__cycle-title {
+  margin-top: 0;
+}
+
+.ifc-panel-side-toggle {
+  position: fixed;
+  top: 76px;
+  left: calc(23rem - 14px);
+  z-index: 1003;
+  display: inline-grid;
+  width: 28px;
+  height: 42px;
+  place-items: center;
+  border: 0;
+  border-radius: 0 999px 999px 0;
+  background: #f7fbff;
+  color: #111820;
+  cursor: pointer;
+  font-size: 1.2rem;
+  font-weight: 900;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+}
+
+.ifc-panel-side-toggle:hover {
+  background: #d9f0ff;
+}
+
+.ifc-panel-side-toggle--collapsed {
+  left: 0;
+  border-radius: 0 999px 999px 0;
+}
+
+.global-color-legend--ifc-collapsed {
+  left: 48px;
+}
+
 @media (max-width: 820px) {
   .control-panels {
     top: auto;
@@ -7301,6 +7537,13 @@ function chunk<T>(items: T[], size: number) {
     width: calc(100vw - 24px);
     max-height: calc(100vh - 24px);
   }
+
+.global-color-legend {
+  top: 12px;
+  left: 12px;
+  width: calc(100vw - 24px);
+  max-height: 28vh;
+}
 
   .corner-logo {
     display: none;
