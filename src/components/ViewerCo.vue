@@ -8,6 +8,48 @@
   </div>
 
   <div ref="containerRef" class="full-screen">
+
+  <nav class="application-tabs">
+  <button
+    type="button"
+    :class="[
+      'application-tab',
+      activeApplicationTab === 'automatic'
+        ? 'application-tab--active'
+        : ''
+    ]"
+    @click="activeApplicationTab = 'automatic'"
+  >
+    Análise automática
+  </button>
+
+  <button
+    type="button"
+    :class="[
+      'application-tab',
+      activeApplicationTab === 'manual'
+        ? 'application-tab--active'
+        : ''
+    ]"
+    @click="activeApplicationTab = 'manual'"
+  >
+    Configuração manual
+  </button>
+
+  <button
+    type="button"
+    :class="[
+      'application-tab',
+      activeApplicationTab === 'simulation'
+        ? 'application-tab--active'
+        : ''
+    ]"
+    @click="activeApplicationTab = 'simulation'"
+  >
+    Simulação
+  </button>
+</nav>
+
     <bim-grid id="appGrid"></bim-grid>
     <button
   type="button"
@@ -64,7 +106,92 @@
     />
 
     <div class="control-panels">
+    <section
+  v-if="activeApplicationTab === 'automatic'"
+  class="flow-panel automatic-analysis-panel"
+  aria-label="Análise automática"
+>
+  <div class="flow-panel__header">
+    <div>
+      <p class="flow-panel__eyebrow">Configuração automática</p>
+      <h2>Análise do IFC</h2>
+    </div>
+  </div>
+
+  <div class="flow-panel__content">
+    <p
+  v-if="!hasLoadedModel"
+  class="workflow-help-note"
+>
+  Carrega um ficheiro IFC no painel da esquerda para iniciar a análise automática.
+</p>
+
+<p
+  v-else
+  class="automatic-analysis-status automatic-analysis-status--ready"
+>
+  IFC carregado. O modelo está pronto para ser analisado.
+</p>
+
+   <div
+  v-if="hasLoadedModel"
+  class="flow-actions flow-actions--single"
+>
+  <button
+    type="button"
+    :disabled="isAutomaticAnalysisRunning"
+    @click="startAutomaticAnalysis"
+  >
+    {{
+      isAutomaticAnalysisRunning
+        ? 'A analisar IFC...'
+        : 'Iniciar análise automática'
+    }}
+  </button>
+</div>
+
+<div
+  v-if="hasAutomaticAnalysisResults"
+  class="automatic-analysis-results"
+>
+  <div class="automatic-analysis-result">
+    <span>Tubos e acessórios</span>
+    <strong>{{ automaticAnalysisResults.pipes }}</strong>
+  </div>
+
+  <div class="automatic-analysis-result">
+    <span>Válvulas e controladores</span>
+    <strong>{{ automaticAnalysisResults.valves }}</strong>
+  </div>
+
+  <div class="automatic-analysis-result">
+    <span>Equipamentos</span>
+    <strong>{{ automaticAnalysisResults.equipment }}</strong>
+  </div>
+
+  <div
+    class="automatic-analysis-result automatic-analysis-result--total"
+  >
+    <span>Total identificado</span>
+    <strong>{{ automaticAnalysisResults.total }}</strong>
+  </div>
+</div>
+<div
+  v-if="hasAutomaticAnalysisResults"
+  class="flow-actions flow-actions--single"
+>
+  <button
+    type="button"
+    class="flow-button--danger"
+    @click="clearAutomaticAnalysisResults"
+  >
+    Limpar resultados automáticos
+  </button>
+</div>
+  </div>
+</section>
       <section
+  v-if="activeApplicationTab === 'manual'"
   class="flow-panel"
   :class="{ 'flow-panel--minimized': isElementPanelMinimized }"
   aria-label="Element classification controls"
@@ -273,6 +400,7 @@
       </section>
 
 <section
+  v-if="activeApplicationTab === 'manual'"
   :class="['flow-panel', isFlowControlsPanelMinimized ? 'flow-panel--minimized' : '']"
   aria-label="Water flow controls"
 >
@@ -771,13 +899,14 @@
   </div>
 </section>
 
-      <section
-        :class="[
-          'flow-panel',
-          isSimulationControlPanelMinimized ? 'flow-panel--minimized' : ''
-        ]"
-        aria-label="Simulation control"
-      >
+    <section
+  v-if="activeApplicationTab === 'manual'"
+  :class="[
+    'flow-panel',
+    isSimulationControlPanelMinimized ? 'flow-panel--minimized' : ''
+  ]"
+  aria-label="Simulation control"
+>  
         <div class="flow-panel__header">
           <div>
             <p class="flow-panel__eyebrow">Simulação</p>
@@ -999,37 +1128,6 @@
   </button>
 </div>
 
-          <div class="flow-section-title">
-            Animação
-          </div>
-
-          <div class="flow-actions flow-actions--secondary">
-  <button type="button" @click="toggleFlow">
-    {{ isFlowing ? 'Pausar' : 'Animar' }}
-  </button>
-
-  <button type="button" @click="rebuildManualFlowLayer">
-    Atualizar
-  </button>
-</div>
-
-          <label class="flow-slider">
-            <span>Velocidade</span>
-            <input
-              v-model.number="flowSpeed"
-              type="range"
-              min="0.2"
-              max="3"
-              step="0.1"
-            />
-          </label>
-
-          <div class="flow-actions flow-actions--single">
-            <button type="button" @click="toggleCentralSimulation">
-              {{ isCentralSimulationRunning ? 'Parar simulação' : 'Simular central' }}
-            </button>
-          </div>
-
           <p class="connection-note">
             Bloqueios ativos: {{ blockedCount }}
           </p>
@@ -1110,8 +1208,112 @@
 </template>
         </div>
       </section>
+    
+    <section
+  v-if="activeApplicationTab === 'simulation'"
+  :class="[
+    'flow-panel',
+    isSimulationControlPanelMinimized
+      ? 'flow-panel--minimized'
+      : ''
+  ]"
+  aria-label="Simulação da central"
+>
+  <div class="flow-panel__header">
+    <div>
+      <p class="flow-panel__eyebrow">Simulação</p>
+      <h2>Controlo da central</h2>
     </div>
+
+    <span
+      :class="[
+        'flow-status',
+        isFlowing ? 'flow-status--on' : ''
+      ]"
+    >
+      {{
+        isCentralSimulationRunning
+          ? 'SIM'
+          : isFlowing
+            ? 'ON'
+            : 'OFF'
+      }}
+    </span>
+
+    <button
+      type="button"
+      class="flow-panel__toggle"
+      @click="toggleSimulationControlPanelMinimized"
+    >
+      {{ isSimulationControlPanelMinimized ? '+' : '−' }}
+    </button>
   </div>
+
+  <div class="flow-panel__content">
+    <div class="flow-section-title">
+      Animação
+    </div>
+
+    <div class="flow-actions flow-actions--secondary">
+      <button
+        type="button"
+        @click="toggleFlow"
+      >
+        {{ isFlowing ? 'Pausar' : 'Animar' }}
+      </button>
+
+      <button
+        type="button"
+        @click="rebuildManualFlowLayer"
+      >
+        Atualizar
+      </button>
+    </div>
+
+    <label class="flow-slider">
+      <span>Velocidade</span>
+
+      <input
+        v-model.number="flowSpeed"
+        type="range"
+        min="0.2"
+        max="3"
+        step="0.1"
+      />
+    </label>
+
+    <div class="flow-actions flow-actions--single">
+      <button
+        type="button"
+        @click="toggleCentralSimulation"
+      >
+        {{
+          isCentralSimulationRunning
+            ? 'Parar simulação'
+            : 'Simular central'
+        }}
+      </button>
+    </div>
+
+    <p class="connection-note">
+      Caminhos guardados: {{ savedRoutes.length }}
+    </p>
+
+    <p class="connection-note">
+      Tubos marcados: {{ pipeStats.total }}
+    </p>
+
+    <p class="connection-note">
+      Bloqueios ativos: {{ blockedCount }}
+    </p>
+
+    <p class="flow-note">
+      {{ flowMessage }}
+    </p>
+  </div>
+</section>
+  </div>
+</div>
 
   <a
   href="https://github.com/bastto"
@@ -1133,6 +1335,10 @@ import * as BUI from "@thatopen/ui";
 import * as BUIC from "@thatopen/ui-obc";
 import * as OBCF from "@thatopen/components-front";
 
+type ApplicationTab =
+  | "automatic"
+  | "manual"
+  | "simulation";
 type PipeCircuit = string;
 type CycleCircuitKind =
   | "hotSupply"
@@ -1244,6 +1450,8 @@ type PipeGraphItem = FlowNode & {
   endpoints: any[];
 };
 
+const activeApplicationTab =
+  ref<ApplicationTab>("automatic");
 const containerRef = ref<HTMLDivElement | null>(null);
 const ifcInput = ref<HTMLInputElement | null>(null);
 const isLoading = ref(false);
@@ -1275,6 +1483,14 @@ const selectedCount = ref(0);
 const selectedMepElementInfo = ref("Nenhum elemento classificado selecionado.");
 const selectedIfcDetailsText = ref("");
 const isIfcDetailsPanelOpen = ref(false);
+const isAutomaticAnalysisRunning = ref(false);
+const hasAutomaticAnalysisResults = ref(false);
+const automaticAnalysisResults = reactive({
+  pipes: 0,
+  valves: 0,
+  equipment: 0,
+  total: 0,
+});
 const selectedValveDesignation = ref("nenhuma válvula selecionada");
 const pendingValveDesignation = ref("");
 const selectedValveOriginalDesignation = ref("");
@@ -1577,6 +1793,10 @@ function createBimPanel(components: OBC.Components, viewport: HTMLElement) {
 
   highlighter.events.select.onHighlight.add(async (modelIdMap) => {
   replaceSelection(modelIdMap);
+
+  selectedIfcDetailsText.value = "";
+isIfcDetailsPanelOpen.value = false;
+
 updatePropertiesTable({ modelIdMap });
 
 await showSelectedMepElementInfo();
@@ -1594,6 +1814,8 @@ await syncSelectedValveAssociationRoute();
   highlighter.events.select.onClear.add(async () => {
   selectedItems.clear();
   selectedCount.value = 0;
+  selectedIfcDetailsText.value = "";
+isIfcDetailsPanelOpen.value = false;
   selectedMepElementInfo.value = "Nenhum elemento classificado selecionado.";
 
   updatePropertiesTable({
@@ -3862,6 +4084,119 @@ function getSingleDiameterValue(value: string) {
   return Number(numericMatch[0].replace(",", "."));
 }
 
+function collectExactIfcPropertyValues(
+  data: any,
+  propertyName: string,
+) {
+  const results: {
+    caminho: string;
+    valor: string;
+  }[] = [];
+
+  const visitedObjects = new WeakSet<object>();
+
+  function normalizeText(value: any) {
+    return getAttributeValueText(value)
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "")
+      .replace(/_/g, "");
+  }
+
+  const targetName = normalizeText(propertyName);
+
+  function extractValue(value: any) {
+    if (value === null || value === undefined) {
+      return "";
+    }
+
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+    ) {
+      return String(value);
+    }
+
+    const possibleValues = [
+      value.NominalValue,
+      value.nominalValue,
+      value.Value,
+      value.value,
+      value.wrappedValue,
+    ];
+
+    for (const possibleValue of possibleValues) {
+      const text =
+        getAttributeValueText(possibleValue).trim();
+
+      if (text) {
+        return text;
+      }
+    }
+
+    return "";
+  }
+
+  function visit(value: any, path: string[] = []) {
+    if (
+      value === null ||
+      value === undefined ||
+      typeof value !== "object"
+    ) {
+      return;
+    }
+
+    if (visitedObjects.has(value)) {
+      return;
+    }
+
+    visitedObjects.add(value);
+
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => {
+        visit(item, [...path, String(index)]);
+      });
+
+      return;
+    }
+
+    const objectPropertyName = normalizeText(
+      value.Name ?? value.name,
+    );
+
+    if (objectPropertyName === targetName) {
+      const extractedValue = extractValue(value);
+
+      if (extractedValue) {
+        results.push({
+          caminho: path.join("."),
+          valor: extractedValue,
+        });
+      }
+    }
+
+    for (const [key, nestedValue] of Object.entries(value)) {
+      if (normalizeText(key) === targetName) {
+        const extractedValue = extractValue(nestedValue);
+
+        if (extractedValue) {
+          results.push({
+            caminho: [...path, key].join("."),
+            valor: extractedValue,
+          });
+        }
+      }
+
+      visit(nestedValue, [...path, key]);
+    }
+  }
+
+  visit(data);
+
+  return results;
+}
+
 async function extractSelectedIfcInformation() {
   const selectedNode = getFirstSelectedNode();
 
@@ -3897,13 +4232,9 @@ async function extractSelectedIfcInformation() {
     relations: true,
   },
   HasAssignments: {
-    attributes: true,
-    relations: true,
-  },
-  IsGroupedBy: {
-    attributes: true,
-    relations: true,
-  },
+  attributes: true,
+  relations: false,
+},
 },
     },
   );
@@ -3923,7 +4254,7 @@ async function extractSelectedIfcInformation() {
   ],
 );
 
-const systemName = findIfcPropertyValue(
+  const systemName = findIfcPropertyValue(
   rawIfcData,
   [
     "System Name",
@@ -6705,6 +7036,96 @@ function animateFlow() {
   tick();
 }
 
+function clearAutomaticAnalysisResults() {
+  hasAutomaticAnalysisResults.value = false;
+  isAutomaticAnalysisRunning.value = false;
+
+  automaticAnalysisResults.pipes = 0;
+  automaticAnalysisResults.valves = 0;
+  automaticAnalysisResults.equipment = 0;
+  automaticAnalysisResults.total = 0;
+
+  flowMessage.value =
+    "Resultados da análise automática limpos. A configuração manual foi mantida.";
+}
+
+async function startAutomaticAnalysis() {
+  if (!loadedModels.size) {
+    flowMessage.value =
+      "Carrega primeiro um ficheiro IFC no painel da esquerda.";
+    return;
+  }
+
+  isAutomaticAnalysisRunning.value = true;
+  hasAutomaticAnalysisResults.value = false;
+
+  automaticAnalysisResults.pipes = 0;
+  automaticAnalysisResults.valves = 0;
+  automaticAnalysisResults.equipment = 0;
+  automaticAnalysisResults.total = 0;
+
+  try {
+    for (const model of loadedModels.values()) {
+      const pipeCategories = await model.getItemsOfCategories([
+        /IFCPIPESEGMENT/i,
+        /IFCFLOWSEGMENT/i,
+        /IFCPIPEFITTING/i,
+        /IFCFLOWFITTING/i,
+      ]);
+
+      const valveCategories = await model.getItemsOfCategories([
+        /IFCVALVE/i,
+        /IFCFLOWCONTROLLER/i,
+      ]);
+
+      const equipmentCategories = await model.getItemsOfCategories([
+        /IFCPUMP/i,
+        /IFCBOILER/i,
+        /IFCTANK/i,
+        /IFCHEATEXCHANGER/i,
+        /IFCFLOWSTORAGEDEVICE/i,
+        /IFCFLOWMOVINGDEVICE/i,
+      ]);
+
+      const pipeIds = new Set(
+        Object.values(pipeCategories).flat(),
+      );
+
+      const valveIds = new Set(
+        Object.values(valveCategories).flat(),
+      );
+
+      const equipmentIds = new Set(
+        Object.values(equipmentCategories).flat(),
+      );
+
+      automaticAnalysisResults.pipes += pipeIds.size;
+      automaticAnalysisResults.valves += valveIds.size;
+      automaticAnalysisResults.equipment += equipmentIds.size;
+    }
+
+    automaticAnalysisResults.total =
+      automaticAnalysisResults.pipes +
+      automaticAnalysisResults.valves +
+      automaticAnalysisResults.equipment;
+
+    hasAutomaticAnalysisResults.value = true;
+
+    flowMessage.value =
+      "Análise automática inicial concluída.";
+  } catch (error) {
+    console.error(
+      "Erro durante a análise automática:",
+      error,
+    );
+
+    flowMessage.value =
+      "Não foi possível concluir a análise automática.";
+  } finally {
+    isAutomaticAnalysisRunning.value = false;
+  }
+}
+
 function toggleElementPanelMinimized() {
   isElementPanelMinimized.value = !isElementPanelMinimized.value;
 }
@@ -7363,10 +7784,10 @@ function chunk<T>(items: T[], size: number) {
 .control-panels {
   position: fixed;
   right: 24px;
-  top: 24px;
+  top: 60px;
   z-index: 1000;
   width: min(390px, calc(100vw - 48px));
-  max-height: calc(100vh - 48px);
+  max-height: calc(100vh - 84px);
   overflow-y: auto;
   display: grid;
   gap: 14px;
@@ -8050,7 +8471,7 @@ function chunk<T>(items: T[], size: number) {
 
 .global-color-legend {
   position: fixed;
-  top: 24px;
+  top: 60px;
   left: calc(23rem + 24px);
   z-index: 1002;
   width: min(260px, calc(100vw - 23rem - 48px));
@@ -8213,6 +8634,89 @@ function chunk<T>(items: T[], size: number) {
   line-height: 1.35;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.application-tabs {
+  position: fixed;
+  top: 0;
+  left: 23rem;
+  right: 0;
+  z-index: 1005;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 46px;
+  padding: 6px 14px 0;
+  background: rgba(13, 22, 28, 0.96);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.application-tab {
+  min-height: 36px;
+  padding: 7px 18px;
+  border: 1px solid transparent;
+  border-radius: 8px 8px 0 0;
+  background: rgba(255, 255, 255, 0.08);
+  color: #b8c9d3;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.application-tab:hover {
+  background: rgba(143, 211, 255, 0.14);
+  color: #f7fbff;
+}
+
+.application-tab--active {
+  border-color: rgba(143, 211, 255, 0.45);
+  border-bottom-color: #1d2932;
+  background: #1d2932;
+  color: #8fd3ff;
+}
+
+.automatic-analysis-status {
+  margin: 12px 0 0;
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.automatic-analysis-status--ready {
+  border: 1px solid rgba(102, 187, 106, 0.55);
+  background: rgba(102, 187, 106, 0.14);
+  color: #a5d6a7;
+}
+
+.automatic-analysis-results {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.automatic-analysis-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #dbe9f1;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.automatic-analysis-result strong {
+  color: #8fd3ff;
+  font-size: 0.95rem;
+}
+
+.automatic-analysis-result--total {
+  border: 1px solid rgba(143, 211, 255, 0.45);
+  background: rgba(143, 211, 255, 0.14);
 }
 
 @media (max-width: 820px) {
