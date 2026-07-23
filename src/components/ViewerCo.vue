@@ -1125,6 +1125,7 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, reactive, ref } from "vue";
+import * as WEBIFC from "web-ifc";
 import * as THREE from "three";
 import * as OBC from "@thatopen/components";
 import * as FRAGS from "@thatopen/fragments";
@@ -1428,6 +1429,23 @@ onMounted(async () => {
   grids.create(world);
 
   serializer = new FRAGS.IfcImporter();
+  serializer.classes.abstract.add(...FRAGS.ifcClasses.types);
+
+serializer.relations.set(WEBIFC.IFCRELDEFINESBYTYPE, {
+  forRelated: "IsTypedBy",
+  forRelating: "Types",
+});
+
+serializer.relations.set(WEBIFC.IFCRELASSIGNSTOGROUP, {
+  forRelated: "HasAssignments",
+  forRelating: "IsGroupedBy",
+});
+
+serializer.relations.set(WEBIFC.IFCRELDEFINESBYPROPERTIES, {
+  forRelated: "IsDefinedBy",
+  forRelating: "DefinesOccurrence",
+});
+
   serializer.wasm = {
     absolute: true,
     path: "https://unpkg.com/web-ifc@0.0.69/",
@@ -3715,55 +3733,311 @@ function collectRevitFamilyAndTypeValues(data: any) {
   return results;
 }
 
+function findIfcPropertyValue(
+  data: any,
+  propertyNames: string[],
+) {
+  const normalizedNames = propertyNames.map((name) =>
+    name
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[\s_\-]/g, ""),
+  );
+
+  function normalizeName(value: any) {
+    return getAttributeValueText(value)
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[\s_\-]/g, "");
+  }
+
+  function getPropertyValue(value: any): string {
+    if (value === null || value === undefined) {
+      return "";
+    }
+
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+    ) {
+      return String(value).trim();
+    }
+
+    if (typeof value === "object") {
+      const possibleValues = [
+        value.NominalValue,
+        value.nominalValue,
+        value.Value,
+        value.value,
+        value.wrappedValue,
+      ];
+
+      for (const possibleValue of possibleValues) {
+        const extractedValue =
+          getAttributeValueText(possibleValue).trim();
+
+        if (extractedValue) {
+          return extractedValue;
+        }
+      }
+    }
+
+    return "";
+  }
+
+  function visit(value: any): string | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const result = visit(item);
+
+        if (result) {
+          return result;
+        }
+      }
+
+      return null;
+    }
+
+    if (typeof value !== "object") {
+      return null;
+    }
+
+    const propertyName = normalizeName(
+      value.Name ?? value.name,
+    );
+
+    if (
+      propertyName &&
+      normalizedNames.includes(propertyName)
+    ) {
+      const propertyValue = getPropertyValue(value);
+
+      if (propertyValue) {
+        return propertyValue;
+      }
+    }
+
+    for (const [key, nestedValue] of Object.entries(value)) {
+      const normalizedKey = normalizeName(key);
+
+      if (normalizedNames.includes(normalizedKey)) {
+        const directValue = getPropertyValue(nestedValue);
+
+        if (directValue) {
+          return directValue;
+        }
+      }
+
+      const nestedResult = visit(nestedValue);
+
+      if (nestedResult) {
+        return nestedResult;
+      }
+    }
+
+    return null;
+  }
+
+  return visit(data) ?? "não encontrado";
+}
+
+function getSingleDiameterValue(value: string) {
+  if (!value || value === "não encontrado") {
+    return "não encontrado";
+  }
+
+  const numericMatch = value.match(/\d+(?:[.,]\d+)?/);
+
+  if (!numericMatch) {
+    return value;
+  }
+
+  return Number(numericMatch[0].replace(",", "."));
+}
+
 async function extractSelectedIfcInformation() {
   const selectedNode = getFirstSelectedNode();
 
   if (!selectedNode) {
-    flowMessage.value = "Seleciona primeiro um tubo ou elemento no modelo.";
+    flowMessage.value =
+      "Seleciona primeiro um tubo ou elemento no modelo.";
     return;
   }
 
   const model = loadedModels.get(selectedNode.modelId);
 
   if (!model) {
-    flowMessage.value = "Modelo do elemento selecionado não encontrado.";
+    flowMessage.value =
+      "Modelo do elemento selecionado não encontrado.";
     return;
   }
 
-  const itemData = await model.getItemsData([selectedNode.localId], {
-  attributesDefault: true,
-  relations: {
-    IsTypedBy: {
-      attributes: true,
-      relations: true,
-    },
-    DefinesOccurrence: {
-      attributes: true,
-      relations: true,
-    },
-    IsDefinedBy: {
-      attributes: true,
-      relations: true,
-    },
+  const itemData = await model.getItemsData(
+    [selectedNode.localId],
+    {
+      attributesDefault: true,
+      relations: {
+  IsTypedBy: {
+    attributes: true,
+    relations: true,
   },
-});
+  DefinesOccurrence: {
+    attributes: true,
+    relations: true,
+  },
+  IsDefinedBy: {
+    attributes: true,
+    relations: true,
+  },
+  HasAssignments: {
+    attributes: true,
+    relations: true,
+  },
+  IsGroupedBy: {
+    attributes: true,
+    relations: true,
+  },
+},
+    },
+  );
 
   const rawIfcData = normalizeIfcValue(itemData[0]);
-  const revitValues = collectRevitFamilyAndTypeValues(rawIfcData);
+
+  const revitValues =
+    collectRevitFamilyAndTypeValues(rawIfcData);
+
+  const systemType = findIfcPropertyValue(
+  rawIfcData,
+  [
+    "System Type",
+    "SystemType",
+    "System Classification",
+    "SystemClassification",
+  ],
+);
+
+const systemName = findIfcPropertyValue(
+  rawIfcData,
+  [
+    "System Name",
+    "SystemName",
+    "System Abbreviation",
+    "SystemAbbreviation",
+  ],
+);
+
+const diameterValue = findIfcPropertyValue(
+  rawIfcData,
+  [
+    "Diameter",
+    "Nominal Diameter",
+    "NominalDiameter",
+    "Outer Diameter",
+    "OuterDiameter",
+    "Inner Diameter",
+    "InnerDiameter",
+    "Size",
+  ],
+);
+
+  const typeRelation =
+    itemData[0]?.IsTypedBy?.[0] ??
+    itemData[0]?.isTypedBy?.[0] ??
+    null;
+
+  let revitFamily = revitValues.family;
+
+  if (typeRelation) {
+    const typeLocalId = Number(
+      typeRelation._localId?.value ??
+      typeRelation.localId?.value ??
+      typeRelation._localId ??
+      typeRelation.localId,
+    );
+
+    if (Number.isFinite(typeLocalId)) {
+      const typeItemData = await model.getItemsData(
+  [typeLocalId],
+  {
+    attributesDefault: false,
+    attributes: [
+      "Name",
+      "Description",
+      "ElementType",
+      "ApplicableOccurrence",
+      "Tag",
+      "PredefinedType",
+      "ObjectType",
+    ],
+    relationsDefault: {
+      attributes: false,
+      relations: false,
+    },
+  },
+);
+
+      const typeEntity = typeItemData[0];
+
+      console.log(
+        "ENTIDADE IFC DE TIPO COMPLETA:",
+        typeEntity,
+      );
+
+      const possibleFamilyValues = [
+        typeEntity?.FamilyName,
+        typeEntity?.familyName,
+        typeEntity?.Family,
+        typeEntity?.family,
+        typeEntity?.ElementType,
+        typeEntity?.elementType,
+        typeEntity?.Name,
+        typeEntity?.name,
+      ];
+
+      for (
+        const possibleFamilyValue of possibleFamilyValues
+      ) {
+        const familyText =
+          getAttributeValueText(
+            possibleFamilyValue,
+          ).trim();
+
+        if (familyText) {
+          revitFamily = familyText;
+          break;
+        }
+      }
+    }
+  }
 
   const extractedData = {
   elementoSelecionado: {
     modelId: selectedNode.modelId,
     localId: selectedNode.localId,
   },
-  Family: revitValues.family,
-Type: revitValues.type,
+  Family: revitFamily,
+  Type: revitValues.type,
+  "System Type": systemType,
+  "System Name": systemName,
+  Diameter: getSingleDiameterValue(diameterValue),
 };
 
-  selectedIfcDetailsText.value = JSON.stringify(extractedData, null, 2);
+  selectedIfcDetailsText.value =
+    JSON.stringify(extractedData, null, 2);
+
   isIfcDetailsPanelOpen.value = true;
 
-  console.log("Family e Type extraídos:", extractedData);
+  console.log(
+    "Family e Type extraídos:",
+    extractedData,
+  );
 
   flowMessage.value =
     "Family e Type extraídos para o elemento #" +
