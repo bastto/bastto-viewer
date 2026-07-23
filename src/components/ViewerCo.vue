@@ -4197,6 +4197,37 @@ function collectExactIfcPropertyValues(
   return results;
 }
 
+function getSelectedElementSystemName(itemData: any) {
+  const assignments =
+    itemData?.HasAssignments ??
+    itemData?.hasAssignments ??
+    [];
+
+  if (!Array.isArray(assignments)) {
+    return "";
+  }
+
+  for (const assignment of assignments) {
+    const possibleNames = [
+      assignment?.Name,
+      assignment?.name,
+      assignment?.LongName,
+      assignment?.longName,
+    ];
+
+    for (const possibleName of possibleNames) {
+      const systemName =
+        getAttributeValueText(possibleName).trim();
+
+      if (systemName) {
+        return systemName;
+      }
+    }
+  }
+
+  return "";
+}
+
 async function extractSelectedIfcInformation() {
   const selectedNode = getFirstSelectedNode();
 
@@ -4254,15 +4285,23 @@ async function extractSelectedIfcInformation() {
   ],
 );
 
-  const systemName = findIfcPropertyValue(
-  rawIfcData,
-  [
-    "System Name",
-    "SystemName",
-    "System Abbreviation",
-    "SystemAbbreviation",
-  ],
-);
+  const assignedSystemName =
+  getSelectedElementSystemName(itemData[0]);
+
+const fallbackSystemName =
+  findIfcPropertyValue(
+    rawIfcData,
+    [
+      "System Name",
+      "SystemName",
+      "System Abbreviation",
+      "SystemAbbreviation",
+    ],
+  );
+
+const systemName =
+  assignedSystemName ||
+  fallbackSystemName;
 
 const diameterValue = findIfcPropertyValue(
   rawIfcData,
