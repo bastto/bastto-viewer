@@ -9,7 +9,13 @@
 
   <div ref="containerRef" class="full-screen">
 
-  <nav class="application-tabs">
+  <nav
+  class="application-tabs"
+  :class="{
+    'application-tabs--ifc-collapsed':
+      isIfcPanelCollapsed
+  }"
+>
   <button
     type="button"
     :class="[
@@ -1723,41 +1729,60 @@ onBeforeUnmount(() => {
 });
 
 function applyIfcPanelLayout() {
-  const app = document.getElementById("appGrid") as BUI.Grid<["main"]> | null;
+  const app = document.getElementById(
+    "appGrid",
+  ) as BUI.Grid<["main"]> | null;
 
   if (!app || !bimGridViewport || !bimGridPanel) {
     return;
   }
 
-  bimGridPanel.style.opacity = isIfcPanelCollapsed.value ? "0" : "1";
-  bimGridPanel.style.pointerEvents = isIfcPanelCollapsed.value ? "none" : "auto";
-  bimGridPanel.style.overflow = "hidden";
+  if (isIfcPanelCollapsed.value) {
+    bimGridPanel.style.display = "none";
 
-  app.layouts = {
-    main: {
-      template: isIfcPanelCollapsed.value
-        ? `
-          "panel viewport"
-          / 0rem 1fr
-        `
-        : `
+    bimGridViewport.style.position = "absolute";
+    bimGridViewport.style.inset = "0";
+    bimGridViewport.style.width = "100%";
+    bimGridViewport.style.height = "100%";
+
+    app.layouts = {
+      main: {
+        template: `
+          "viewport"
+          / 1fr
+        `,
+        elements: {
+          viewport: bimGridViewport,
+        },
+      },
+    };
+  } else {
+    bimGridPanel.style.display = "";
+
+    bimGridViewport.style.position = "";
+    bimGridViewport.style.inset = "";
+    bimGridViewport.style.width = "";
+    bimGridViewport.style.height = "";
+
+    app.layouts = {
+      main: {
+        template: `
           "panel viewport"
           / 23rem 1fr
         `,
-      elements: {
-        panel: bimGridPanel,
-        viewport: bimGridViewport,
+        elements: {
+          panel: bimGridPanel,
+          viewport: bimGridViewport,
+        },
       },
-    },
-  };
+    };
+  }
 
   app.layout = "main";
 
-  if (fragmentManager) {
-    setTimeout(() => {
-      void fragmentManager.core.update(true);
-    }, 0);
-  }
+  setTimeout(() => {
+    void fragmentManager?.core.update(true);
+  }, 0);
 }
 
 function toggleIfcPanelCollapsed() {
@@ -8688,6 +8713,10 @@ function chunk<T>(items: T[], size: number) {
   padding: 6px 14px 0;
   background: rgba(13, 22, 28, 0.96);
   border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.application-tabs--ifc-collapsed {
+  left: 0;
 }
 
 .application-tab {
