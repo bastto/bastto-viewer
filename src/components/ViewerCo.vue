@@ -4106,16 +4106,18 @@ function getSingleDiameterValue(value: string) {
     return value;
   }
 
-  const diameterInMeters = Number(
+  const numericDiameter = Number(
     numericMatch[0].replace(",", "."),
   );
 
-  const diameterInCentimeters =
-    diameterInMeters * 1000;
+  const diameterInMillimeters =
+    numericDiameter <= 1
+      ? numericDiameter * 1000
+      : numericDiameter;
 
   return (
     "DN " +
-    Number(diameterInCentimeters.toFixed(2)) 
+    Number(diameterInMillimeters.toFixed(2))
   );
 }
 
@@ -4563,11 +4565,11 @@ const diameterValue = findIfcPropertyValue(
   ],
 );
 
-const estadoValue = findIfcPropertyValue(
+  const stateValue = findIfcPropertyValue(
   rawIfcData,
   [
-    "Estado",
     "State",
+    "Estado",
     "Valve State",
     "ValveState",
   ],
@@ -4655,7 +4657,7 @@ const estadoValue = findIfcPropertyValue(
   "System Type": systemType,
   "System Name": systemName,
   Diameter: getSingleDiameterValue(diameterValue),
-  Estado: estadoValue,
+  State: stateValue,
 };
 
   selectedIfcDetailsText.value =
