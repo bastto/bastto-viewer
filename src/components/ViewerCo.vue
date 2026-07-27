@@ -4106,7 +4106,17 @@ function getSingleDiameterValue(value: string) {
     return value;
   }
 
-  return Number(numericMatch[0].replace(",", "."));
+  const diameterInMeters = Number(
+    numericMatch[0].replace(",", "."),
+  );
+
+  const diameterInCentimeters =
+    diameterInMeters * 1000;
+
+  return (
+    "DN " +
+    Number(diameterInCentimeters.toFixed(2)) 
+  );
 }
 
 function collectExactIfcPropertyValues(
@@ -4253,6 +4263,214 @@ function getSelectedElementSystemName(itemData: any) {
   return "";
 }
 
+function findMechanicalSystemName(data: any) {
+  function normalizeText(value: any) {
+    return getAttributeValueText(value)
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "")
+      .replace(/_/g, "");
+  }
+
+  function extractValue(value: any) {
+    if (value === null || value === undefined) {
+      return "";
+    }
+
+    if (
+      typeof value === "string" ||
+      typeof value === "number"
+    ) {
+      return String(value).trim();
+    }
+
+    const possibleValues = [
+      value.NominalValue,
+      value.nominalValue,
+      value.Value,
+      value.value,
+      value.wrappedValue,
+    ];
+
+    for (const possibleValue of possibleValues) {
+      const text =
+        getAttributeValueText(possibleValue).trim();
+
+      if (text) {
+        return text;
+      }
+    }
+
+    return "";
+  }
+
+  function visit(
+    value: any,
+    insideMechanical = false,
+  ): string {
+    if (
+      value === null ||
+      value === undefined ||
+      typeof value !== "object"
+    ) {
+      return "";
+    }
+
+    const objectName = normalizeText(
+      value.Name ?? value.name,
+    );
+
+    const isMechanical =
+      insideMechanical ||
+      objectName === "mechanical";
+
+    if (
+      isMechanical &&
+      objectName === "systemname"
+    ) {
+      return extractValue(value);
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const result = visit(item, isMechanical);
+
+        if (result) {
+          return result;
+        }
+      }
+
+      return "";
+    }
+
+    for (const [key, nestedValue] of Object.entries(value)) {
+      const normalizedKey = normalizeText(key);
+
+      const nextInsideMechanical =
+        isMechanical ||
+        normalizedKey === "mechanical";
+
+      if (
+        nextInsideMechanical &&
+        normalizedKey === "systemname"
+      ) {
+        const directValue = extractValue(nestedValue);
+
+        if (directValue) {
+          return directValue;
+        }
+      }
+
+      const result = visit(
+        nestedValue,
+        nextInsideMechanical,
+      );
+
+      if (result) {
+        return result;
+      }
+    }
+
+    return "";
+  }
+
+  return visit(data);
+}
+
+function findRevitTypeValue(data: any) {
+  function normalizeText(value: any) {
+    return getAttributeValueText(value)
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "")
+      .replace(/_/g, "");
+  }
+
+  function extractPropertyValue(value: any) {
+    if (!value || typeof value !== "object") {
+      return "";
+    }
+
+    const possibleValues = [
+      value.NominalValue,
+      value.nominalValue,
+      value.Value,
+      value.value,
+      value.wrappedValue,
+    ];
+
+    for (const possibleValue of possibleValues) {
+      const text =
+        getAttributeValueText(possibleValue).trim();
+
+      if (text) {
+        return text;
+      }
+    }
+
+    return "";
+  }
+
+  function visit(value: any): string {
+    if (
+      value === null ||
+      value === undefined ||
+      typeof value !== "object"
+    ) {
+      return "";
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const result = visit(item);
+
+        if (result) {
+          return result;
+        }
+      }
+
+      return "";
+    }
+
+    const propertyName = normalizeText(
+      value.Name ?? value.name,
+    );
+
+    if (propertyName === "type") {
+      const propertyValue =
+        extractPropertyValue(value);
+
+      if (propertyValue) {
+        return propertyValue;
+      }
+    }
+
+    for (const [key, nestedValue] of Object.entries(value)) {
+      if (normalizeText(key) === "type") {
+        const directValue =
+          getAttributeValueText(nestedValue).trim();
+
+        if (
+          directValue &&
+          !directValue.toLowerCase().startsWith("ifc")
+        ) {
+          return directValue;
+        }
+      }
+
+      const result = visit(nestedValue);
+
+      if (result) {
+        return result;
+      }
+    }
+
+    return "";
+  }
+
+  return visit(data);
+}
+
 async function extractSelectedIfcInformation() {
   const selectedNode = getFirstSelectedNode();
 
@@ -4300,6 +4518,9 @@ async function extractSelectedIfcInformation() {
   const revitValues =
     collectRevitFamilyAndTypeValues(rawIfcData);
 
+  const exactRevitType =
+  findRevitTypeValue(rawIfcData);
+
   const systemType = findIfcPropertyValue(
   rawIfcData,
   [
@@ -4310,8 +4531,8 @@ async function extractSelectedIfcInformation() {
   ],
 );
 
-  const assignedSystemName =
-  getSelectedElementSystemName(itemData[0]);
+  const mechanicalSystemName =
+  findMechanicalSystemName(rawIfcData);
 
 const fallbackSystemName =
   findIfcPropertyValue(
@@ -4325,7 +4546,7 @@ const fallbackSystemName =
   );
 
 const systemName =
-  assignedSystemName ||
+  mechanicalSystemName ||
   fallbackSystemName;
 
 const diameterValue = findIfcPropertyValue(
@@ -4339,6 +4560,16 @@ const diameterValue = findIfcPropertyValue(
     "Inner Diameter",
     "InnerDiameter",
     "Size",
+  ],
+);
+
+const estadoValue = findIfcPropertyValue(
+  rawIfcData,
+  [
+    "Estado",
+    "State",
+    "Valve State",
+    "ValveState",
   ],
 );
 
@@ -4418,10 +4649,13 @@ const diameterValue = findIfcPropertyValue(
     localId: selectedNode.localId,
   },
   Family: revitFamily,
-  Type: revitValues.type,
+  Type:
+  exactRevitType ||
+  revitValues.type,
   "System Type": systemType,
   "System Name": systemName,
   Diameter: getSingleDiameterValue(diameterValue),
+  Estado: estadoValue,
 };
 
   selectedIfcDetailsText.value =
