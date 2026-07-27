@@ -139,6 +139,127 @@
   IFC carregado. O modelo está pronto para ser analisado.
 </p>
 
+<div
+  v-if="hasLoadedModel"
+  class="flow-actions flow-actions--single"
+>
+  <button
+    type="button"
+    :disabled="isSystemScanRunning"
+    @click="scanIfcSystems"
+  >
+    {{
+      isSystemScanRunning
+        ? 'A analisar sistemas...'
+        : 'Analisar System Types e System Names'
+    }}
+  </button>
+</div>
+
+<div
+  v-if="hasSystemScanResults"
+  class="automatic-analysis-results"
+>
+  <div class="automatic-system-result">
+    <div class="automatic-system-result__header">
+      <span>
+        System Types diferentes
+      </span>
+
+      <strong>
+        {{ systemScanResults.systemTypes.length }}
+      </strong>
+
+      <button
+        type="button"
+        class="section-collapse-button"
+        @click="
+          isSystemTypesListOpen =
+            !isSystemTypesListOpen
+        "
+      >
+        {{ isSystemTypesListOpen ? '−' : '+' }}
+      </button>
+    </div>
+
+    <div
+      v-if="isSystemTypesListOpen"
+      class="automatic-system-result__list"
+    >
+      <span
+        v-for="systemType in systemScanResults.systemTypes"
+        :key="`system-type-${systemType}`"
+      >
+        {{ systemType }}
+      </span>
+
+      <span
+        v-if="!systemScanResults.systemTypes.length"
+        class="automatic-system-result__empty"
+      >
+        Nenhum System Type encontrado.
+      </span>
+    </div>
+  </div>
+
+  <div class="automatic-system-result">
+    <div class="automatic-system-result__header">
+      <span>
+        System Names diferentes
+      </span>
+
+      <strong>
+        {{ systemScanResults.systemNames.length }}
+      </strong>
+
+      <button
+        type="button"
+        class="section-collapse-button"
+        @click="
+          isSystemNamesListOpen =
+            !isSystemNamesListOpen
+        "
+      >
+        {{ isSystemNamesListOpen ? '−' : '+' }}
+      </button>
+    </div>
+
+    <div
+      v-if="isSystemNamesListOpen"
+      class="automatic-system-result__list"
+    >
+      <span
+        v-for="systemName in systemScanResults.systemNames"
+        :key="`system-name-${systemName}`"
+      >
+        {{ systemName }}
+      </span>
+
+      <span
+        v-if="!systemScanResults.systemNames.length"
+        class="automatic-system-result__empty"
+      >
+        Nenhum System Name encontrado.
+      </span>
+    </div>
+  </div>
+</div>
+
+<div
+  v-if="
+    hasSystemScanResults &&
+    systemScanResults.systemNames.length
+  "
+  class="flow-actions flow-actions--single"
+>
+  <button
+    type="button"
+    @click="createAutomaticCircuitsFromSystemNames"
+  >
+    Criar caminhos a partir dos System Names
+  </button>
+</div>
+
    <div
   v-if="hasLoadedModel"
   class="flow-actions flow-actions--single"
@@ -1491,6 +1612,21 @@ const selectedIfcDetailsText = ref("");
 const isIfcDetailsPanelOpen = ref(false);
 const isAutomaticAnalysisRunning = ref(false);
 const hasAutomaticAnalysisResults = ref(false);
+const isSystemScanRunning = ref(false);
+const hasSystemScanResults = ref(false);
+const systemScanResults = reactive({
+  systemTypes: [] as string[],
+  systemNames: [] as string[],
+});
+const scannedSystemGroups = new Map<
+  string,
+  {
+    nodes: FlowNode[];
+    systemTypes: Set<string>;
+  }
+>();
+const isSystemTypesListOpen = ref(false);
+const isSystemNamesListOpen = ref(false);
 const automaticAnalysisResults = reactive({
   pipes: 0,
   valves: 0,
@@ -7426,6 +7562,397 @@ async function startAutomaticAnalysis() {
   }
 }
 
+function getAutomaticCircuitKindFromText(
+  value: string,
+): CycleCircuitKind {
+  const normalizedValue = value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (
+    normalizedValue.includes("avanco") ||
+    normalizedValue.includes("ida")
+  ) {
+    return "hotSupply";
+  }
+
+  if (
+    normalizedValue.includes("retorno") ||
+    normalizedValue.includes("return") ||
+    normalizedValue.includes("_ret")
+  ) {
+    return "hotReturn";
+  }
+
+  return "extra";
+}
+
+function getAutomaticCircuitKindFromSystemGroup(
+  systemName: string,
+  systemTypes: Set<string>,
+): CycleCircuitKind {
+  const detectedKinds = new Set<CycleCircuitKind>();
+
+  for (const systemType of systemTypes) {
+    const kind =
+      getAutomaticCircuitKindFromText(systemType);
+
+    if (kind !== "extra") {
+      detectedKinds.add(kind);
+    }
+  }
+
+  if (detectedKinds.size === 1) {
+    return [...detectedKinds][0];
+  }
+
+  if (detectedKinds.size > 1) {
+    return "extra";
+  }
+
+  return getAutomaticCircuitKindFromText(systemName);
+}
+
+async function createAutomaticCircuitsFromSystemNames() {
+  if (!systemScanResults.systemNames.length) {
+    flowMessage.value =
+      "Faz primeiro a análise dos sistemas IFC.";
+    return;
+  }
+
+  let createdCount = 0;
+  let existingCount = 0;
+  let assignedPipeCount = 0;
+  let unidentifiedCount = 0;
+
+  for (
+    const systemName of systemScanResults.systemNames
+  ) {
+    const systemGroup =
+      scannedSystemGroups.get(systemName);
+
+    if (!systemGroup) {
+      continue;
+    }
+
+    const normalizedSystemName =
+      systemName.trim().toLowerCase();
+
+    let circuit =
+      cycleCircuitDefinitions.find(
+        (existingCircuit) =>
+          existingCircuit.name
+            .trim()
+            .toLowerCase() ===
+          normalizedSystemName,
+      );
+
+    const detectedKind =
+  getAutomaticCircuitKindFromSystemGroup(
+    systemName,
+    systemGroup.systemTypes,
+  );
+
+if (circuit) {
+  existingCount++;
+
+  if (
+    detectedKind !== "extra" &&
+    circuit.kind !== detectedKind
+  ) {
+    const automaticColor =
+      getNextCircuitColorForKind(detectedKind);
+
+    circuit.kind = detectedKind;
+    circuit.color = automaticColor;
+    circuit.defaultColor = automaticColor;
+  }
+
+  if (detectedKind === "extra") {
+    unidentifiedCount++;
+  }
+} else {
+  const kind = detectedKind;
+
+  if (kind === "extra") {
+    unidentifiedCount++;
+  }
+
+  const color =
+    getNextCircuitColorForKind(kind);
+
+      const key =
+        "cycle" +
+        activeCycleNumber.value +
+        "-" +
+        kind +
+        "-" +
+        crypto.randomUUID();
+
+      circuit = {
+        key,
+        cycleNumber: activeCycleNumber.value,
+        kind,
+        name: systemName,
+        color,
+        defaultColor: color,
+      };
+
+      cycleCircuitDefinitions.push(circuit);
+      createdCount++;
+    }
+
+    if (!manualAssignments[circuit.key]) {
+      manualAssignments[circuit.key] =
+        new Map();
+    }
+
+    for (const node of systemGroup.nodes) {
+      for (
+        const existingCircuitKey of
+          getAllKnownCircuitKeys()
+      ) {
+        getAssignmentSet(
+          existingCircuitKey,
+          node.modelId,
+        ).delete(node.localId);
+      }
+
+      getAssignmentSet(
+        circuit.key,
+        node.modelId,
+      ).add(node.localId);
+
+      assignedPipeCount++;
+    }
+  }
+
+  saveCycleCircuitDefinitionsToStorage();
+selectDefaultCircuitForActiveCycle();
+updateManualStats();
+
+circuitMaterialCache.clear();
+
+await rebuildManualFlowLayer();
+
+  flowMessage.value =
+    createdCount +
+    " caminho(s) criado(s). " +
+    existingCount +
+    " já existiam. " +
+    assignedPipeCount +
+    " tubo(s) associados. " +
+    unidentifiedCount +
+    " caminho(s) precisam de revisão manual.";
+}
+
+async function scanIfcSystems() {
+  if (!loadedModels.size) {
+    flowMessage.value =
+      "Carrega primeiro um ficheiro IFC.";
+    return;
+  }
+
+  isSystemScanRunning.value = true;
+  hasSystemScanResults.value = false;
+
+  isSystemTypesListOpen.value = false;
+  isSystemNamesListOpen.value = false;
+
+  systemScanResults.systemTypes.splice(0);
+  systemScanResults.systemNames.splice(0);
+
+  const uniqueSystemTypes = new Set<string>();
+  const uniqueSystemNames = new Set<string>();
+
+  scannedSystemGroups.clear();
+
+  try {
+    for (const model of loadedModels.values()) {
+      const categories =
+        await model.getItemsOfCategories([
+          /IFCPIPESEGMENT/i,
+          /IFCFLOWSEGMENT/i,
+          /IFCPIPEFITTING/i,
+          /IFCFLOWFITTING/i,
+        ]);
+
+      const localIds = [
+        ...new Set(
+          Object.values(categories).flat(),
+        ),
+      ];
+
+      for (
+        let startIndex = 0;
+        startIndex < localIds.length;
+        startIndex += 100
+      ) {
+        const currentIds = localIds.slice(
+          startIndex,
+          startIndex + 100,
+        );
+
+        const itemsData =
+          await model.getItemsData(
+            currentIds,
+            {
+              attributesDefault: true,
+              relations: {
+                IsDefinedBy: {
+                  attributes: true,
+                  relations: true,
+                },
+                HasAssignments: {
+                  attributes: true,
+                  relations: false,
+                },
+              },
+            },
+          );
+
+        for (
+          let itemIndex = 0;
+          itemIndex < itemsData.length;
+          itemIndex++
+        ) {
+          const itemData = itemsData[itemIndex];
+          const localId = currentIds[itemIndex];
+
+          if (
+            !itemData ||
+            !Number.isFinite(localId)
+          ) {
+            continue;
+          }
+
+          const rawIfcData =
+            normalizeIfcValue(itemData);
+
+          const systemType =
+            findIfcPropertyValue(
+              rawIfcData,
+              [
+                "System Type",
+                "SystemType",
+                "System Classification",
+                "SystemClassification",
+              ],
+            );
+
+          const mechanicalSystemName =
+            findMechanicalSystemName(
+              rawIfcData,
+            );
+
+          const fallbackSystemName =
+            findIfcPropertyValue(
+              rawIfcData,
+              [
+                "System Name",
+                "SystemName",
+              ],
+            );
+
+          const systemName =
+            mechanicalSystemName ||
+            fallbackSystemName;
+
+          const hasSystemType =
+            systemType &&
+            systemType !== "não encontrado";
+
+          const hasSystemName =
+            systemName &&
+            systemName !== "não encontrado";
+
+          if (hasSystemType) {
+            uniqueSystemTypes.add(
+              String(systemType).trim(),
+            );
+          }
+
+          if (!hasSystemName) {
+            continue;
+          }
+
+          const cleanSystemName =
+            String(systemName).trim();
+
+          uniqueSystemNames.add(cleanSystemName);
+
+          const systemGroup =
+            scannedSystemGroups.get(
+              cleanSystemName,
+            ) ?? {
+              nodes: [],
+              systemTypes: new Set<string>(),
+            };
+
+          const nodeAlreadyExists =
+            systemGroup.nodes.some(
+              (node) =>
+                node.modelId === model.modelId &&
+                node.localId === localId,
+            );
+
+          if (!nodeAlreadyExists) {
+            systemGroup.nodes.push({
+              modelId: model.modelId,
+              localId,
+            });
+          }
+
+          if (hasSystemType) {
+            systemGroup.systemTypes.add(
+              String(systemType).trim(),
+            );
+          }
+
+          scannedSystemGroups.set(
+            cleanSystemName,
+            systemGroup,
+          );
+        }
+      }
+    }
+
+    systemScanResults.systemTypes.splice(
+      0,
+      systemScanResults.systemTypes.length,
+      ...[...uniqueSystemTypes].sort(
+        (first, second) =>
+          first.localeCompare(second),
+      ),
+    );
+
+    systemScanResults.systemNames.splice(
+      0,
+      systemScanResults.systemNames.length,
+      ...[...uniqueSystemNames].sort(
+        (first, second) =>
+          first.localeCompare(second),
+      ),
+    );
+
+    hasSystemScanResults.value = true;
+
+    flowMessage.value =
+      "Scan dos sistemas IFC concluído.";
+  } catch (error) {
+    console.error(
+      "Erro ao analisar os sistemas IFC:",
+      error,
+    );
+
+    flowMessage.value =
+      "Não foi possível analisar os sistemas IFC.";
+  } finally {
+    isSystemScanRunning.value = false;
+  }
+}
+
 function toggleElementPanelMinimized() {
   isElementPanelMinimized.value = !isElementPanelMinimized.value;
 }
@@ -9021,6 +9548,54 @@ function chunk<T>(items: T[], size: number) {
 .automatic-analysis-result--total {
   border: 1px solid rgba(143, 211, 255, 0.45);
   background: rgba(143, 211, 255, 0.14);
+}
+
+.automatic-system-result {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.automatic-system-result__header {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  color: #dbe9f1;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.automatic-system-result__header strong {
+  color: #8fd3ff;
+  font-size: 0.95rem;
+}
+
+.automatic-system-result__list {
+  display: grid;
+  gap: 5px;
+  max-height: 240px;
+  padding: 0 10px 10px;
+  overflow-y: auto;
+}
+
+.automatic-system-result__list span {
+  padding: 7px 8px;
+  border-radius: 4px;
+  background: rgba(143, 211, 255, 0.1);
+  color: #dbe9f1;
+  font-size: 0.74rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.automatic-system-result__list
+  .automatic-system-result__empty {
+  color: #9fb0ba;
+  font-style: italic;
+  font-weight: 600;
 }
 
 @media (max-width: 820px) {
