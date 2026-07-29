@@ -7836,15 +7836,15 @@ const estimatedPipeDiameter =
   crossSectionSizes[0] ?? 0.08;
 
 const arrowRadius = THREE.MathUtils.clamp(
-  estimatedPipeDiameter * 0.4,
-  0.035,
-  0.14,
+  Math.pow(estimatedPipeDiameter, 0.75) * 0.28,
+  0.025,
+  0.18,
 );
 
 const arrowLength = THREE.MathUtils.clamp(
-  estimatedPipeDiameter * 1.2,
-  0.1,
-  0.35,
+  Math.pow(estimatedPipeDiameter, 0.75) * 0.9,
+  0.07,
+  0.48,
 );
 
 const geometry = new THREE.ConeGeometry(
