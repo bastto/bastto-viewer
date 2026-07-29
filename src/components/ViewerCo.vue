@@ -66,7 +66,7 @@
   {{ isIfcPanelCollapsed ? '›' : '‹' }}
 </button>
     <div
-  v-if="cycleCircuitDefinitions.length"
+  v-if="hasLoadedModel && cycleCircuitDefinitions.length"
   class="global-color-legend"
   :class="{ 'global-color-legend--ifc-collapsed': isIfcPanelCollapsed }"
 >
@@ -257,6 +257,18 @@
     @click="createAutomaticCircuitsFromSystemNames"
   >
     Criar caminhos a partir dos System Names
+  </button>
+</div>
+
+<div
+  v-if="automaticOrderedCircuitNodes.size"
+  class="flow-actions flow-actions--single"
+>
+  <button
+    type="button"
+    @click="saveAutomaticRoutes"
+  >
+    Guardar caminhos automáticos
   </button>
 </div>
 
@@ -996,7 +1008,22 @@
     <p class="connection-note">Inicio: {{ routeStartLabel }}</p>
     <p class="connection-note">Fim: {{ routeEndLabel }}</p>
 
-    <dl class="flow-stats">
+    <div class="flow-section-title flow-section-title--button">
+  <span>Estatísticas dos caminhos</span>
+
+  <button
+    type="button"
+    class="section-collapse-button"
+    @click="isPathStatsPanelOpen = !isPathStatsPanelOpen"
+  >
+    {{ isPathStatsPanelOpen ? '−' : '+' }}
+  </button>
+</div>
+
+    <dl
+  v-if="isPathStatsPanelOpen"
+  class="flow-stats"
+>
   <template
   v-for="circuit in getActiveCycleCircuitDefinitions()"
   :key="`stats-active-circuit-${circuit.key}`"
@@ -1588,7 +1615,7 @@ const isManualFlowAnimationRunning = ref(false);
 const isFlowManuallyPaused = ref(false);
 const loadingProgress = ref(0);
 const loadingFileName = ref("");
-const flowSpeed = ref(1);
+const flowSpeed = ref(0.2);
 const flowMessage = ref("Seleciona tubos no modelo e atribui um circuito.");
 const discardRouteMessage = ref("");
 const waterCycleCount = ref(3);
@@ -1604,6 +1631,7 @@ const selectedCycleCircuitKey = ref("");
 const isIfcPanelCollapsed = ref(false);
 const isCycleNamesPanelOpen = ref(false);
 const isSavedRoutesPanelOpen = ref(true);
+const isPathStatsPanelOpen = ref(false);
 const highlightedSavedRouteId = ref<string | null>(null);
 const isCentralSummaryOpen = ref(false);
 const selectedCount = ref(0);
@@ -1618,13 +1646,40 @@ const systemScanResults = reactive({
   systemTypes: [] as string[],
   systemNames: [] as string[],
 });
+const pipeTypeFlowNodes = new Set<string>();
+const ignoredAutomaticPathNodes = new Map<
+  string,
+  Set<number>
+>();
 const scannedSystemGroups = new Map<
   string,
   {
-    nodes: FlowNode[];
+    nodes: Array<
+      FlowNode & {
+        revitElementId: number;
+      }
+    >;
     systemTypes: Set<string>;
   }
 >();
+const automaticOrderedCircuitNodes =
+  new Map<PipeCircuit, FlowNode[]>();
+
+function automaticDirectionKey(
+  circuit: PipeCircuit,
+  node: FlowNode,
+) {
+  return circuit + "|" + nodeKey(node);
+}
+
+const automaticDirectionNeighbors =
+  new Map<
+    string,
+    {
+      previous: FlowNode | null;
+      next: FlowNode | null;
+    }
+  >();
 const isSystemTypesListOpen = ref(false);
 const isSystemNamesListOpen = ref(false);
 const automaticAnalysisResults = reactive({
@@ -2265,13 +2320,42 @@ if (isFlowArrowHidden(modelId, localId)) {
   continue;
 }
 
-const hints = await getPipeDirectionHints({ modelId, localId });
+const node = {
+  modelId,
+  localId,
+};
+
+if (!pipeTypeFlowNodes.has(nodeKey(node))) {
+  continue;
+}
+
+const hints =
+  await getPipeDirectionHints(node);
+
+const hasAutomaticDirection =
+  !!hints.upstream ||
+  !!hints.downstream;
+
+const belongsToAutomaticPath =
+  automaticDirectionNeighbors.has(
+    automaticDirectionKey(
+      temperature,
+      node,
+    ),
+  );
+
+if (
+  belongsToAutomaticPath &&
+  !hasAutomaticDirection
+) {
+  continue;
+}
 
 addPipeParticles(
   box,
   temperature,
   hints,
-  { modelId, localId },
+  node,
 );
     }
   }
@@ -2622,6 +2706,81 @@ function assignPathToTemperature(
   }
 }
 
+function saveAutomaticRoutes() {
+  if (!automaticOrderedCircuitNodes.size) {
+    flowMessage.value =
+      "Cria primeiro os caminhos automáticos.";
+    return;
+  }
+
+  let savedCount = 0;
+  let existingCount = 0;
+
+  for (
+    const [circuitKey, orderedNodes] of
+      automaticOrderedCircuitNodes
+  ) {
+    if (orderedNodes.length < 2) {
+      continue;
+    }
+
+    const circuit =
+      getCycleCircuitDefinition(circuitKey);
+
+    if (!circuit) {
+      continue;
+    }
+
+    const alreadyExists = savedRoutes.some(
+      (route) =>
+        route.temperature === circuitKey &&
+        route.path.length === orderedNodes.length &&
+        route.path.every(
+          (node, index) =>
+            isSameNode(
+              node,
+              orderedNodes[index],
+            ),
+        ),
+    );
+
+    if (alreadyExists) {
+      existingCount++;
+      continue;
+    }
+
+    const routeNumber =
+      getNextRouteNumberForCircuit(
+        circuitKey,
+      );
+
+    savedRoutes.push({
+      id: crypto.randomUUID(),
+      name:
+        circuit.name +
+        " - Caminho " +
+        routeNumber,
+      temperature: circuitKey,
+      path: orderedNodes.map((node) => ({
+        modelId: node.modelId,
+        localId: node.localId,
+      })),
+      hidden: false,
+      locked: false,
+    });
+
+    savedCount++;
+  }
+
+  saveRoutesToStorage();
+
+  flowMessage.value =
+    savedCount +
+    " caminho(s) automático(s) guardado(s). " +
+    existingCount +
+    " já estavam guardado(s).";
+}
+
 function saveCurrentRoute() {
   if (!currentRouteConnections.length) {
     flowMessage.value = "Cria primeiro um caminho antes de o guardar.";
@@ -2966,32 +3125,38 @@ async function reverseSavedRoute(routeId: string) {
     (savedRoute) => savedRoute.id === routeId,
   );
 
-  if (!route) return;
+  if (!route) {
+    return;
+  }
 
   if (route.locked) {
-  flowMessage.value =
-    `O caminho "${route.name}" está protegido. Desprotege primeiro para inverter.`;
-  return;
-}
+    flowMessage.value =
+      "O caminho \"" +
+      route.name +
+      "\" está protegido. Desprotege primeiro para inverter.";
+    return;
+  }
 
-  const reversedPath = [...route.path].reverse();
+  route.path.reverse();
 
-  route.path.splice(
-    0,
-    route.path.length,
-    ...reversedPath,
-  );
-
-  toggleSyncedPipesForPath(route.path);
+  for (const node of route.path) {
+    toggleReversedPipeDirection(
+      node.modelId,
+      node.localId,
+    );
+  }
 
   saveRoutesToStorage();
+  saveReversedDirectionsToStorage();
 
   if (loadedModels.size) {
     await applySavedRoute(route);
   }
 
   flowMessage.value =
-    `Sentido do caminho "${route.name}" invertido.`;
+    "Sentido do caminho \"" +
+    route.name +
+    "\" invertido.";
 }
 
 function toggleSavedRouteProtection(routeId: string) {
@@ -4653,6 +4818,21 @@ async function extractSelectedIfcInformation() {
 
   const rawIfcData = normalizeIfcValue(itemData[0]);
 
+  const revitElementId =
+  getAttributeValueText(
+    itemData[0]?.Tag ??
+    itemData[0]?.tag,
+  ).trim() ||
+  findIfcPropertyValue(
+    rawIfcData,
+    [
+      "Tag",
+      "BATID",
+      "Element ID",
+      "ElementId",
+    ],
+  );
+
   const revitValues =
     collectRevitFamilyAndTypeValues(rawIfcData);
 
@@ -4786,6 +4966,7 @@ const diameterValue = findIfcPropertyValue(
     modelId: selectedNode.modelId,
     localId: selectedNode.localId,
   },
+  "Revit Element ID": revitElementId,
   Family: revitFamily,
   Type:
   exactRevitType ||
@@ -6069,21 +6250,295 @@ if (normalState === "closed") {
   flowMessage.value = "Válvulas repostas ao estado normal.";
 }
 
-async function getPipeDirectionHints(node: FlowNode): Promise<PipeDirectionHints> {
-  const hints: PipeDirectionHints = {};
+async function updateAutomaticDirectionNeighbors(
+  circuit: PipeCircuit,
+  orderedNodes: Array<
+    FlowNode & {
+      revitElementId: number;
+    }
+  >,
+) {
+  const nodesByModel = new Map<
+    string,
+    Array<
+      FlowNode & {
+        revitElementId: number;
+      }
+    >
+  >();
 
-  for (const connection of flowConnections) {
-    if (isConnectionBlocked(connection)) {
+  for (const node of orderedNodes) {
+    const modelNodes =
+      nodesByModel.get(node.modelId) ?? [];
+
+    modelNodes.push(node);
+    nodesByModel.set(node.modelId, modelNodes);
+  }
+
+  for (const [modelId, modelNodes] of nodesByModel) {
+    const model = loadedModels.get(modelId);
+
+    if (!model || !modelNodes.length) {
       continue;
     }
 
-    if (isSameNode(connection.to, node)) {
-      hints.upstream = await getNodeCenter(connection.from);
+    const localIds = modelNodes.map(
+      (node) => node.localId,
+    );
+
+    const boxes = await model.getBoxes(localIds);
+
+    const graphItems = new Map<
+      number,
+      PipeGraphItem
+    >();
+
+    const nodesByLocalId = new Map<
+      number,
+      FlowNode & {
+        revitElementId: number;
+      }
+    >();
+
+    for (
+      let index = 0;
+      index < modelNodes.length;
+      index++
+    ) {
+      const node = modelNodes[index];
+
+      const graphItem = graphItemFromBox(
+        modelId,
+        node.localId,
+        boxes[index],
+      );
+
+      if (!graphItem) {
+        continue;
+      }
+
+      graphItems.set(node.localId, graphItem);
+      nodesByLocalId.set(node.localId, node);
     }
 
-    if (isSameNode(connection.from, node)) {
-      hints.downstream = await getNodeCenter(connection.to);
+    const adjacency = new Map<number, number[]>();
+
+    for (const node of modelNodes) {
+      adjacency.set(node.localId, []);
     }
+
+    for (
+      let firstIndex = 0;
+      firstIndex < modelNodes.length;
+      firstIndex++
+    ) {
+      const firstNode = modelNodes[firstIndex];
+      const firstItem =
+        graphItems.get(firstNode.localId);
+
+      if (!firstItem) {
+        continue;
+      }
+
+      for (
+        let secondIndex = firstIndex + 1;
+        secondIndex < modelNodes.length;
+        secondIndex++
+      ) {
+        const secondNode = modelNodes[secondIndex];
+        const secondItem =
+          graphItems.get(secondNode.localId);
+
+        if (!secondItem) {
+          continue;
+        }
+
+        const distance = pipeConnectionDistance(
+          firstItem,
+          secondItem,
+        );
+
+        const tolerance = pipeConnectionTolerance(
+          firstItem,
+          secondItem,
+        );
+
+        if (distance > tolerance) {
+          continue;
+        }
+
+        adjacency
+          .get(firstNode.localId)
+          ?.push(secondNode.localId);
+
+        adjacency
+          .get(secondNode.localId)
+          ?.push(firstNode.localId);
+      }
+    }
+
+    const unvisited = new Set(
+      nodesByLocalId.keys(),
+    );
+
+    while (unvisited.size) {
+      const componentStart = [...unvisited]
+        .map((localId) =>
+          nodesByLocalId.get(localId),
+        )
+        .filter(
+          (
+            node,
+          ): node is FlowNode & {
+            revitElementId: number;
+          } => !!node,
+        )
+        .sort(
+          (firstNode, secondNode) =>
+            firstNode.revitElementId -
+            secondNode.revitElementId,
+        )[0];
+
+      if (!componentStart) {
+        break;
+      }
+
+      const queue: number[] = [
+        componentStart.localId,
+      ];
+
+      const parentByLocalId =
+        new Map<number, number | null>();
+
+      parentByLocalId.set(
+        componentStart.localId,
+        null,
+      );
+
+      unvisited.delete(
+        componentStart.localId,
+      );
+
+      while (queue.length) {
+        const currentLocalId = queue.shift();
+
+        if (currentLocalId === undefined) {
+          continue;
+        }
+
+        const currentNode =
+          nodesByLocalId.get(currentLocalId);
+
+        if (!currentNode) {
+          continue;
+        }
+
+        const connectedUnvisitedNodes = (
+          adjacency.get(currentLocalId) ?? []
+        )
+          .filter((localId) =>
+            unvisited.has(localId),
+          )
+          .map((localId) =>
+            nodesByLocalId.get(localId),
+          )
+          .filter(
+            (
+              node,
+            ): node is FlowNode & {
+              revitElementId: number;
+            } => !!node,
+          )
+          .sort(
+            (firstNode, secondNode) =>
+              firstNode.revitElementId -
+              secondNode.revitElementId,
+          );
+
+        for (
+          const nextNode of
+            connectedUnvisitedNodes
+        ) {
+          parentByLocalId.set(
+            nextNode.localId,
+            currentLocalId,
+          );
+
+          unvisited.delete(nextNode.localId);
+          queue.push(nextNode.localId);
+        }
+
+        const parentLocalId =
+          parentByLocalId.get(
+            currentLocalId,
+          ) ?? null;
+
+        const firstChild =
+          connectedUnvisitedNodes[0] ?? null;
+
+        automaticDirectionNeighbors.set(
+          automaticDirectionKey(
+            circuit,
+            currentNode,
+          ),
+          {
+            previous:
+              parentLocalId !== null
+                ? {
+                    modelId,
+                    localId: parentLocalId,
+                  }
+                : null,
+
+            next: firstChild
+              ? {
+                  modelId,
+                  localId:
+                    firstChild.localId,
+                }
+              : null,
+          },
+        );
+      }
+    }
+  }
+}
+
+async function getPipeDirectionHints(
+  node: FlowNode,
+): Promise<PipeDirectionHints> {
+  const circuit = getNodeTemperature(node);
+
+  if (!circuit) {
+    return {};
+  }
+
+  const automaticNeighbors =
+    automaticDirectionNeighbors.get(
+      automaticDirectionKey(
+        circuit,
+        node,
+      ),
+    );
+
+  if (!automaticNeighbors) {
+    return {};
+  }
+
+  const hints: PipeDirectionHints = {};
+
+  if (automaticNeighbors.previous) {
+    hints.upstream =
+      await getNodeCenter(
+        automaticNeighbors.previous,
+      );
+  }
+
+  if (automaticNeighbors.next) {
+    hints.downstream =
+      await getNodeCenter(
+        automaticNeighbors.next,
+      );
   }
 
   return hints;
@@ -7369,8 +7824,34 @@ function addPipeParticles(
 
   const direction = end.clone().sub(start).normalize();
 
-  const radius = 0.04;
-  const geometry = new THREE.ConeGeometry(radius * 1.2, radius * 2.5, 8);
+const crossSectionSizes = [
+  size.x,
+  size.y,
+  size.z,
+]
+  .filter((dimension) => dimension > 0.001)
+  .sort((first, second) => first - second);
+
+const estimatedPipeDiameter =
+  crossSectionSizes[0] ?? 0.08;
+
+const arrowRadius = THREE.MathUtils.clamp(
+  estimatedPipeDiameter * 0.4,
+  0.035,
+  0.14,
+);
+
+const arrowLength = THREE.MathUtils.clamp(
+  estimatedPipeDiameter * 1.2,
+  0.1,
+  0.35,
+);
+
+const geometry = new THREE.ConeGeometry(
+  arrowRadius,
+  arrowLength,
+  8,
+);
 
   const material = getCircuitMaterial(temperature);
 
@@ -7399,30 +7880,60 @@ function addPipeParticles(
   }
 }
 
-function choosePipeDirection(endpointA: any, endpointB: any, hints: PipeDirectionHints) {
+function choosePipeDirection(
+  endpointA: any,
+  endpointB: any,
+  hints: PipeDirectionHints,
+) {
   let start = endpointA;
   let end = endpointB;
 
   if (hints.upstream && hints.downstream) {
-    start = closestEndpoint(endpointA, endpointB, hints.upstream);
-    end = closestEndpoint(endpointA, endpointB, hints.downstream);
+    const optionA =
+      endpointA.distanceTo(hints.upstream) +
+      endpointB.distanceTo(hints.downstream);
 
-    if (start.distanceTo(end) < 0.001) {
-      end = start === endpointA ? endpointB : endpointA;
+    const optionB =
+      endpointB.distanceTo(hints.upstream) +
+      endpointA.distanceTo(hints.downstream);
+
+    if (optionA <= optionB) {
+      start = endpointA;
+      end = endpointB;
+    } else {
+      start = endpointB;
+      end = endpointA;
     }
 
     return { start, end };
   }
 
   if (hints.upstream) {
-    start = closestEndpoint(endpointA, endpointB, hints.upstream);
-    end = start === endpointA ? endpointB : endpointA;
+    start = closestEndpoint(
+      endpointA,
+      endpointB,
+      hints.upstream,
+    );
+
+    end =
+      start === endpointA
+        ? endpointB
+        : endpointA;
+
     return { start, end };
   }
 
   if (hints.downstream) {
-    end = closestEndpoint(endpointA, endpointB, hints.downstream);
-    start = end === endpointA ? endpointB : endpointA;
+    end = closestEndpoint(
+      endpointA,
+      endpointB,
+      hints.downstream,
+    );
+
+    start =
+      end === endpointA
+        ? endpointB
+        : endpointA;
   }
 
   return { start, end };
@@ -7625,6 +8136,37 @@ async function createAutomaticCircuitsFromSystemNames() {
   let existingCount = 0;
   let assignedPipeCount = 0;
   let unidentifiedCount = 0;
+  flowConnections.splice(0);
+  for (
+  const [modelId, ignoredIds] of
+    ignoredAutomaticPathNodes
+) {
+  for (const localId of ignoredIds) {
+    for (
+      const circuitKey of
+        getAllKnownCircuitKeys()
+    ) {
+      getAssignmentSet(
+        circuitKey,
+        modelId,
+      ).delete(localId);
+    }
+
+    hiddenFlowArrowElements
+      .get(modelId)
+      ?.delete(localId);
+
+    reversedPipeDirections
+      .get(modelId)
+      ?.delete(localId);
+
+    syncedPipeDirections
+      .get(modelId)
+      ?.delete(localId);
+  }
+}
+  automaticDirectionNeighbors.clear();
+automaticOrderedCircuitNodes.clear();
 
   for (
     const systemName of systemScanResults.systemNames
@@ -7708,27 +8250,80 @@ if (circuit) {
         new Map();
     }
 
-    for (const node of systemGroup.nodes) {
-      for (
-        const existingCircuitKey of
-          getAllKnownCircuitKeys()
-      ) {
-        getAssignmentSet(
-          existingCircuitKey,
-          node.modelId,
-        ).delete(node.localId);
-      }
+    const orderedNodes = [
+  ...systemGroup.nodes,
+].sort(
+  (firstNode, secondNode) =>
+    firstNode.revitElementId -
+    secondNode.revitElementId,
+);
 
-      getAssignmentSet(
-        circuit.key,
-        node.modelId,
-      ).add(node.localId);
+await updateAutomaticDirectionNeighbors(
+  circuit.key,
+  orderedNodes,
+);
 
-      assignedPipeCount++;
-    }
+automaticOrderedCircuitNodes.set(
+  circuit.key,
+  orderedNodes.map((node) => ({
+    modelId: node.modelId,
+    localId: node.localId,
+  })),
+);
+for (const node of orderedNodes) {
+  reversedPipeDirections
+  .get(node.modelId)
+  ?.delete(node.localId);
+
+syncedPipeDirections
+  .get(node.modelId)
+  ?.delete(node.localId);
+
+  for (
+    const existingCircuitKey of
+      getAllKnownCircuitKeys()
+  ) {
+    getAssignmentSet(
+      existingCircuitKey,
+      node.modelId,
+    ).delete(node.localId);
+  }
+
+  getAssignmentSet(
+    circuit.key,
+    node.modelId,
+  ).add(node.localId);
+
+  assignedPipeCount++;
+}
+
+for (
+  let nodeIndex = 0;
+  nodeIndex < orderedNodes.length - 1;
+  nodeIndex++
+) {
+  const fromNode = orderedNodes[nodeIndex];
+  const toNode = orderedNodes[nodeIndex + 1];
+
+  const connection: FlowConnection = {
+    from: {
+      modelId: fromNode.modelId,
+      localId: fromNode.localId,
+    },
+    to: {
+      modelId: toNode.modelId,
+      localId: toNode.localId,
+    },
+    temperature: circuit.key,
+  };
+
+  addFlowConnectionIfMissing(connection);
+}
   }
 
   saveCycleCircuitDefinitionsToStorage();
+  saveReversedDirectionsToStorage();
+saveSyncedPipeDirectionsToStorage();
 selectDefaultCircuitForActiveCycle();
 updateManualStats();
 
@@ -7745,6 +8340,22 @@ await rebuildManualFlowLayer();
     " tubo(s) associados. " +
     unidentifiedCount +
     " caminho(s) precisam de revisão manual.";
+}
+
+function isIgnoredAutomaticPathElement(data: any) {
+  const elementText = flattenItemText(data)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[_-]/g, " ");
+
+  return (
+    elementText.includes("rigid coupling") ||
+    elementText.includes("acoplamento rigido") ||
+    elementText.includes("uniao rigida") ||
+    elementText.includes("flange") ||
+    elementText.includes("flanged")
+  );
 }
 
 async function scanIfcSystems() {
@@ -7767,6 +8378,8 @@ async function scanIfcSystems() {
   const uniqueSystemNames = new Set<string>();
 
   scannedSystemGroups.clear();
+  pipeTypeFlowNodes.clear();
+  ignoredAutomaticPathNodes.clear();
 
   try {
     for (const model of loadedModels.values()) {
@@ -7829,6 +8442,83 @@ async function scanIfcSystems() {
 
           const rawIfcData =
             normalizeIfcValue(itemData);
+
+
+          const revitValues =
+  collectRevitFamilyAndTypeValues(
+    rawIfcData,
+  );
+
+const exactRevitType =
+  findRevitTypeValue(rawIfcData);
+
+const normalizedFamily =
+  String(revitValues.family)
+    .trim()
+    .toLowerCase();
+
+const normalizedType =
+  String(
+    exactRevitType ||
+    revitValues.type,
+  )
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const isMultilayerTee =
+  normalizedType.includes("te multicamada");
+
+const isPipeTypeElement =
+  normalizedFamily === "pipe types" &&
+  !isMultilayerTee;
+
+if (isPipeTypeElement) {
+  pipeTypeFlowNodes.add(
+    nodeKey({
+      modelId: model.modelId,
+      localId,
+    }),
+  );
+}
+          
+          if (isIgnoredAutomaticPathElement(rawIfcData)) {
+  const ignoredIds =
+    ignoredAutomaticPathNodes.get(
+      model.modelId,
+    ) ?? new Set<number>();
+
+  ignoredIds.add(localId);
+
+  ignoredAutomaticPathNodes.set(
+    model.modelId,
+    ignoredIds,
+  );
+
+  continue;
+}
+
+          const revitElementIdText =
+  getAttributeValueText(
+    itemData?.Tag ??
+    itemData?.tag,
+  ).trim() ||
+  findIfcPropertyValue(
+    rawIfcData,
+    [
+      "Tag",
+      "BATID",
+      "Element ID",
+      "ElementId",
+    ],
+  );
+
+const revitElementId =
+  Number(
+    String(revitElementIdText)
+      .replace(/[^\d]/g, ""),
+  );
 
           const systemType =
             findIfcPropertyValue(
@@ -7898,11 +8588,15 @@ async function scanIfcSystems() {
             );
 
           if (!nodeAlreadyExists) {
-            systemGroup.nodes.push({
-              modelId: model.modelId,
-              localId,
-            });
-          }
+  systemGroup.nodes.push({
+    modelId: model.modelId,
+    localId,
+    revitElementId:
+      Number.isFinite(revitElementId)
+        ? revitElementId
+        : Number.MAX_SAFE_INTEGER,
+  });
+}
 
           if (hasSystemType) {
             systemGroup.systemTypes.add(
