@@ -9,6 +9,87 @@
 
   <div ref="containerRef" class="full-screen">
 
+  <div
+  v-if="isRouteGroupDialogOpen"
+  class="route-group-dialog-backdrop"
+>
+  <div class="route-group-dialog">
+    <div class="route-group-dialog__header">
+      <div>
+        <p class="flow-panel__eyebrow">
+          Agrupamento manual
+        </p>
+
+        <h2>Agrupar caminhos</h2>
+      </div>
+
+      <button
+        type="button"
+        class="section-collapse-button"
+        @click="closeRouteGroupingDialog"
+      >
+        ×
+      </button>
+    </div>
+
+    <label class="route-group-dialog__field">
+      <span>Nome do grupo</span>
+
+      <input
+        v-model="pendingRouteGroupName"
+        type="text"
+      />
+    </label>
+
+    <label class="route-group-dialog__field">
+      <span>Cor comum dos caminhos</span>
+
+      <div class="route-group-color-control">
+        <input
+          v-model="pendingRouteGroupColor"
+          type="color"
+        />
+
+        <span
+          class="route-group-color-preview"
+          :style="{
+            backgroundColor:
+              pendingRouteGroupColor
+          }"
+        ></span>
+
+        <strong>
+          Esta será a cor dos caminhos.
+        </strong>
+      </div>
+    </label>
+
+    <p class="connection-note">
+      Serão agrupados
+      {{ selectedRouteIdsForGrouping.size }}
+      caminhos. Ao retirar um caminho do grupo,
+      a cor original será reposta.
+    </p>
+
+    <div class="flow-actions flow-actions--secondary">
+      <button
+        type="button"
+        @click="closeRouteGroupingDialog"
+      >
+        Cancelar
+      </button>
+
+      <button
+        type="button"
+        class="automatic-review-button"
+        @click="groupSelectedSavedRoutes"
+      >
+        Confirmar agrupamento
+      </button>
+    </div>
+  </div>
+</div>
+
   <nav
   class="application-tabs"
   :class="{
@@ -967,14 +1048,14 @@
 </button>
 
   <button
-    type="button"
-    :disabled="
-      selectedRouteIdsForGrouping.size < 2
-    "
-    @click="groupSelectedSavedRoutes"
-  >
-    Agrupar caminhos selecionados
-  </button>
+  type="button"
+  :disabled="
+    selectedRouteIdsForGrouping.size < 2
+  "
+  @click="openRouteGroupingDialog"
+>
+  Agrupar caminhos selecionados
+</button>
 
   <button
     type="button"
@@ -1747,6 +1828,7 @@ type SavedRoute = {
   hidden?: boolean;
   locked?: boolean;
   groupId?: string;
+  originalCircuitColor?: string;
 };
 
 type SavedRouteGroup = {
@@ -1949,10 +2031,15 @@ const mepElements = reactive<Record<string, MepElement>>({});
 const savedRoutes = reactive<SavedRoute[]>([]);
 const savedRouteGroups =
   reactive<SavedRouteGroup[]>([]);
-
 const selectedRouteIdsForGrouping =
   reactive<Set<string>>(new Set());
-
+const isRouteGroupDialogOpen = ref(false);
+const pendingRouteGroupName = ref(
+  "Novo grupo de caminhos",
+);
+const pendingRouteGroupColor = ref(
+  "#ff8c00",
+);
 const isRouteGroupingPanelOpen = ref(false);
 let routeStart: FlowNode | null = null;
 let routeEnd: FlowNode | null = null;
@@ -8475,6 +8562,35 @@ async function moveSelectedSavedRoutesToCycle() {
       : "Os caminhos selecionados já pertencem ao ciclo escolhido.";
 }
 
+function openRouteGroupingDialog() {
+  const selectedRoutes = savedRoutes.filter(
+    (route) =>
+      selectedRouteIdsForGrouping.has(
+        route.id,
+      ),
+  );
+
+  if (selectedRoutes.length < 2) {
+    flowMessage.value =
+      "Seleciona pelo menos dois caminhos para agrupar.";
+    return;
+  }
+
+  const firstRoute = selectedRoutes[0];
+
+  pendingRouteGroupName.value =
+    "Novo grupo de caminhos";
+
+  pendingRouteGroupColor.value =
+    getSavedRouteGroupColor(firstRoute);
+
+  isRouteGroupDialogOpen.value = true;
+}
+
+function closeRouteGroupingDialog() {
+  isRouteGroupDialogOpen.value = false;
+}
+
 async function groupSelectedSavedRoutes() {
   const selectedRoutes = savedRoutes.filter(
     (route) =>
@@ -8489,41 +8605,23 @@ async function groupSelectedSavedRoutes() {
     return;
   }
 
-  const groupNameInput = prompt(
-    "Nome do grupo:",
-    "Novo grupo de caminhos",
-  );
-
   const groupName =
-    groupNameInput?.trim();
+    pendingRouteGroupName.value.trim();
+
+  const groupColor =
+    pendingRouteGroupColor.value.trim();
 
   if (!groupName) {
     flowMessage.value =
-      "Criação do grupo cancelada.";
+      "Indica um nome para o grupo.";
     return;
   }
 
-  const firstRoute = selectedRoutes[0];
-
-  const defaultColor =
-    getCircuitColorStyle(
-      firstRoute.temperature,
-    );
-
-  const groupColorInput = prompt(
-    "Cor do grupo em formato hexadecimal:",
-    defaultColor,
-  );
-
-  const groupColor =
-    groupColorInput?.trim();
-
   if (
-    !groupColor ||
     !/^#[0-9a-fA-F]{6}$/.test(groupColor)
   ) {
     flowMessage.value =
-      "A cor deve ter o formato #RRGGBB.";
+      "Seleciona uma cor válida.";
     return;
   }
 
@@ -8536,17 +8634,21 @@ async function groupSelectedSavedRoutes() {
   });
 
   for (const route of selectedRoutes) {
-    route.groupId = groupId;
-
     const circuit =
       getCycleCircuitDefinition(
         route.temperature,
       );
 
     if (circuit) {
+      if (!route.originalCircuitColor) {
+        route.originalCircuitColor =
+          circuit.color;
+      }
+
       circuit.color = groupColor;
-      circuit.defaultColor = groupColor;
     }
+
+    route.groupId = groupId;
   }
 
   circuitMaterialCache.clear();
@@ -8556,6 +8658,8 @@ async function groupSelectedSavedRoutes() {
   saveCycleCircuitDefinitionsToStorage();
 
   clearRouteGroupingSelection();
+
+  isRouteGroupDialogOpen.value = false;
 
   if (
     countAssignments() > 0 ||
@@ -8586,14 +8690,46 @@ async function removeSelectedRoutesFromGroup() {
     return;
   }
 
-  const affectedGroupIds = new Set<string>();
+  const originalColorsByCircuit =
+    new Map<PipeCircuit, string>();
 
   for (const route of selectedRoutes) {
-    if (route.groupId) {
-      affectedGroupIds.add(route.groupId);
+    if (route.originalCircuitColor) {
+      originalColorsByCircuit.set(
+        route.temperature,
+        route.originalCircuitColor,
+      );
     }
 
     delete route.groupId;
+    delete route.originalCircuitColor;
+  }
+
+  for (
+    const [
+      circuitKey,
+      originalColor,
+    ] of originalColorsByCircuit
+  ) {
+    const circuitStillGrouped =
+      savedRoutes.some(
+        (route) =>
+          route.temperature === circuitKey &&
+          route.groupId,
+      );
+
+    if (circuitStillGrouped) {
+      continue;
+    }
+
+    const circuit =
+      getCycleCircuitDefinition(
+        circuitKey,
+      );
+
+    if (circuit) {
+      circuit.color = originalColor;
+    }
   }
 
   for (
@@ -8616,14 +8752,25 @@ async function removeSelectedRoutesFromGroup() {
     }
   }
 
+  circuitMaterialCache.clear();
+
   saveRouteGroupsToStorage();
   saveRoutesToStorage();
+  saveCycleCircuitDefinitionsToStorage();
 
   clearRouteGroupingSelection();
 
+  if (
+    countAssignments() > 0 ||
+    flowConnections.length > 0
+  ) {
+    await rebuildManualFlowLayer();
+  }
+
   flowMessage.value =
     selectedRoutes.length +
-    " caminho(s) retirado(s) do grupo.";
+    " caminho(s) retirado(s) do grupo. " +
+    "As cores originais foram repostas.";
 }
 
 function getRoutePipeCount(route: SavedRoute) {
@@ -11591,6 +11738,93 @@ function chunk<T>(items: T[], size: number) {
 .simulation-cycle-option input {
   margin: 0;
   accent-color: #8fd3ff;
+}
+
+.route-group-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(3, 8, 12, 0.68);
+  backdrop-filter: blur(4px);
+}
+
+.route-group-dialog {
+  width: min(390px, calc(100vw - 40px));
+  padding: 16px;
+  border: 1px solid rgba(143, 211, 255, 0.4);
+  border-radius: 10px;
+  background: #17232c;
+  color: #f7fbff;
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.45);
+}
+
+.route-group-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.route-group-dialog__header h2 {
+  margin: 3px 0 0;
+  font-size: 1rem;
+}
+
+.route-group-dialog__field {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.route-group-dialog__field > span {
+  color: #dbe9f1;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.route-group-dialog__field input[type="text"] {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 1px solid rgba(143, 211, 255, 0.35);
+  border-radius: 5px;
+  background: rgba(7, 19, 26, 0.85);
+  color: #f7fbff;
+}
+
+.route-group-color-control {
+  display: grid;
+  grid-template-columns: 48px 30px 1fr;
+  align-items: center;
+  gap: 9px;
+}
+
+.route-group-color-control input[type="color"] {
+  width: 48px;
+  height: 36px;
+  padding: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.route-group-color-preview {
+  display: block;
+  width: 26px;
+  height: 26px;
+  border: 2px solid #f7fbff;
+  border-radius: 50%;
+}
+
+.route-group-color-control strong {
+  color: #dbe9f1;
+  font-size: 0.72rem;
+  line-height: 1.3;
 }
 
 @media (max-width: 820px) {
