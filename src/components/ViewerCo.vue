@@ -917,6 +917,74 @@
     </button>
   </div>
 
+  <div
+  v-if="isSavedRoutesPanelOpen"
+  class="saved-route-group-actions"
+>
+  <span>
+    Selecionados:
+    {{ selectedRouteIdsForGrouping.size }}
+  </span>
+
+  <label class="saved-route-cycle-selector">
+  <span>Ciclo de destino</span>
+
+  <select
+    v-model.number="
+      targetCycleNumberForSavedRoutes
+    "
+  >
+    <option
+      v-for="cycleNumber in waterCycleCount"
+      :key="`saved-route-target-cycle-${cycleNumber}`"
+      :value="cycleNumber"
+    >
+      {{ getCycleDisplayName(cycleNumber) }}
+    </option>
+  </select>
+</label>
+
+<button
+  type="button"
+  :disabled="
+    selectedRouteIdsForGrouping.size < 1
+  "
+  @click="moveSelectedSavedRoutesToCycle"
+>
+  Mover selecionados para o ciclo
+</button>
+
+  <button
+    type="button"
+    :disabled="
+      selectedRouteIdsForGrouping.size < 2
+    "
+    @click="groupSelectedSavedRoutes"
+  >
+    Agrupar caminhos selecionados
+  </button>
+
+  <button
+    type="button"
+    :disabled="
+      selectedRouteIdsForGrouping.size < 1
+    "
+    @click="removeSelectedRoutesFromGroup"
+  >
+    Retirar do grupo
+  </button>
+
+  <button
+    type="button"
+    :disabled="
+      selectedRouteIdsForGrouping.size < 1
+    "
+    @click="clearRouteGroupingSelection"
+  >
+    Limpar seleção
+  </button>
+</div>
+
   <div v-if="isSavedRoutesPanelOpen" class="saved-routes-list">
     <div
       v-for="route in savedRoutes"
@@ -928,14 +996,39 @@
   'saved-route-item--blocked': isSavedRouteBlocked(route)
 }"
     >
+
+    <label class="saved-route-group-checkbox">
+  <input
+    type="checkbox"
+    :checked="
+      isRouteSelectedForGrouping(route.id)
+    "
+    @change="
+      toggleRouteSelectionForGrouping(
+        route.id
+      )
+    "
+  />
+
+  <span>Selecionar</span>
+</label>
+
       <div class="saved-route-select saved-route-select--details">
   <span class="saved-route-text">
+  <span
+  class="saved-route-group-color"
+  :style="{
+    backgroundColor:
+      getSavedRouteGroupColor(route)
+  }"
+></span>
           <strong>
             <span v-if="route.locked" class="route-lock-icon">🔒</span>
             {{ route.name }}
           </strong>
 
           <small>
+          Grupo: {{ getSavedRouteGroupName(route) }} ·
             {{ getRouteCircuitDisplayLabel(route) }} ·
 {{ getRoutePipeCount(route) }} tubo(s) ·
 {{ getRouteVisibilityLabel(route) }} ·
@@ -1408,6 +1501,53 @@
       Animação
     </div>
 
+    <div class="flow-section-title">
+  Ciclo visualizado
+</div>
+
+<label class="flow-cycle-config">
+  <span>Selecionar ciclo</span>
+
+  <select
+    v-model.number="simulationCycleNumber"
+    @change="updateSelectedSimulationCycle"
+  >
+    <option
+      v-for="cycleNumber in waterCycleCount"
+      :key="`simulation-cycle-${cycleNumber}`"
+      :value="cycleNumber"
+    >
+      {{ getCycleDisplayName(cycleNumber) }}
+    </option>
+  </select>
+</label>
+
+<div class="flow-actions flow-actions--single">
+  <button
+    type="button"
+    :class="{
+      'cycle-view-button--active':
+        isSingleCycleViewActive
+    }"
+    @click="toggleSelectedCycleView"
+  >
+    {{
+      isSingleCycleViewActive
+        ? 'Mostrar todos os ciclos'
+        : 'Visualizar apenas este ciclo'
+    }}
+  </button>
+</div>
+
+<p
+  v-if="isSingleCycleViewActive"
+  class="automatic-analysis-status automatic-analysis-status--ready"
+>
+  Apenas o ciclo
+  {{ getCycleDisplayName(simulationCycleNumber) }}
+  está visível.
+</p>
+
     <div class="flow-actions flow-actions--secondary">
       <button
         type="button"
@@ -1564,6 +1704,13 @@ type SavedRoute = {
   path: FlowNode[];
   hidden?: boolean;
   locked?: boolean;
+  groupId?: string;
+};
+
+type SavedRouteGroup = {
+  id: string;
+  name: string;
+  color: string;
 };
 
 type SavedReversedDirection = {
@@ -1622,6 +1769,9 @@ const waterCycleCount = ref(3);
 const pendingWaterCycleCount = ref(3);
 const cycleNames = reactive<Record<string, string>>({});
 const activeCycleNumber = ref(1);
+const simulationCycleNumber = ref(1);
+const isSingleCycleViewActive = ref(false);
+const targetCycleNumberForSavedRoutes = ref(1);
 const cycleCircuitDefinitions = reactive<CycleCircuitDefinition[]>([]);
 const isCycleCircuitPanelOpen = ref(false);
 const pendingCycleCircuitKind = ref<CycleCircuitKind>("extra");
@@ -1712,6 +1862,8 @@ const pipeStats = reactive<Record<string, number>>({
 
 const MEP_ELEMENTS_STORAGE_KEY = "bastto-viewer-mep-elements";
 const ROUTES_STORAGE_KEY = "bastto-viewer-routes";
+const ROUTE_GROUPS_STORAGE_KEY =
+  "bastto-viewer-route-groups";
 const WATER_CYCLE_COUNT_STORAGE_KEY =
   "bastto-viewer-water-cycle-count";
 const WATER_CYCLE_NAMES_STORAGE_KEY =
@@ -1747,6 +1899,13 @@ const manualRouteNodes = reactive<FlowNode[]>([]);
 const isManualRouteRecording = ref(false);
 const mepElements = reactive<Record<string, MepElement>>({});
 const savedRoutes = reactive<SavedRoute[]>([]);
+const savedRouteGroups =
+  reactive<SavedRouteGroup[]>([]);
+
+const selectedRouteIdsForGrouping =
+  reactive<Set<string>>(new Set());
+
+const isRouteGroupingPanelOpen = ref(false);
 let routeStart: FlowNode | null = null;
 let routeEnd: FlowNode | null = null;
 let ignoredManualRouteNodeAfterRemove: FlowNode | null = null;
@@ -1903,12 +2062,11 @@ loadCycleNamesFromStorage();
 loadCycleCircuitDefinitionsFromStorage();
 loadMepElementsFromStorage();
 loadRoutesFromStorage();
+loadRouteGroupsFromStorage();
 loadReversedDirectionsFromStorage();
 loadSyncedPipeDirectionsFromStorage();
 loadHiddenFlowArrowsFromStorage();
 loadValvePipeLinksFromStorage();
-
-localStorage.removeItem("bastto-viewer-route-groups");
 
   createBimPanel(components, viewport);
   animateFlow();
@@ -2237,6 +2395,115 @@ async function assignSelectedPipes(circuit: PipeCircuit) {
   ".";
 }
 
+function shouldShowCircuitInSimulation(
+  circuit: PipeCircuit,
+) {
+  if (!isSingleCycleViewActive.value) {
+    return true;
+  }
+
+  return (
+    getCircuitCycleNumber(circuit) ===
+    simulationCycleNumber.value
+  );
+}
+
+async function resetAllCircuitHighlights() {
+  const loadedModelIds = [
+    ...loadedModels.keys(),
+  ];
+
+  if (!loadedModelIds.length) {
+    return;
+  }
+
+  const fallbackModelId =
+    loadedModelIds[0];
+
+  const idsByModel =
+    new Map<string, Set<number>>();
+
+  function addNode(
+    modelId: string,
+    localId: number,
+  ) {
+    const validModelId =
+      loadedModels.has(modelId)
+        ? modelId
+        : fallbackModelId;
+
+    const modelIds =
+      idsByModel.get(validModelId) ??
+      new Set<number>();
+
+    modelIds.add(localId);
+
+    idsByModel.set(
+      validModelId,
+      modelIds,
+    );
+  }
+
+  // Elementos atribuídos diretamente aos circuitos.
+  for (
+    const circuit of
+      getAllKnownCircuitKeys()
+  ) {
+    const assignmentMap =
+      manualAssignments[circuit];
+
+    if (!assignmentMap) {
+      continue;
+    }
+
+    for (
+      const [modelId, localIds] of
+        assignmentMap
+    ) {
+      for (const localId of localIds) {
+        addNode(modelId, localId);
+      }
+    }
+  }
+
+  // Elementos existentes nos caminhos guardados.
+  for (const route of savedRoutes) {
+    for (const node of route.path) {
+      addNode(
+        node.modelId,
+        node.localId,
+      );
+    }
+  }
+
+  // Remover as cores de todos os ciclos.
+  for (
+    const [modelId, localIds] of
+      idsByModel
+  ) {
+    const model =
+      loadedModels.get(modelId);
+
+    if (!model || !localIds.size) {
+      continue;
+    }
+
+    await model.resetHighlight(
+      [...localIds],
+    );
+  }
+
+  await fragmentManager.core.update(true);
+
+  // Esperar a limpeza ser renderizada antes
+  // de aplicar as cores do ciclo selecionado.
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      resolve();
+    });
+  });
+}
+
 async function rebuildManualFlowLayer() {
   const wasFlowingBeforeRebuild = isFlowing.value;
 
@@ -2250,7 +2517,15 @@ clearFlowVisuals(true);
     return;
   }
 
-  for (const circuit of getAllKnownCircuitKeys()) {
+  await resetAllCircuitHighlights();
+
+for (const circuit of getAllKnownCircuitKeys()) {
+  if (
+    !shouldShowCircuitInSimulation(circuit)
+  ) {
+    continue;
+  }
+
   await addAssignmentsToScene(circuit);
 }
 
@@ -2973,57 +3248,154 @@ async function restoreFlowVisualsAfterRouteHighlight() {
   await fragmentManager.core.update(true);
 }
 
-async function toggleSavedRouteHighlight(route: SavedRoute) {
-  const loadedModelIds = [...loadedModels.keys()];
+async function clearFlowVisualsForRouteHighlight() {
+  clearFlowVisuals(true);
+
+  const idsByModel =
+    new Map<string, Set<number>>();
+
+  function addNode(
+    modelId: string,
+    localId: number,
+  ) {
+    const modelIds =
+      idsByModel.get(modelId) ??
+      new Set<number>();
+
+    modelIds.add(localId);
+
+    idsByModel.set(
+      modelId,
+      modelIds,
+    );
+  }
+
+  // Recolher todos os elementos atribuídos aos circuitos.
+  for (const circuit of getAllKnownCircuitKeys()) {
+    const assignmentMap =
+      manualAssignments[circuit];
+
+    if (!assignmentMap) {
+      continue;
+    }
+
+    for (
+      const [modelId, localIds] of
+        assignmentMap
+    ) {
+      for (const localId of localIds) {
+        addNode(modelId, localId);
+      }
+    }
+  }
+
+  // Recolher também todos os elementos
+  // existentes nos caminhos guardados.
+  for (const route of savedRoutes) {
+    for (const node of route.path) {
+      addNode(
+        node.modelId,
+        node.localId,
+      );
+    }
+  }
+
+  // Remover as cores de todos os elementos.
+  for (
+    const [modelId, localIds] of
+      idsByModel
+  ) {
+    const model = loadedModels.get(modelId);
+
+    if (!model || !localIds.size) {
+      continue;
+    }
+
+    await model.resetHighlight(
+      [...localIds],
+    );
+  }
+
+  // Forçar a atualização antes de aplicar o azul.
+  await fragmentManager.core.update(true);
+
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      resolve();
+    });
+  });
+}
+
+async function toggleSavedRouteHighlight(
+  route: SavedRoute,
+) {
+  const loadedModelIds = [
+    ...loadedModels.keys(),
+  ];
 
   if (!loadedModelIds.length) {
-    flowMessage.value = "Carrega primeiro o IFC antes de realçar um caminho.";
+    flowMessage.value =
+      "Carrega primeiro o IFC antes de realçar um caminho.";
     return;
   }
 
-  if (highlightedSavedRouteId.value === route.id) {
+  if (
+    highlightedSavedRouteId.value === route.id
+  ) {
     highlightedSavedRouteId.value = null;
 
     await resetRoutePathHighlight(route);
     await restoreFlowVisualsAfterRouteHighlight();
 
     flowMessage.value =
-  "Realce do caminho \"" +
-  route.name +
-  "\" removido.";
+      "Realce do caminho \"" +
+      route.name +
+      "\" removido.";
+
     return;
   }
 
   const previousRoute = savedRoutes.find(
-    (savedRoute) => savedRoute.id === highlightedSavedRouteId.value,
+    (savedRoute) =>
+      savedRoute.id ===
+      highlightedSavedRouteId.value,
   );
 
   if (previousRoute) {
-    await resetRoutePathHighlight(previousRoute);
-    await restoreFlowVisualsAfterRouteHighlight();
+    await resetRoutePathHighlight(
+      previousRoute,
+    );
   }
+
+  await clearFlowVisualsForRouteHighlight();
 
   const fallbackModelId = loadedModelIds[0];
 
-  const adaptedPath = route.path.map((node) => {
-    if (loadedModels.has(node.modelId)) {
-      return node;
-    }
+  const adaptedPath = route.path.map(
+    (node) => {
+      if (loadedModels.has(node.modelId)) {
+        return node;
+      }
 
-    return {
-      modelId: fallbackModelId,
-      localId: node.localId,
-    };
-  });
+      return {
+        modelId: fallbackModelId,
+        localId: node.localId,
+      };
+    },
+  );
 
-  const idsByModel = new Map<string, number[]>();
+  const idsByModel =
+    new Map<string, number[]>();
 
   for (const node of adaptedPath) {
-    if (!idsByModel.has(node.modelId)) {
-      idsByModel.set(node.modelId, []);
-    }
+    const modelIds =
+      idsByModel.get(node.modelId) ?? [];
 
-    idsByModel.get(node.modelId)?.push(node.localId);
+    modelIds.push(node.localId);
+    idsByModel.set(
+      node.modelId,
+      modelIds,
+    );
   }
 
   for (const [modelId, ids] of idsByModel) {
@@ -3035,7 +3407,10 @@ async function toggleSavedRouteHighlight(route: SavedRoute) {
 
     await model.highlight(
       ids,
-      createHighlight(0x00e5ff, "saved-route-highlight-" + route.id),
+      createHighlight(
+        0x00e5ff,
+        "saved-route-highlight-" + route.id,
+      ),
     );
   }
 
@@ -3044,9 +3419,9 @@ async function toggleSavedRouteHighlight(route: SavedRoute) {
   await fragmentManager.core.update(true);
 
   flowMessage.value =
-  "Caminho \"" +
-  route.name +
-  "\" realçado.";
+    "Caminho \"" +
+    route.name +
+    "\" realçado.";
 }
 
 async function setSavedRouteVisibility(routeId: string, shouldShow: boolean) {
@@ -3494,6 +3869,36 @@ function saveMepElementsToStorage() {
     MEP_ELEMENTS_STORAGE_KEY,
     JSON.stringify(mepElements),
   );
+}
+
+function saveRouteGroupsToStorage() {
+  localStorage.setItem(
+    ROUTE_GROUPS_STORAGE_KEY,
+    JSON.stringify(savedRouteGroups),
+  );
+}
+
+function loadRouteGroupsFromStorage() {
+  const saved = localStorage.getItem(
+    ROUTE_GROUPS_STORAGE_KEY,
+  );
+
+  if (!saved) {
+    return;
+  }
+
+  try {
+    const parsed =
+      JSON.parse(saved) as SavedRouteGroup[];
+
+    savedRouteGroups.splice(0);
+    savedRouteGroups.push(...parsed);
+  } catch (error) {
+    console.error(
+      "Erro ao carregar grupos de caminhos:",
+      error,
+    );
+  }
 }
 
 function saveRoutesToStorage() {
@@ -7504,6 +7909,363 @@ function capitalizeFirstLetter(text: string) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+function getSavedRouteGroup(
+  groupId?: string,
+) {
+  if (!groupId) {
+    return null;
+  }
+
+  return (
+    savedRouteGroups.find(
+      (group) => group.id === groupId,
+    ) ?? null
+  );
+}
+
+function getSavedRouteGroupName(
+  route: SavedRoute,
+) {
+  return (
+    getSavedRouteGroup(route.groupId)?.name ??
+    "Sem grupo"
+  );
+}
+
+function getSavedRouteGroupColor(
+  route: SavedRoute,
+) {
+  return (
+    getSavedRouteGroup(route.groupId)?.color ??
+    getCircuitColorStyle(route.temperature)
+  );
+}
+
+function toggleRouteSelectionForGrouping(
+  routeId: string,
+) {
+  if (
+    selectedRouteIdsForGrouping.has(routeId)
+  ) {
+    selectedRouteIdsForGrouping.delete(routeId);
+    return;
+  }
+
+  selectedRouteIdsForGrouping.add(routeId);
+}
+
+function isRouteSelectedForGrouping(
+  routeId: string,
+) {
+  return selectedRouteIdsForGrouping.has(
+    routeId,
+  );
+}
+
+function clearRouteGroupingSelection() {
+  selectedRouteIdsForGrouping.clear();
+}
+
+async function moveSelectedSavedRoutesToCycle() {
+  const selectedRoutes = savedRoutes.filter(
+    (route) =>
+      selectedRouteIdsForGrouping.has(route.id),
+  );
+
+  if (!selectedRoutes.length) {
+    flowMessage.value =
+      "Seleciona primeiro pelo menos um caminho guardado.";
+    return;
+  }
+
+  const targetCycleNumber = Number(
+    targetCycleNumberForSavedRoutes.value,
+  );
+
+  if (
+    !Number.isFinite(targetCycleNumber) ||
+    targetCycleNumber < 1 ||
+    targetCycleNumber > waterCycleCount.value
+  ) {
+    flowMessage.value =
+      "Seleciona um ciclo de destino válido.";
+    return;
+  }
+
+  let movedCount = 0;
+
+  for (const route of selectedRoutes) {
+    const sourceCircuit =
+      getCycleCircuitDefinition(
+        route.temperature,
+      );
+
+    if (!sourceCircuit) {
+      continue;
+    }
+
+    if (
+      sourceCircuit.cycleNumber ===
+      targetCycleNumber
+    ) {
+      continue;
+    }
+
+    const routesUsingSourceCircuit =
+      savedRoutes.filter(
+        (savedRoute) =>
+          savedRoute.temperature ===
+          sourceCircuit.key,
+      );
+
+    const allSourceRoutesAreSelected =
+      routesUsingSourceCircuit.every(
+        (savedRoute) =>
+          selectedRouteIdsForGrouping.has(
+            savedRoute.id,
+          ),
+      );
+
+    if (allSourceRoutesAreSelected) {
+      sourceCircuit.cycleNumber =
+        targetCycleNumber;
+
+      movedCount++;
+      continue;
+    }
+
+    const newCircuitKey =
+      "cycle" +
+      targetCycleNumber +
+      "-" +
+      sourceCircuit.kind +
+      "-" +
+      crypto.randomUUID();
+
+    const newCircuit: CycleCircuitDefinition = {
+      key: newCircuitKey,
+      cycleNumber: targetCycleNumber,
+      kind: sourceCircuit.kind,
+      name: sourceCircuit.name,
+      color: sourceCircuit.color,
+      defaultColor:
+        sourceCircuit.defaultColor ??
+        sourceCircuit.color,
+      locked: false,
+    };
+
+    cycleCircuitDefinitions.push(
+      newCircuit,
+    );
+
+    manualAssignments[newCircuitKey] =
+      new Map();
+
+    for (const node of route.path) {
+      const oldAssignmentSet =
+        getAssignmentSet(
+          sourceCircuit.key,
+          node.modelId,
+        );
+
+      oldAssignmentSet.delete(
+        node.localId,
+      );
+
+      getAssignmentSet(
+        newCircuitKey,
+        node.modelId,
+      ).add(node.localId);
+    }
+
+    route.temperature = newCircuitKey;
+
+    movedCount++;
+  }
+
+  saveCycleCircuitDefinitionsToStorage();
+  saveRoutesToStorage();
+
+  circuitMaterialCache.clear();
+
+  activeCycleNumber.value =
+    targetCycleNumber;
+
+  selectDefaultCircuitForActiveCycle();
+
+  updateManualStats();
+
+  if (
+    countAssignments() > 0 ||
+    flowConnections.length > 0
+  ) {
+    await rebuildManualFlowLayer();
+  }
+
+  clearRouteGroupingSelection();
+
+  flowMessage.value =
+    movedCount > 0
+      ? movedCount +
+        " caminho(s) movido(s) para " +
+        getCycleDisplayName(
+          targetCycleNumber,
+        ) +
+        "."
+      : "Os caminhos selecionados já pertencem ao ciclo escolhido.";
+}
+
+async function groupSelectedSavedRoutes() {
+  const selectedRoutes = savedRoutes.filter(
+    (route) =>
+      selectedRouteIdsForGrouping.has(
+        route.id,
+      ),
+  );
+
+  if (selectedRoutes.length < 2) {
+    flowMessage.value =
+      "Seleciona pelo menos dois caminhos para agrupar.";
+    return;
+  }
+
+  const groupNameInput = prompt(
+    "Nome do grupo:",
+    "Novo grupo de caminhos",
+  );
+
+  const groupName =
+    groupNameInput?.trim();
+
+  if (!groupName) {
+    flowMessage.value =
+      "Criação do grupo cancelada.";
+    return;
+  }
+
+  const firstRoute = selectedRoutes[0];
+
+  const defaultColor =
+    getCircuitColorStyle(
+      firstRoute.temperature,
+    );
+
+  const groupColorInput = prompt(
+    "Cor do grupo em formato hexadecimal:",
+    defaultColor,
+  );
+
+  const groupColor =
+    groupColorInput?.trim();
+
+  if (
+    !groupColor ||
+    !/^#[0-9a-fA-F]{6}$/.test(groupColor)
+  ) {
+    flowMessage.value =
+      "A cor deve ter o formato #RRGGBB.";
+    return;
+  }
+
+  const groupId = crypto.randomUUID();
+
+  savedRouteGroups.push({
+    id: groupId,
+    name: groupName,
+    color: groupColor,
+  });
+
+  for (const route of selectedRoutes) {
+    route.groupId = groupId;
+
+    const circuit =
+      getCycleCircuitDefinition(
+        route.temperature,
+      );
+
+    if (circuit) {
+      circuit.color = groupColor;
+      circuit.defaultColor = groupColor;
+    }
+  }
+
+  circuitMaterialCache.clear();
+
+  saveRouteGroupsToStorage();
+  saveRoutesToStorage();
+  saveCycleCircuitDefinitionsToStorage();
+
+  clearRouteGroupingSelection();
+
+  if (
+    countAssignments() > 0 ||
+    flowConnections.length > 0
+  ) {
+    await rebuildManualFlowLayer();
+  }
+
+  flowMessage.value =
+    selectedRoutes.length +
+    " caminho(s) agrupado(s) em \"" +
+    groupName +
+    "\".";
+}
+
+async function removeSelectedRoutesFromGroup() {
+  const selectedRoutes = savedRoutes.filter(
+    (route) =>
+      selectedRouteIdsForGrouping.has(
+        route.id,
+      ) &&
+      route.groupId,
+  );
+
+  if (!selectedRoutes.length) {
+    flowMessage.value =
+      "Seleciona caminhos que pertençam a um grupo.";
+    return;
+  }
+
+  const affectedGroupIds = new Set<string>();
+
+  for (const route of selectedRoutes) {
+    if (route.groupId) {
+      affectedGroupIds.add(route.groupId);
+    }
+
+    delete route.groupId;
+  }
+
+  for (
+    let index =
+      savedRouteGroups.length - 1;
+    index >= 0;
+    index--
+  ) {
+    const group =
+      savedRouteGroups[index];
+
+    const groupStillHasRoutes =
+      savedRoutes.some(
+        (route) =>
+          route.groupId === group.id,
+      );
+
+    if (!groupStillHasRoutes) {
+      savedRouteGroups.splice(index, 1);
+    }
+  }
+
+  saveRouteGroupsToStorage();
+  saveRoutesToStorage();
+
+  clearRouteGroupingSelection();
+
+  flowMessage.value =
+    selectedRoutes.length +
+    " caminho(s) retirado(s) do grupo.";
+}
+
 function getRoutePipeCount(route: SavedRoute) {
   return route.path.length;
 }
@@ -8653,6 +9415,50 @@ function toggleElementPanelMinimized() {
 
 function toggleFlowControlsPanelMinimized() {
   isFlowControlsPanelMinimized.value = !isFlowControlsPanelMinimized.value;
+}
+
+async function toggleSelectedCycleView() {
+  if (!loadedModels.size) {
+    flowMessage.value =
+      "Carrega primeiro um ficheiro IFC.";
+    return;
+  }
+
+  isSingleCycleViewActive.value =
+    !isSingleCycleViewActive.value;
+
+  highlightedSavedRouteId.value = null;
+
+  await rebuildManualFlowLayer();
+
+  if (isSingleCycleViewActive.value) {
+    flowMessage.value =
+      "A visualizar apenas o ciclo \"" +
+      getCycleDisplayName(
+        simulationCycleNumber.value,
+      ) +
+      "\".";
+  } else {
+    flowMessage.value =
+      "Todos os ciclos estão visíveis.";
+  }
+}
+
+async function updateSelectedSimulationCycle() {
+  if (!isSingleCycleViewActive.value) {
+    return;
+  }
+
+  highlightedSavedRouteId.value = null;
+
+  await rebuildManualFlowLayer();
+
+  flowMessage.value =
+    "A visualizar apenas o ciclo \"" +
+    getCycleDisplayName(
+      simulationCycleNumber.value,
+    ) +
+    "\".";
 }
 
 function toggleSimulationControlPanelMinimized() {
@@ -10290,6 +11096,91 @@ function chunk<T>(items: T[], size: number) {
   color: #9fb0ba;
   font-style: italic;
   font-weight: 600;
+}
+
+.saved-route-group-actions {
+  display: grid;
+  gap: 7px;
+  margin: 8px 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(143, 211, 255, 0.1);
+}
+
+.saved-route-group-actions span {
+  color: #dbe9f1;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.saved-route-group-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #dbe9f1;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.saved-route-group-checkbox input {
+  margin: 0;
+  accent-color: #8fd3ff;
+}
+
+.saved-route-group-color {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-right: 6px;
+  border: 1px solid rgba(
+    255,
+    255,
+    255,
+    0.55
+  );
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.saved-route-cycle-selector {
+  display: grid;
+  gap: 5px;
+}
+
+.saved-route-cycle-selector span {
+  color: #dbe9f1;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.saved-route-cycle-selector select {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid
+    rgba(143, 211, 255, 0.35);
+  border-radius: 5px;
+  background: rgba(7, 19, 26, 0.85);
+  color: #dbe9f1;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.cycle-view-button--active {
+  border-color: rgba(
+    102,
+    187,
+    106,
+    0.75
+  ) !important;
+  background: rgba(
+    102,
+    187,
+    106,
+    0.22
+  ) !important;
+  color: #b9f6ca !important;
 }
 
 @media (max-width: 820px) {
