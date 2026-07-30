@@ -133,10 +133,20 @@
 </p>
 
 <p
+  v-else-if="savedRoutes.length"
+  class="automatic-analysis-status automatic-analysis-status--ready"
+>
+  ✓ {{ savedRoutes.length }} caminho(s) guardado(s)
+  aplicado(s) automaticamente. Não é necessário repetir
+  o scan se estás a usar o mesmo IFC.
+</p>
+
+<p
   v-else
   class="automatic-analysis-status automatic-analysis-status--ready"
 >
-  IFC carregado. O modelo está pronto para ser analisado.
+  IFC carregado. Ainda não existem caminhos guardados
+  para aplicar.
 </p>
 
 <div
@@ -151,7 +161,9 @@
     {{
       isSystemScanRunning
         ? 'A analisar sistemas...'
-        : 'Analisar System Types e System Names'
+        : savedRoutes.length
+          ? 'Voltar a fazer scan do IFC'
+          : 'Analisar System Types e System Names'
     }}
   </button>
 </div>
@@ -1874,6 +1886,8 @@ const REVERSED_DIRECTIONS_STORAGE_KEY =
   "bastto-viewer-reversed-directions";
 const HIDDEN_FLOW_ARROWS_STORAGE_KEY =
   "bastto-viewer-hidden-flow-arrows";
+const PIPE_TYPE_FLOW_NODES_STORAGE_KEY =
+  "bastto-viewer-pipe-type-flow-nodes";
 const SYNCED_PIPE_DIRECTIONS_STORAGE_KEY =
   "bastto-viewer-synced-pipe-directions";
 const VALVE_PIPE_LINKS_STORAGE_KEY =
@@ -2066,6 +2080,7 @@ loadRouteGroupsFromStorage();
 loadReversedDirectionsFromStorage();
 loadSyncedPipeDirectionsFromStorage();
 loadHiddenFlowArrowsFromStorage();
+loadPipeTypeFlowNodesFromStorage();
 loadValvePipeLinksFromStorage();
 
   createBimPanel(components, viewport);
@@ -2600,7 +2615,10 @@ const node = {
   localId,
 };
 
-if (!pipeTypeFlowNodes.has(nodeKey(node))) {
+if (
+  pipeTypeFlowNodes.size > 0 &&
+  !pipeTypeFlowNodes.has(nodeKey(node))
+) {
   continue;
 }
 
@@ -3587,6 +3605,26 @@ function renameSavedRoute(routeId: string) {
     `Caminho renomeado para "${trimmedName}".`;
 }
 
+async function applySavedRoutesWithoutScan() {
+  if (!loadedModels.size) {
+    flowMessage.value =
+      "Carrega primeiro o ficheiro IFC.";
+    return;
+  }
+
+  if (!savedRoutes.length) {
+    flowMessage.value =
+      "Não existem caminhos guardados.";
+    return;
+  }
+
+  await applyAllSavedRoutes();
+
+  flowMessage.value =
+    savedRoutes.length +
+    " caminho(s) guardado(s) aplicado(s) sem repetir o scan.";
+}
+
 async function applyAllSavedRoutes() {
   if (!savedRoutes.length) {
     return;
@@ -4047,6 +4085,41 @@ function loadValvePipeLinksFromStorage() {
     }
   } catch (error) {
     console.error("Erro ao carregar associações de válvulas:", error);
+  }
+}
+
+function savePipeTypeFlowNodesToStorage() {
+  localStorage.setItem(
+    PIPE_TYPE_FLOW_NODES_STORAGE_KEY,
+    JSON.stringify(
+      [...pipeTypeFlowNodes],
+    ),
+  );
+}
+
+function loadPipeTypeFlowNodesFromStorage() {
+  const saved = localStorage.getItem(
+    PIPE_TYPE_FLOW_NODES_STORAGE_KEY,
+  );
+
+  if (!saved) {
+    return;
+  }
+
+  try {
+    const parsed =
+      JSON.parse(saved) as string[];
+
+    pipeTypeFlowNodes.clear();
+
+    for (const nodeKeyValue of parsed) {
+      pipeTypeFlowNodes.add(nodeKeyValue);
+    }
+  } catch (error) {
+    console.error(
+      "Erro ao carregar elementos Pipe Types:",
+      error,
+    );
   }
 }
 
@@ -9391,6 +9464,8 @@ const revitElementId =
           first.localeCompare(second),
       ),
     );
+
+    savePipeTypeFlowNodesToStorage();
 
     hasSystemScanResults.value = true;
 
