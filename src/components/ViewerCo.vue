@@ -90,6 +90,173 @@
   </div>
 </div>
 
+<div
+  v-if="isSavedRouteDirectionPanelOpen"
+  class="route-direction-dialog-backdrop"
+>
+  <div class="route-direction-dialog">
+    <div class="route-direction-dialog__header">
+      <div>
+        <p class="flow-panel__eyebrow">
+          Orientação do fluxo
+        </p>
+
+        <h2>Definir sentido do caminho</h2>
+      </div>
+
+      <button
+        type="button"
+        class="section-collapse-button"
+        @click="closeSavedRouteDirectionPanel"
+      >
+        ×
+      </button>
+    </div>
+
+    <div class="route-direction-dialog__route">
+      <span>Caminho selecionado</span>
+
+      <strong>
+        {{
+          getSelectedSavedRouteForDirection()?.name
+        }}
+      </strong>
+    </div>
+
+    <p class="route-direction-dialog__help">
+      Seleciona um tubo no modelo e define-o como
+      início. Depois seleciona outro tubo e define-o
+      como fim.
+    </p>
+
+    <div class="route-direction-dialog__definition-grid">
+      <div class="route-direction-dialog__definition">
+  <span class="route-direction-dialog__step">
+    1
+  </span>
+
+  <strong>Inícios do fluxo</strong>
+
+  <div
+    v-if="savedRouteDirectionStarts.length"
+    class="route-direction-dialog__node-list"
+  >
+    <div
+      v-for="node in savedRouteDirectionStarts"
+      :key="
+        `direction-start-${node.modelId}-${node.localId}`
+      "
+      class="route-direction-dialog__node"
+    >
+      <span>
+        Tubo #{{ node.localId }}
+      </span>
+
+      <button
+        type="button"
+        title="Remover início"
+        @click="
+          removeSavedRouteDirectionStart(
+            node
+          )
+        "
+      >
+        ×
+      </button>
+    </div>
+  </div>
+
+  <span
+    v-else
+    class="route-direction-dialog__value"
+  >
+    Nenhum início definido
+  </span>
+
+  <button
+    type="button"
+    @click="setSavedRouteDirectionStart"
+  >
+    Adicionar início selecionado
+  </button>
+</div>
+
+      <div class="route-direction-dialog__definition">
+  <span class="route-direction-dialog__step">
+    2
+  </span>
+
+  <strong>Fins do fluxo</strong>
+
+  <div
+    v-if="savedRouteDirectionEnds.length"
+    class="route-direction-dialog__node-list"
+  >
+    <div
+      v-for="node in savedRouteDirectionEnds"
+      :key="
+        `direction-end-${node.modelId}-${node.localId}`
+      "
+      class="route-direction-dialog__node"
+    >
+      <span>
+        Tubo #{{ node.localId }}
+      </span>
+
+      <button
+        type="button"
+        title="Remover fim"
+        @click="
+          removeSavedRouteDirectionEnd(
+            node
+          )
+        "
+      >
+        ×
+      </button>
+    </div>
+  </div>
+
+  <span
+    v-else
+    class="route-direction-dialog__value"
+  >
+    Nenhum fim definido
+  </span>
+
+  <button
+    type="button"
+    @click="setSavedRouteDirectionEnd"
+  >
+    Adicionar fim selecionado
+  </button>
+</div>
+    </div>
+
+    <div class="route-direction-dialog__actions">
+      <button
+        type="button"
+        @click="closeSavedRouteDirectionPanel"
+      >
+        Cancelar
+      </button>
+
+      <button
+  type="button"
+  class="automatic-review-button"
+  :disabled="
+    savedRouteDirectionStarts.length === 0 ||
+    savedRouteDirectionEnds.length === 0 ||
+    getSelectedSavedRouteForDirection()?.locked
+  "
+  @click="applyAndSaveSavedRouteDirection"
+>
+  Aplicar e guardar sentido
+</button>
+    </div>
+  </div>
+</div>
+
   <nav
   class="application-tabs"
   :class="{
@@ -1168,6 +1335,14 @@
         </button>
 
         <button
+  v-if="!route.locked"
+  type="button"
+  @click="openSavedRouteDirectionPanel(route)"
+>
+  Definir sentido
+</button>
+
+        <button
           v-if="!route.locked"
           type="button"
           @click="renameSavedRoute(route.id)"
@@ -1185,7 +1360,7 @@
           @click="deleteSavedRoute(route.id)"
         >
           Apagar
-        </button>
+                </button>
       </div>
     </div>
   </div>
@@ -1549,6 +1724,31 @@
         </div>
       </section>
     
+<section
+  v-if="activeApplicationTab === 'manual'"
+  class="flow-panel manual-reset-section"
+  aria-label="Reposição total da configuração manual"
+>
+  <div class="flow-section-title">
+    Reposição total
+  </div>
+
+  <p class="manual-reset-section__description">
+    Apaga todos os caminhos guardados, grupos, sentidos
+    definidos ou invertidos, setas ocultadas, circuitos
+    personalizados, associações de válvulas e restantes
+    configurações manuais.
+  </p>
+
+  <button
+    type="button"
+    class="manual-reset-button"
+    @click="resetAllManualConfiguration"
+  >
+    Apagar toda a configuração manual
+  </button>
+</section>
+
     <section
   v-if="activeApplicationTab === 'simulation'"
   :class="[
@@ -1829,6 +2029,8 @@ type SavedRoute = {
   locked?: boolean;
   groupId?: string;
   originalCircuitColor?: string;
+  directionStarts?: FlowNode[];
+directionEnds?: FlowNode[];
 };
 
 type SavedRouteGroup = {
@@ -1910,6 +2112,15 @@ const isSavedRoutesPanelOpen = ref(true);
 const isPathStatsPanelOpen = ref(false);
 const highlightedSavedRouteId = ref<string | null>(null);
 const isApplyingSavedRouteHighlight = ref(false);
+const isSavedRouteDirectionPanelOpen =
+  ref(false);
+const selectedSavedRouteDirectionId =
+  ref("");
+const savedRouteDirectionStarts =
+  ref<FlowNode[]>([]);
+
+const savedRouteDirectionEnds =
+  ref<FlowNode[]>([]);
 const isCentralSummaryOpen = ref(false);
 const selectedCount = ref(0);
 const selectedMepElementInfo = ref("Nenhum elemento classificado selecionado.");
@@ -2367,6 +2578,53 @@ async function restoreSelectedCircuitColors(
   await fragmentManager.core.update(true);
 }
 
+function resetAllManualConfiguration() {
+  const confirmed = window.confirm(
+    "Tens a certeza de que queres apagar toda a configuração manual?\n\n" +
+      "Serão apagados:\n" +
+      "• caminhos guardados;\n" +
+      "• grupos de caminhos;\n" +
+      "• sentidos definidos e invertidos;\n" +
+      "• setas ocultadas;\n" +
+      "• circuitos, nomes e cores personalizados;\n" +
+      "• associações entre válvulas e tubos;\n" +
+      "• definições manuais de elementos MEP.\n\n" +
+      "Esta ação não pode ser anulada.",
+  );
+
+  if (!confirmed) {
+    flowMessage.value =
+      "Reposição total cancelada.";
+
+    return;
+  }
+
+  const manualStorageKeys = [
+    "bastto-viewer-mep-elements",
+    "bastto-viewer-routes",
+    "bastto-viewer-route-groups",
+    "bastto-viewer-water-cycle-count",
+    "bastto-viewer-water-cycle-names",
+    "bastto-viewer-cycle-circuits",
+    "bastto-viewer-reversed-directions",
+    "bastto-viewer-hidden-flow-arrows",
+    "bastto-viewer-pipe-type-flow-nodes",
+    "bastto-viewer-synced-pipe-directions",
+    "bastto-viewer-valve-pipe-links",
+  ];
+
+  for (const storageKey of manualStorageKeys) {
+    localStorage.removeItem(storageKey);
+  }
+
+  window.alert(
+    "Toda a configuração manual foi apagada.\n\n" +
+      "A aplicação será reiniciada.",
+  );
+
+  window.location.reload();
+}
+
 function createBimPanel(components: OBC.Components, viewport: HTMLElement) {
   const [modelsList] = BUIC.tables.modelsList({
     components,
@@ -2426,9 +2684,7 @@ if (isManualRouteRecording.value && manualRouteNodes.length > 0) {
 await syncSelectedValveAssociationRoute();
 });
 
-  highlighter.events.select.onClear.add(
-  async () => {
-        highlighter.events.select.onClear.add(
+highlighter.events.select.onClear.add(
   async () => {
     const previousSelection:
       SelectionMap = new Map();
@@ -2460,10 +2716,7 @@ await syncSelectedValveAssociationRoute();
     }
 
     if (highlightedSavedRouteId.value) {
-      await fragmentManager.core.update(
-        true,
-      );
-
+      await fragmentManager.core.update(true);
       return;
     }
 
@@ -2474,50 +2727,6 @@ await syncSelectedValveAssociationRoute();
         previousSelection,
       );
     }
-  },
-);
-``
-
-    const previousSelection:
-      SelectionMap = new Map();
-
-    for (
-      const [modelId, localIds] of
-        selectedItems
-    ) {
-      previousSelection.set(
-        modelId,
-        new Set(localIds),
-      );
-    }
-
-    selectedItems.clear();
-    selectedCount.value = 0;
-    selectedIfcDetailsText.value = "";
-    isIfcDetailsPanelOpen.value = false;
-
-    selectedMepElementInfo.value =
-      "Nenhum elemento classificado selecionado.";
-
-    updatePropertiesTable({
-      modelIdMap: {},
-    });
-
-    if (isManualRouteRecording.value) {
-      return;
-    }
-
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => {
-        resolve();
-      });
-    });
-
-if (!isApplyingSavedRouteHighlight.value) {
-  await restoreSelectedCircuitColors(
-    previousSelection,
-  );
-}
   },
 );
 
@@ -2783,7 +2992,6 @@ function shouldShowCircuitInSimulation(
     circuitCycleNumber,
   );
 }
-``
 
 async function resetAllCircuitHighlights() {
   const loadedModelIds = [
@@ -3905,6 +4113,15 @@ async function reverseSavedRoute(routeId: string) {
   }
 
   route.path.reverse();
+
+  const previousDirectionStart =
+  route.directionStart;
+
+route.directionStart =
+  route.directionEnd;
+
+route.directionEnd =
+  previousDirectionStart;
 
   for (const node of route.path) {
     toggleReversedPipeDirection(
@@ -7359,7 +7576,8 @@ async function updateAutomaticDirectionNeighbors(
 async function getPipeDirectionHints(
   node: FlowNode,
 ): Promise<PipeDirectionHints> {
-  const circuit = getNodeTemperature(node);
+  const circuit =
+    getNodeTemperature(node);
 
   if (!circuit) {
     return {};
@@ -7373,24 +7591,53 @@ async function getPipeDirectionHints(
       ),
     );
 
-  if (!automaticNeighbors) {
-    return {};
+  if (automaticNeighbors) {
+    const hints: PipeDirectionHints = {};
+
+    if (automaticNeighbors.previous) {
+      hints.upstream =
+        await getNodeCenter(
+          automaticNeighbors.previous,
+        );
+    }
+
+    if (automaticNeighbors.next) {
+      hints.downstream =
+        await getNodeCenter(
+          automaticNeighbors.next,
+        );
+    }
+
+    if (
+      hints.upstream ||
+      hints.downstream
+    ) {
+      return hints;
+    }
   }
 
   const hints: PipeDirectionHints = {};
 
-  if (automaticNeighbors.previous) {
-    hints.upstream =
-      await getNodeCenter(
-        automaticNeighbors.previous,
-      );
-  }
+  for (const connection of flowConnections) {
+    if (
+      connection.temperature !== circuit
+    ) {
+      continue;
+    }
 
-  if (automaticNeighbors.next) {
-    hints.downstream =
-      await getNodeCenter(
-        automaticNeighbors.next,
-      );
+    if (isSameNode(connection.to, node)) {
+      hints.upstream =
+        await getNodeCenter(
+          connection.from,
+        );
+    }
+
+    if (isSameNode(connection.from, node)) {
+      hints.downstream =
+        await getNodeCenter(
+          connection.to,
+        );
+    }
   }
 
   return hints;
@@ -8771,6 +9018,535 @@ async function removeSelectedRoutesFromGroup() {
     selectedRoutes.length +
     " caminho(s) retirado(s) do grupo. " +
     "As cores originais foram repostas.";
+}
+
+function getSelectedSavedRouteForDirection() {
+  if (!selectedSavedRouteDirectionId.value) {
+    return null;
+  }
+
+  return (
+    savedRoutes.find(
+      (route) =>
+        route.id ===
+        selectedSavedRouteDirectionId.value,
+    ) ?? null
+  );
+}
+
+async function openSavedRouteDirectionPanel(
+  route: SavedRoute,
+) {
+  if (route.locked) {
+    flowMessage.value =
+      "O caminho \"" +
+      route.name +
+      "\" está protegido. Desprotege primeiro para alterar o sentido.";
+
+    return;
+  }
+
+  selectedSavedRouteDirectionId.value =
+    route.id;
+
+  savedRouteDirectionStarts.value =
+  route.directionStarts
+    ? route.directionStarts.map((node) => ({
+        modelId: node.modelId,
+        localId: node.localId,
+      }))
+    : [];
+
+savedRouteDirectionEnds.value =
+  route.directionEnds
+    ? route.directionEnds.map((node) => ({
+        modelId: node.modelId,
+        localId: node.localId,
+      }))
+    : [];
+
+  isSavedRouteDirectionPanelOpen.value =
+    true;
+
+  if (
+    highlightedSavedRouteId.value !==
+    route.id
+  ) {
+    await toggleSavedRouteHighlight(route);
+  }
+
+  flowMessage.value =
+    "Seleciona um tubo do caminho e define o início. Depois seleciona outro tubo e define o fim.";
+}
+
+function closeSavedRouteDirectionPanel() {
+  isSavedRouteDirectionPanelOpen.value =
+    false;
+
+  selectedSavedRouteDirectionId.value =
+    "";
+
+  savedRouteDirectionStarts.value = [];
+savedRouteDirectionEnds.value = [];
+
+  flowMessage.value =
+    "Definição do sentido cancelada.";
+}
+
+function getSelectedDirectionNodeFromRoute() {
+  const route =
+    getSelectedSavedRouteForDirection();
+
+  if (!route) {
+    flowMessage.value =
+      "Seleciona primeiro um caminho guardado.";
+
+    return null;
+  }
+
+  const selectedNode =
+    getFirstSelectedNode();
+
+  if (!selectedNode) {
+    flowMessage.value =
+      "Seleciona primeiro um tubo no modelo.";
+
+    return null;
+  }
+
+  const belongsToRoute = route.path.some(
+    (node) =>
+      isSameNode(node, selectedNode),
+  );
+
+  if (!belongsToRoute) {
+    flowMessage.value =
+      "O elemento selecionado não pertence ao caminho \"" +
+      route.name +
+      "\".";
+
+    return null;
+  }
+
+  return {
+    modelId: selectedNode.modelId,
+    localId: selectedNode.localId,
+  };
+}
+
+function hasDirectionNode(
+  nodes: FlowNode[],
+  node: FlowNode,
+) {
+  return nodes.some(
+    (existingNode) =>
+      existingNode.modelId === node.modelId &&
+      existingNode.localId === node.localId,
+  );
+}
+
+function setSavedRouteDirectionStart() {
+  const selectedNode =
+    getSelectedDirectionNodeFromRoute();
+
+  if (!selectedNode) {
+    return;
+  }
+
+  if (
+    hasDirectionNode(
+      savedRouteDirectionStarts.value,
+      selectedNode,
+    )
+  ) {
+    flowMessage.value =
+      "Este tubo já está definido como início.";
+
+    return;
+  }
+
+  const isAlreadyAnEnd =
+    hasDirectionNode(
+      savedRouteDirectionEnds.value,
+      selectedNode,
+    );
+
+  if (isAlreadyAnEnd) {
+    flowMessage.value =
+      "O mesmo tubo não pode ser simultaneamente início e fim.";
+
+    return;
+  }
+
+  savedRouteDirectionStarts.value.push({
+    modelId: selectedNode.modelId,
+    localId: selectedNode.localId,
+  });
+
+  flowMessage.value =
+    "Início adicionado: tubo #" +
+    selectedNode.localId +
+    ".";
+}
+
+function setSavedRouteDirectionEnd() {
+  const selectedNode =
+    getSelectedDirectionNodeFromRoute();
+
+  if (!selectedNode) {
+    return;
+  }
+
+  if (
+    hasDirectionNode(
+      savedRouteDirectionEnds.value,
+      selectedNode,
+    )
+  ) {
+    flowMessage.value =
+      "Este tubo já está definido como fim.";
+
+    return;
+  }
+
+  const isAlreadyAStart =
+    hasDirectionNode(
+      savedRouteDirectionStarts.value,
+      selectedNode,
+    );
+
+  if (isAlreadyAStart) {
+    flowMessage.value =
+      "O mesmo tubo não pode ser simultaneamente início e fim.";
+
+    return;
+  }
+
+  savedRouteDirectionEnds.value.push({
+    modelId: selectedNode.modelId,
+    localId: selectedNode.localId,
+  });
+
+  flowMessage.value =
+    "Fim adicionado: tubo #" +
+    selectedNode.localId +
+    ".";
+}
+
+function removeSavedRouteDirectionStart(
+  nodeToRemove: FlowNode,
+) {
+  savedRouteDirectionStarts.value =
+    savedRouteDirectionStarts.value.filter(
+      (node) =>
+        !(
+          node.modelId ===
+            nodeToRemove.modelId &&
+          node.localId ===
+            nodeToRemove.localId
+        ),
+    );
+}
+
+function removeSavedRouteDirectionEnd(
+  nodeToRemove: FlowNode,
+) {
+  savedRouteDirectionEnds.value =
+    savedRouteDirectionEnds.value.filter(
+      (node) =>
+        !(
+          node.modelId ===
+            nodeToRemove.modelId &&
+          node.localId ===
+            nodeToRemove.localId
+        ),
+    );
+}
+
+async function findPathInsideSavedRoute(
+  route: SavedRoute,
+  start: FlowNode,
+  end: FlowNode,
+) {
+  if (start.modelId !== end.modelId) {
+    return [] as FlowNode[];
+  }
+
+  const model =
+    loadedModels.get(start.modelId);
+
+  if (!model) {
+    return [] as FlowNode[];
+  }
+
+  const routeNodes = route.path.filter(
+    (node) =>
+      node.modelId === start.modelId,
+  );
+
+  const localIds = [
+    ...new Set(
+      routeNodes.map(
+        (node) => node.localId,
+      ),
+    ),
+  ];
+
+  const boxes =
+    await model.getBoxes(localIds);
+
+  const graphItems =
+    new Map<string, PipeGraphItem>();
+
+  for (
+    let index = 0;
+    index < localIds.length;
+    index++
+  ) {
+    const graphItem = graphItemFromBox(
+      start.modelId,
+      localIds[index],
+      boxes[index],
+    );
+
+    if (graphItem) {
+      graphItems.set(
+        nodeKey(graphItem),
+        graphItem,
+      );
+    }
+  }
+
+  const graph = buildPipeGraph(
+    graphItems,
+  );
+
+  const pathKeys = shortestPath(
+    graph,
+    nodeKey(start),
+    nodeKey(end),
+  );
+
+  return pathKeys
+    .map((key) => graphItems.get(key))
+    .filter(
+      (
+        item,
+      ): item is PipeGraphItem => !!item,
+    )
+    .map((item) => ({
+      modelId: item.modelId,
+      localId: item.localId,
+    }));
+}
+
+async function findSavedRouteDirectionPaths(
+  route: SavedRoute,
+  starts: FlowNode[],
+  ends: FlowNode[],
+) {
+  const directionPaths: FlowNode[][] = [];
+
+  for (const start of starts) {
+    for (const end of ends) {
+      const path =
+        await findPathInsideSavedRoute(
+          route,
+          start,
+          end,
+        );
+
+      if (!path.length) {
+        continue;
+      }
+
+      directionPaths.push(path);
+    }
+  }
+
+  return directionPaths;
+}
+
+function applySavedRouteDirectionPaths(
+  route: SavedRoute,
+  directionPaths: FlowNode[][],
+) {
+  const routeNodeKeys = new Set(
+    route.path.map((node) =>
+      automaticDirectionKey(
+        route.temperature,
+        node,
+      ),
+    ),
+  );
+
+  for (const key of routeNodeKeys) {
+    automaticDirectionNeighbors.delete(key);
+  }
+
+  for (const path of directionPaths) {
+    for (
+      let nodeIndex = 0;
+      nodeIndex < path.length;
+      nodeIndex++
+    ) {
+      const node = path[nodeIndex];
+
+      const previous =
+        nodeIndex > 0
+          ? path[nodeIndex - 1]
+          : null;
+
+      const next =
+        nodeIndex < path.length - 1
+          ? path[nodeIndex + 1]
+          : null;
+
+      const key =
+        automaticDirectionKey(
+          route.temperature,
+          node,
+        );
+
+      const existing =
+        automaticDirectionNeighbors.get(
+          key,
+        );
+
+      automaticDirectionNeighbors.set(
+        key,
+        {
+          previous:
+            existing?.previous ??
+            previous,
+
+          next:
+            next ??
+            existing?.next ??
+            null,
+        },
+      );
+    }
+  }
+}
+
+async function applyAndSaveSavedRouteDirection() {
+  const route =
+    getSelectedSavedRouteForDirection();
+
+  if (!route) {
+    flowMessage.value =
+      "Não foi possível encontrar o caminho selecionado.";
+
+    return;
+  }
+
+  if (route.locked) {
+    flowMessage.value =
+      "Desprotege o caminho antes de alterar o sentido.";
+
+    return;
+  }
+
+  if (
+    savedRouteDirectionStarts.value.length ===
+    0
+  ) {
+    flowMessage.value =
+      "Define pelo menos um início.";
+
+    return;
+  }
+
+  if (
+    savedRouteDirectionEnds.value.length ===
+    0
+  ) {
+    flowMessage.value =
+      "Define pelo menos um fim.";
+
+    return;
+  }
+
+  const directionPaths =
+    await findSavedRouteDirectionPaths(
+      route,
+      savedRouteDirectionStarts.value,
+      savedRouteDirectionEnds.value,
+    );
+
+  if (!directionPaths.length) {
+    flowMessage.value =
+      "Não foi encontrada uma ligação entre os inícios e os fins definidos.";
+
+    return;
+  }
+
+  route.directionStarts =
+    savedRouteDirectionStarts.value.map(
+      (node) => ({
+        modelId: node.modelId,
+        localId: node.localId,
+      }),
+    );
+
+  route.directionEnds =
+    savedRouteDirectionEnds.value.map(
+      (node) => ({
+        modelId: node.modelId,
+        localId: node.localId,
+      }),
+    );
+
+  applySavedRouteDirectionPaths(
+    route,
+    directionPaths,
+  );
+
+  for (const node of route.path) {
+    reversedPipeDirections.delete(
+      elementKey(
+        node.modelId,
+        node.localId,
+      ),
+    );
+
+    syncedPipeDirections.delete(
+      elementKey(
+        node.modelId,
+        node.localId,
+      ),
+    );
+  }
+
+  saveRoutesToStorage();
+  saveReversedDirectionsToStorage();
+  saveSyncedPipeDirectionsToStorage();
+
+  closeSavedRouteDirectionPanel();
+
+  await rebuildManualFlowLayer();
+
+  const startCount =
+    route.directionStarts.length;
+
+  const endCount =
+    route.directionEnds.length;
+
+  flowMessage.value =
+    "Sentido guardado com " +
+    startCount +
+    (
+      startCount === 1
+        ? " início e "
+        : " inícios e "
+    ) +
+    endCount +
+    (
+      endCount === 1
+        ? " fim."
+        : " fins."
+    );
 }
 
 function getRoutePipeCount(route: SavedRoute) {
@@ -11827,6 +12603,245 @@ function chunk<T>(items: T[], size: number) {
   line-height: 1.3;
 }
 
+.saved-route-direction-status span {
+  color: #dbe9f1;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.route-direction-dialog-backdrop {
+  position: fixed;
+  top: 90px;
+  right: 24px;
+  z-index: 2100;
+
+  width: min(520px, calc(100vw - 48px));
+  max-height: calc(100vh - 114px);
+
+  pointer-events: none;
+}
+
+.route-direction-dialog {
+  width: 100%;
+  max-height: calc(100vh - 114px);
+  overflow-y: auto;
+
+  padding: 18px;
+  border: 1px solid rgba(0, 229, 255, 0.55);
+  border-radius: 12px;
+
+  background: #17232c;
+  color: #f7fbff;
+
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.55);
+
+  pointer-events: auto;
+}
+``
+
+.route-direction-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.route-direction-dialog__header h2 {
+  margin: 3px 0 0;
+  color: #8fd3ff;
+  font-size: 1.08rem;
+}
+
+.route-direction-dialog__route {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border-radius: 7px;
+  background: rgba(0, 229, 255, 0.1);
+}
+
+.route-direction-dialog__route span {
+  color: #9fb0ba;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.route-direction-dialog__route strong {
+  color: #f7fbff;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.route-direction-dialog__help {
+  margin: 13px 0;
+  color: #dbe9f1;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.route-direction-dialog__definition-grid {
+  display: grid;
+  grid-template-columns: repeat(
+    2,
+    minmax(0, 1fr)
+  );
+  gap: 10px;
+}
+
+.route-direction-dialog__definition {
+  display: grid;
+  gap: 9px;
+  padding: 13px;
+  border: 1px solid
+    rgba(143, 211, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(7, 19, 26, 0.68);
+}
+
+.route-direction-dialog__step {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  background: #8fd3ff;
+  color: #07131a;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.route-direction-dialog__definition strong {
+  color: #f7fbff;
+  font-size: 0.82rem;
+}
+
+.route-direction-dialog__value {
+  min-height: 34px;
+  padding: 8px 9px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #9fb0ba;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.route-direction-dialog__value--defined {
+  background: rgba(102, 187, 106, 0.16);
+  color: #b9f6ca;
+}
+
+.route-direction-dialog__definition button {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  white-space: normal;
+}
+
+.route-direction-dialog__actions {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 0.7fr)
+    minmax(0, 1.3fr);
+  gap: 9px;
+  margin-top: 16px;
+}
+
+.route-direction-dialog__actions button {
+  min-height: 42px;
+  padding: 8px 12px;
+  white-space: normal;
+}
+
+.route-direction-dialog__node-list {
+  display: grid;
+  gap: 6px;
+}
+
+.route-direction-dialog__node {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  min-height: 36px;
+  padding: 6px 7px 6px 10px;
+
+  border: 1px solid
+    rgba(102, 187, 106, 0.28);
+  border-radius: 6px;
+
+  background: rgba(102, 187, 106, 0.13);
+  color: #b9f6ca;
+
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.route-direction-dialog__node button {
+  width: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+
+  border-radius: 5px;
+
+  color: #ffffff;
+  background: rgba(255, 82, 82, 0.75);
+
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.manual-reset-section {
+  display: grid;
+  gap: 9px;
+
+  margin-top: 16px;
+  padding: 12px;
+
+  border: 1px solid rgba(255, 82, 82, 0.38);
+  border-radius: 8px;
+
+  background: rgba(255, 82, 82, 0.08);
+}
+
+.manual-reset-section__description {
+  margin: 0;
+
+  color: #d6e0e6;
+  font-size: 0.73rem;
+  line-height: 1.45;
+}
+
+.manual-reset-button {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+
+  border: 1px solid rgba(255, 82, 82, 0.75);
+  border-radius: 6px;
+
+  background: rgba(176, 38, 38, 0.86);
+  color: #ffffff;
+
+  font-size: 0.76rem;
+  font-weight: 900;
+
+  cursor: pointer;
+}
+
+.manual-reset-button:hover {
+  background: rgba(211, 47, 47, 0.95);
+  border-color: #ff8a80;
+}
+
+.manual-reset-button:focus-visible {
+  outline: 2px solid #ff8a80;
+  outline-offset: 2px;
+}
+
 @media (max-width: 820px) {
   .control-panels {
     top: auto;
@@ -11835,6 +12850,14 @@ function chunk<T>(items: T[], size: number) {
     width: calc(100vw - 24px);
     max-height: calc(100vh - 24px);
   }
+
+.route-direction-dialog__definition-grid {
+  grid-template-columns: 1fr;
+}
+
+.route-direction-dialog__actions {
+  grid-template-columns: 1fr;
+}
 
 .global-color-legend {
   top: 12px;
