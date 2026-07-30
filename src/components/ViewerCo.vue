@@ -1514,50 +1514,80 @@
     </div>
 
     <div class="flow-section-title">
-  Ciclo visualizado
+  Ciclos visualizados
 </div>
 
-<label class="flow-cycle-config">
-  <span>Selecionar ciclo</span>
-
-  <select
-    v-model.number="simulationCycleNumber"
-    @change="updateSelectedSimulationCycle"
+<div class="simulation-cycle-selection">
+  <label
+    v-for="cycleNumber in waterCycleCount"
+    :key="`simulation-cycle-${cycleNumber}`"
+    class="simulation-cycle-option"
   >
-    <option
-      v-for="cycleNumber in waterCycleCount"
-      :key="`simulation-cycle-${cycleNumber}`"
-      :value="cycleNumber"
-    >
+    <input
+      type="checkbox"
+      :checked="
+        isSimulationCycleSelected(
+          cycleNumber
+        )
+      "
+      @change="
+        toggleSimulationCycleSelection(
+          cycleNumber
+        )
+      "
+    />
+
+    <span>
       {{ getCycleDisplayName(cycleNumber) }}
-    </option>
-  </select>
-</label>
+    </span>
+  </label>
+</div>
+
+<div class="flow-actions flow-actions--secondary">
+  <button
+    type="button"
+    @click="selectAllSimulationCycles"
+  >
+    Selecionar todos
+  </button>
+
+  <button
+    type="button"
+    @click="clearSimulationCycleSelection"
+  >
+    Limpar seleção
+  </button>
+</div>
 
 <div class="flow-actions flow-actions--single">
   <button
     type="button"
+    :disabled="
+      selectedSimulationCycles.size === 0
+    "
     :class="{
       'cycle-view-button--active':
-        isSingleCycleViewActive
+        isCycleViewFilterActive
     }"
-    @click="toggleSelectedCycleView"
+    @click="applySimulationCycleFilter"
   >
-    {{
-      isSingleCycleViewActive
-        ? 'Mostrar todos os ciclos'
-        : 'Visualizar apenas este ciclo'
-    }}
+    Visualizar ciclos selecionados
+  </button>
+
+  <button
+    type="button"
+    @click="showAllSimulationCycles"
+  >
+    Mostrar todos os ciclos
   </button>
 </div>
 
 <p
-  v-if="isSingleCycleViewActive"
+  v-if="isCycleViewFilterActive"
   class="automatic-analysis-status automatic-analysis-status--ready"
 >
-  Apenas o ciclo
-  {{ getCycleDisplayName(simulationCycleNumber) }}
-  está visível.
+  Ciclos visíveis:
+  {{ getSelectedSimulationCyclesLabel() }}
 </p>
 
     <div class="flow-actions flow-actions--secondary">
@@ -1781,8 +1811,10 @@ const waterCycleCount = ref(3);
 const pendingWaterCycleCount = ref(3);
 const cycleNames = reactive<Record<string, string>>({});
 const activeCycleNumber = ref(1);
-const simulationCycleNumber = ref(1);
-const isSingleCycleViewActive = ref(false);
+const selectedSimulationCycles =
+  reactive<Set<number>>(new Set());
+const isCycleViewFilterActive =
+  ref(false);
 const targetCycleNumberForSavedRoutes = ref(1);
 const cycleCircuitDefinitions = reactive<CycleCircuitDefinition[]>([]);
 const isCycleCircuitPanelOpen = ref(false);
@@ -2592,18 +2624,79 @@ async function assignSelectedPipes(circuit: PipeCircuit) {
   ".";
 }
 
+function isSimulationCycleSelected(
+  cycleNumber: number,
+) {
+  return selectedSimulationCycles.has(
+    cycleNumber,
+  );
+}
+
+function toggleSimulationCycleSelection(
+  cycleNumber: number,
+) {
+  if (
+    selectedSimulationCycles.has(
+      cycleNumber,
+    )
+  ) {
+    selectedSimulationCycles.delete(
+      cycleNumber,
+    );
+
+    return;
+  }
+
+  selectedSimulationCycles.add(
+    cycleNumber,
+  );
+}
+
+function selectAllSimulationCycles() {
+  selectedSimulationCycles.clear();
+
+  for (
+    let cycleNumber = 1;
+    cycleNumber <= waterCycleCount.value;
+    cycleNumber++
+  ) {
+    selectedSimulationCycles.add(
+      cycleNumber,
+    );
+  }
+}
+
+function clearSimulationCycleSelection() {
+  selectedSimulationCycles.clear();
+}
+
+function getSelectedSimulationCyclesLabel() {
+  return [...selectedSimulationCycles]
+    .sort(
+      (firstCycle, secondCycle) =>
+        firstCycle - secondCycle,
+    )
+    .map((cycleNumber) =>
+      getCycleDisplayName(cycleNumber),
+    )
+    .join(", ");
+}
+
 function shouldShowCircuitInSimulation(
   circuit: PipeCircuit,
 ) {
-  if (!isSingleCycleViewActive.value) {
+  if (!isCycleViewFilterActive.value) {
     return true;
   }
 
-  return (
-    getCircuitCycleNumber(circuit) ===
-    simulationCycleNumber.value
+  const circuitCycleNumber =
+    getCircuitCycleNumber(circuit);
+
+  return selectedSimulationCycles.has(
+    circuitCycleNumber,
   );
 }
+``
 
 async function resetAllCircuitHighlights() {
   const loadedModelIds = [
@@ -9686,48 +9779,69 @@ function toggleFlowControlsPanelMinimized() {
   isFlowControlsPanelMinimized.value = !isFlowControlsPanelMinimized.value;
 }
 
-async function toggleSelectedCycleView() {
+async function applySimulationCycleFilter() {
   if (!loadedModels.size) {
     flowMessage.value =
       "Carrega primeiro um ficheiro IFC.";
+
     return;
   }
 
-  isSingleCycleViewActive.value =
-    !isSingleCycleViewActive.value;
-
-  highlightedSavedRouteId.value = null;
-
-  await rebuildManualFlowLayer();
-
-  if (isSingleCycleViewActive.value) {
+  if (!selectedSimulationCycles.size) {
     flowMessage.value =
-      "A visualizar apenas o ciclo \"" +
-      getCycleDisplayName(
-        simulationCycleNumber.value,
-      ) +
-      "\".";
-  } else {
-    flowMessage.value =
-      "Todos os ciclos estão visíveis.";
-  }
-}
+      "Seleciona pelo menos um ciclo para visualizar.";
 
-async function updateSelectedSimulationCycle() {
-  if (!isSingleCycleViewActive.value) {
     return;
   }
 
-  highlightedSavedRouteId.value = null;
+  if (
+    highlightedSavedRouteId.value &&
+    modelHighlighter
+  ) {
+    await modelHighlighter.clear(
+      "saved-route-highlight",
+    );
+
+    highlightedSavedRouteId.value = null;
+  }
+
+  isCycleViewFilterActive.value = true;
 
   await rebuildManualFlowLayer();
 
   flowMessage.value =
-    "A visualizar apenas o ciclo \"" +
-    getCycleDisplayName(
-      simulationCycleNumber.value,
-    ) +
-    "\".";
+    "A visualizar os ciclos: " +
+    getSelectedSimulationCyclesLabel() +
+    ".";
+}
+
+async function showAllSimulationCycles() {
+  if (!loadedModels.size) {
+    flowMessage.value =
+      "Carrega primeiro um ficheiro IFC.";
+
+    return;
+  }
+
+  if (
+    highlightedSavedRouteId.value &&
+    modelHighlighter
+  ) {
+    await modelHighlighter.clear(
+      "saved-route-highlight",
+    );
+
+    highlightedSavedRouteId.value = null;
+  }
+
+  isCycleViewFilterActive.value = false;
+
+  selectAllSimulationCycles();
+
+  await rebuildManualFlowLayer();
+
+  flowMessage.value =
+    "Todos os ciclos estão visíveis.";
 }
 
 function toggleSimulationControlPanelMinimized() {
@@ -11450,6 +11564,33 @@ function chunk<T>(items: T[], size: number) {
     0.22
   ) !important;
   color: #b9f6ca !important;
+}
+
+.simulation-cycle-selection {
+  display: grid;
+  gap: 6px;
+  margin: 7px 0;
+  padding: 8px;
+  border: 1px solid
+    rgba(143, 211, 255, 0.25);
+  border-radius: 6px;
+  background: rgba(7, 19, 26, 0.55);
+}
+
+.simulation-cycle-option {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  color: #dbe9f1;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.simulation-cycle-option input {
+  margin: 0;
+  accent-color: #8fd3ff;
 }
 
 @media (max-width: 820px) {
