@@ -1795,6 +1795,7 @@ const isCycleNamesPanelOpen = ref(false);
 const isSavedRoutesPanelOpen = ref(true);
 const isPathStatsPanelOpen = ref(false);
 const highlightedSavedRouteId = ref<string | null>(null);
+const isApplyingSavedRouteHighlight = ref(false);
 const isCentralSummaryOpen = ref(false);
 const selectedCount = ref(0);
 const selectedMepElementInfo = ref("Nenhum elemento classificado selecionado.");
@@ -1896,6 +1897,7 @@ const VALVE_PIPE_LINKS_STORAGE_KEY =
 let world: any;
 let serializer: FRAGS.IfcImporter;
 let fragmentManager: OBC.FragmentsManager;
+let modelHighlighter: OBCF.Highlighter;
 let bimGridPanel: HTMLElement | null = null;
 let bimGridViewport: HTMLElement | null = null;
 let fragmentBytes: ArrayBuffer | null = null;
@@ -2154,6 +2156,98 @@ function toggleIfcPanelCollapsed() {
   applyIfcPanelLayout();
 }
 
+async function restoreSelectedCircuitColors(
+  previousSelection: SelectionMap,
+) {
+    if (
+    isApplyingSavedRouteHighlight.value ||
+    highlightedSavedRouteId.value
+  ) {
+    return;
+  }
+
+  const idsByCircuitAndModel = new Map<
+    string,
+    {
+      circuit: PipeCircuit;
+      modelId: string;
+      localIds: number[];
+    }
+  >();
+
+  for (
+    const [modelId, localIds] of
+      previousSelection
+  ) {
+    for (const localId of localIds) {
+      const node: FlowNode = {
+        modelId,
+        localId,
+      };
+
+      const circuit =
+        getNodeTemperature(node);
+
+      if (
+        !circuit ||
+        !shouldShowCircuitInSimulation(
+          circuit,
+        )
+      ) {
+        continue;
+      }
+
+      const groupKey =
+        circuit + "|" + modelId;
+
+      const existingGroup =
+        idsByCircuitAndModel.get(groupKey);
+
+      if (existingGroup) {
+        existingGroup.localIds.push(
+          localId,
+        );
+
+        continue;
+      }
+
+      idsByCircuitAndModel.set(
+        groupKey,
+        {
+          circuit,
+          modelId,
+          localIds: [localId],
+        },
+      );
+    }
+  }
+
+  for (
+    const {
+      circuit,
+      modelId,
+      localIds,
+    } of idsByCircuitAndModel.values()
+  ) {
+    const model =
+      loadedModels.get(modelId);
+
+    if (!model || !localIds.length) {
+      continue;
+    }
+
+    await model.highlight(
+      localIds,
+      createHighlight(
+        getCircuitColor(circuit),
+        circuit,
+      ),
+    );
+  }
+
+  await fragmentManager.core.update(true);
+}
+
 function createBimPanel(components: OBC.Components, viewport: HTMLElement) {
   const [modelsList] = BUIC.tables.modelsList({
     components,
@@ -2172,7 +2266,20 @@ function createBimPanel(components: OBC.Components, viewport: HTMLElement) {
   });
 
   const highlighter = components.get(OBCF.Highlighter);
+
+  modelHighlighter = highlighter;
+
   highlighter.setup({ world });
+  highlighter.styles.set(
+  "saved-route-highlight",
+  {
+    color: new THREE.Color(0x00e5ff),
+    opacity: 0.95,
+    transparent: true,
+    renderedFaces:
+      FRAGS.RenderedFaces.TWO,
+  },
+);
   highlighter.styles.set("select", {
   color: new THREE.Color(0x00ff66),
   opacity: 0.85,
@@ -2200,25 +2307,100 @@ if (isManualRouteRecording.value && manualRouteNodes.length > 0) {
 await syncSelectedValveAssociationRoute();
 });
 
-  highlighter.events.select.onClear.add(async () => {
-  selectedItems.clear();
-  selectedCount.value = 0;
-  selectedIfcDetailsText.value = "";
-isIfcDetailsPanelOpen.value = false;
-  selectedMepElementInfo.value = "Nenhum elemento classificado selecionado.";
+  highlighter.events.select.onClear.add(
+  async () => {
+        highlighter.events.select.onClear.add(
+  async () => {
+    const previousSelection:
+      SelectionMap = new Map();
 
-  updatePropertiesTable({
-    modelIdMap: {},
-  });
+    for (
+      const [modelId, localIds] of
+        selectedItems
+    ) {
+      previousSelection.set(
+        modelId,
+        new Set(localIds),
+      );
+    }
 
-  if (isManualRouteRecording.value) {
-    return;
-  }
+    selectedItems.clear();
+    selectedCount.value = 0;
+    selectedIfcDetailsText.value = "";
+    isIfcDetailsPanelOpen.value = false;
 
-  if (countAssignments() > 0) {
-    await rebuildManualFlowLayer();
-  }
-});
+    selectedMepElementInfo.value =
+      "Nenhum elemento classificado selecionado.";
+
+    updatePropertiesTable({
+      modelIdMap: {},
+    });
+
+    if (isManualRouteRecording.value) {
+      return;
+    }
+
+    if (highlightedSavedRouteId.value) {
+      await fragmentManager.core.update(
+        true,
+      );
+
+      return;
+    }
+
+    if (
+      !isApplyingSavedRouteHighlight.value
+    ) {
+      await restoreSelectedCircuitColors(
+        previousSelection,
+      );
+    }
+  },
+);
+``
+
+    const previousSelection:
+      SelectionMap = new Map();
+
+    for (
+      const [modelId, localIds] of
+        selectedItems
+    ) {
+      previousSelection.set(
+        modelId,
+        new Set(localIds),
+      );
+    }
+
+    selectedItems.clear();
+    selectedCount.value = 0;
+    selectedIfcDetailsText.value = "";
+    isIfcDetailsPanelOpen.value = false;
+
+    selectedMepElementInfo.value =
+      "Nenhum elemento classificado selecionado.";
+
+    updatePropertiesTable({
+      modelIdMap: {},
+    });
+
+    if (isManualRouteRecording.value) {
+      return;
+    }
+
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        resolve();
+      });
+    });
+
+if (!isApplyingSavedRouteHighlight.value) {
+  await restoreSelectedCircuitColors(
+    previousSelection,
+  );
+}
+  },
+);
 
   propertiesTable.preserveStructureOnFilter = true;
   propertiesTable.indentationInText = false;
@@ -3344,103 +3526,115 @@ async function clearFlowVisualsForRouteHighlight() {
   });
 }
 
-async function toggleSavedRouteHighlight(
+function getSavedRouteHighlightModelIdMap(
   route: SavedRoute,
 ) {
+  const modelIdMap:
+    Record<string, Set<number>> = {};
+
   const loadedModelIds = [
     ...loadedModels.keys(),
   ];
 
-  if (!loadedModelIds.length) {
+  const fallbackModelId =
+    loadedModelIds[0];
+
+  for (const node of route.path) {
+    const modelId =
+      loadedModels.has(node.modelId)
+        ? node.modelId
+        : fallbackModelId;
+
+    if (!modelIdMap[modelId]) {
+      modelIdMap[modelId] =
+        new Set<number>();
+    }
+
+    modelIdMap[modelId].add(
+      node.localId,
+    );
+  }
+
+  return modelIdMap;
+}
+
+async function toggleSavedRouteHighlight(
+  route: SavedRoute,
+) {
+  if (
+    !loadedModels.size ||
+    !modelHighlighter
+  ) {
     flowMessage.value =
       "Carrega primeiro o IFC antes de realçar um caminho.";
     return;
   }
 
   if (
-    highlightedSavedRouteId.value === route.id
+    highlightedSavedRouteId.value ===
+    route.id
   ) {
-    highlightedSavedRouteId.value = null;
+    isApplyingSavedRouteHighlight.value =
+      true;
 
-    await resetRoutePathHighlight(route);
-    await restoreFlowVisualsAfterRouteHighlight();
+    try {
+      await modelHighlighter.clear(
+        "saved-route-highlight",
+      );
 
-    flowMessage.value =
-      "Realce do caminho \"" +
-      route.name +
-      "\" removido.";
+      highlightedSavedRouteId.value =
+        null;
+
+      await restoreFlowVisualsAfterRouteHighlight();
+
+      flowMessage.value =
+        "Realce do caminho \"" +
+        route.name +
+        "\" removido.";
+    } finally {
+      isApplyingSavedRouteHighlight.value =
+        false;
+    }
 
     return;
   }
 
-  const previousRoute = savedRoutes.find(
-    (savedRoute) =>
-      savedRoute.id ===
-      highlightedSavedRouteId.value,
-  );
+  isApplyingSavedRouteHighlight.value =
+    true;
 
-  if (previousRoute) {
-    await resetRoutePathHighlight(
-      previousRoute,
+  try {
+    await modelHighlighter.clear(
+      "saved-route-highlight",
     );
-  }
 
-  await clearFlowVisualsForRouteHighlight();
+    highlightedSavedRouteId.value =
+      route.id;
 
-  const fallbackModelId = loadedModelIds[0];
+    await clearFlowVisualsForRouteHighlight();
 
-  const adaptedPath = route.path.map(
-    (node) => {
-      if (loadedModels.has(node.modelId)) {
-        return node;
-      }
+    const modelIdMap =
+      getSavedRouteHighlightModelIdMap(
+        route,
+      );
 
-      return {
-        modelId: fallbackModelId,
-        localId: node.localId,
-      };
-    },
-  );
-
-  const idsByModel =
-    new Map<string, number[]>();
-
-  for (const node of adaptedPath) {
-    const modelIds =
-      idsByModel.get(node.modelId) ?? [];
-
-    modelIds.push(node.localId);
-    idsByModel.set(
-      node.modelId,
-      modelIds,
+    await modelHighlighter.highlightByID(
+      "saved-route-highlight",
+      modelIdMap,
+      true,
     );
+
+    await fragmentManager.core.update(true);
+
+    flowMessage.value =
+      "Caminho \"" +
+      route.name +
+      "\" realçado.";
+  } finally {
+    isApplyingSavedRouteHighlight.value =
+      false;
   }
-
-  for (const [modelId, ids] of idsByModel) {
-    const model = loadedModels.get(modelId);
-
-    if (!model || !ids.length) {
-      continue;
-    }
-
-    await model.highlight(
-      ids,
-      createHighlight(
-        0x00e5ff,
-        "saved-route-highlight-" + route.id,
-      ),
-    );
-  }
-
-  highlightedSavedRouteId.value = route.id;
-
-  await fragmentManager.core.update(true);
-
-  flowMessage.value =
-    "Caminho \"" +
-    route.name +
-    "\" realçado.";
 }
+
 
 async function setSavedRouteVisibility(routeId: string, shouldShow: boolean) {
   const route = savedRoutes.find((savedRoute) => savedRoute.id === routeId);
