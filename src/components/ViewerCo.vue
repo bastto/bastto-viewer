@@ -20,7 +20,13 @@
           Agrupamento manual
         </p>
 
-        <h2>Agrupar caminhos</h2>
+        <h2>
+  {{
+    editingRouteGroupId
+      ? 'Editar grupo de caminhos'
+      : 'Agrupar caminhos'
+  }}
+</h2>
       </div>
 
       <button
@@ -65,11 +71,19 @@
     </label>
 
     <p class="connection-note">
-      Serão agrupados
-      {{ selectedRouteIdsForGrouping.size }}
-      caminhos. Ao retirar um caminho do grupo,
-      a cor original será reposta.
-    </p>
+  <template v-if="editingRouteGroupId">
+    A nova cor será aplicada a todos os caminhos
+    deste grupo. Ao retirar um caminho do grupo,
+    a respetiva cor original será reposta.
+  </template>
+
+  <template v-else>
+    Serão agrupados
+    {{ selectedRouteIdsForGrouping.size }}
+    caminhos. Ao retirar um caminho do grupo,
+    a respetiva cor original será reposta.
+  </template>
+</p>
 
     <div class="flow-actions flow-actions--secondary">
       <button
@@ -80,11 +94,86 @@
       </button>
 
       <button
+  type="button"
+  class="automatic-review-button"
+  @click="saveRouteGroupChanges"
+>
+  {{
+    editingRouteGroupId
+      ? 'Guardar alterações'
+      : 'Confirmar agrupamento'
+  }}
+</button>
+    </div>
+  </div>
+</div>
+
+<div
+  v-if="isRouteColorDialogOpen"
+  class="route-group-dialog-backdrop"
+>
+  <div class="route-group-dialog">
+    <div class="route-group-dialog__header">
+      <div>
+        <p class="flow-panel__eyebrow">
+          Cor individual
+        </p>
+
+        <h2>Alterar cor do caminho</h2>
+      </div>
+
+      <button
+        type="button"
+        class="section-collapse-button"
+        @click="closeIndividualRouteColorDialog"
+      >
+        ×
+      </button>
+    </div>
+
+    <label class="route-group-dialog__field">
+      <span>Nova cor do caminho</span>
+
+      <div class="route-group-color-control">
+        <input
+          v-model="pendingIndividualRouteColor"
+          type="color"
+        />
+
+        <span
+          class="route-group-color-preview"
+          :style="{
+            backgroundColor:
+              pendingIndividualRouteColor
+          }"
+        ></span>
+
+        <strong>
+          Esta cor será aplicada apenas
+          a este caminho.
+        </strong>
+      </div>
+    </label>
+
+    <p class="connection-note">
+      Podes utilizar “Repor cor” para voltar
+      à cor original do circuito.
+    </p>
+
+    <div class="flow-actions flow-actions--secondary">
+      <button
+        type="button"
+        @click="closeIndividualRouteColorDialog"
+      >
+        Cancelar
+      </button>
+
+      <button
         type="button"
         class="automatic-review-button"
-        @click="groupSelectedSavedRoutes"
+        @click="saveIndividualRouteColor"
       >
-        Confirmar agrupamento
+        Guardar cor
       </button>
     </div>
   </div>
@@ -1350,6 +1439,45 @@
           Renomear
         </button>
 
+        <button
+  v-if="route.groupId"
+  type="button"
+  @click="openRouteGroupColorDialog(route)"
+>
+  Alterar cor do grupo
+</button>
+
+<button
+  v-if="
+    !route.groupId &&
+    !route.locked
+  "
+  type="button"
+  @click="
+    openIndividualRouteColorDialog(
+      route
+    )
+  "
+>
+  Alterar cor
+</button>
+
+<button
+  v-if="
+    !route.groupId &&
+    !route.locked &&
+    route.customColor
+  "
+  type="button"
+  @click="
+    resetIndividualRouteColor(
+      route
+    )
+  "
+>
+  Repor cor
+</button>
+
         <button type="button" @click="toggleSavedRouteProtection(route.id)">
           {{ route.locked ? 'Desproteger' : 'Proteger' }}
         </button>
@@ -2029,6 +2157,7 @@ type SavedRoute = {
   locked?: boolean;
   groupId?: string;
   originalCircuitColor?: string;
+  customColor?: string;
   directionStarts?: FlowNode[];
 directionEnds?: FlowNode[];
 };
@@ -2245,12 +2374,22 @@ const savedRouteGroups =
 const selectedRouteIdsForGrouping =
   reactive<Set<string>>(new Set());
 const isRouteGroupDialogOpen = ref(false);
+const editingRouteGroupId =
+  ref<string | null>(null);
 const pendingRouteGroupName = ref(
   "Novo grupo de caminhos",
 );
 const pendingRouteGroupColor = ref(
   "#ff8c00",
 );
+const isRouteColorDialogOpen =
+  ref(false);
+
+const editingRouteColorId =
+  ref<string | null>(null);
+
+const pendingIndividualRouteColor =
+  ref("#8fd3ff");
 const isRouteGroupingPanelOpen = ref(false);
 let routeStart: FlowNode | null = null;
 let routeEnd: FlowNode | null = null;
@@ -2315,6 +2454,64 @@ function getCircuitMaterial(circuit: PipeCircuit) {
   });
 
   circuitMaterialCache.set(circuit, material);
+
+  return material;
+}
+
+function getRouteMaterialForNode(
+  circuit: PipeCircuit,
+  node?: FlowNode,
+) {
+  if (!node) {
+    return getCircuitMaterial(circuit);
+  }
+
+  const visibleRoute =
+    savedRoutes.find(
+      (route) =>
+        !route.hidden &&
+        route.temperature === circuit &&
+        routeContainsAdaptedNode(
+          route,
+          node,
+        ),
+    );
+
+  if (!visibleRoute) {
+    return getCircuitMaterial(circuit);
+  }
+
+  const color =
+    getSavedRouteGroupColor(
+      visibleRoute,
+    );
+
+  const materialKey =
+    circuit + "|route-color|" + color;
+
+  const cachedMaterial =
+    circuitMaterialCache.get(
+      materialKey,
+    );
+
+  if (cachedMaterial) {
+    return cachedMaterial;
+  }
+
+  const material =
+    new THREE.MeshBasicMaterial({
+      color: Number(
+        color.replace("#", "0x"),
+      ),
+      transparent: true,
+      opacity: 0.9,
+      depthTest: false,
+    });
+
+  circuitMaterialCache.set(
+    materialKey,
+    material,
+  );
 
   return material;
 }
@@ -2566,13 +2763,57 @@ async function restoreSelectedCircuitColors(
       continue;
     }
 
-    await model.highlight(
-      localIds,
-      createHighlight(
-        getCircuitColor(circuit),
-        circuit,
-      ),
+    const idsByColor =
+  new Map<string, number[]>();
+
+for (const localId of localIds) {
+  const node: FlowNode = {
+    modelId,
+    localId,
+  };
+
+  const visibleRoute =
+    savedRoutes.find(
+      (route) =>
+        !route.hidden &&
+        route.temperature === circuit &&
+        routeContainsAdaptedNode(
+          route,
+          node,
+        ),
     );
+
+  const color = visibleRoute
+    ? getSavedRouteGroupColor(
+        visibleRoute,
+      )
+    : getCircuitColorStyle(circuit);
+
+  const colorIds =
+    idsByColor.get(color) ?? [];
+
+  colorIds.push(localId);
+
+  idsByColor.set(
+    color,
+    colorIds,
+  );
+}
+
+for (
+  const [color, colorLocalIds] of
+    idsByColor
+) {
+  await model.highlight(
+    colorLocalIds,
+    createHighlight(
+      Number(
+        color.replace("#", "0x"),
+      ),
+      circuit + "-restore-" + color,
+    ),
+  );
+}
   }
 
   await fragmentManager.core.update(true);
@@ -3153,13 +3394,61 @@ if (hiddenIds.length) {
 
 if (!ids.length) continue;
 
-    await model.highlight(
-  ids,
-  createHighlight(
-    getCircuitColor(temperature),
-    temperature,
-  ),
-);
+    const idsByColor =
+  new Map<string, number[]>();
+
+for (const localId of ids) {
+  const node: FlowNode = {
+    modelId,
+    localId,
+  };
+
+  const visibleRoute =
+    savedRoutes.find(
+      (route) =>
+        !route.hidden &&
+        route.temperature ===
+          temperature &&
+        routeContainsAdaptedNode(
+          route,
+          node,
+        ),
+    );
+
+  const color =
+    visibleRoute
+      ? getSavedRouteGroupColor(
+          visibleRoute,
+        )
+      : getCircuitColorStyle(
+          temperature,
+        );
+
+  const colorIds =
+    idsByColor.get(color) ?? [];
+
+  colorIds.push(localId);
+
+  idsByColor.set(
+    color,
+    colorIds,
+  );
+}
+
+for (
+  const [color, colorLocalIds] of
+    idsByColor
+) {
+  await model.highlight(
+    colorLocalIds,
+    createHighlight(
+      Number(
+        color.replace("#", "0x"),
+      ),
+      temperature + "-" + color,
+    ),
+  );
+}
 
     const boxes = await model.getBoxes(ids);
     for (let index = 0; index < boxes.length; index++) {
@@ -4114,14 +4403,14 @@ async function reverseSavedRoute(routeId: string) {
 
   route.path.reverse();
 
-  const previousDirectionStart =
-  route.directionStart;
+  const previousDirectionStarts =
+  route.directionStarts;
 
-route.directionStart =
-  route.directionEnd;
+route.directionStarts =
+  route.directionEnds;
 
-route.directionEnd =
-  previousDirectionStart;
+route.directionEnds =
+  previousDirectionStarts;
 
   for (const node of route.path) {
     toggleReversedPipeDirection(
@@ -8629,9 +8918,30 @@ function getSavedRouteGroupName(
 function getSavedRouteGroupColor(
   route: SavedRoute,
 ) {
-  return (
-    getSavedRouteGroup(route.groupId)?.color ??
-    getCircuitColorStyle(route.temperature)
+  const group =
+    getSavedRouteGroup(route.groupId);
+
+  if (group) {
+    return group.color;
+  }
+
+  if (route.customColor) {
+    return route.customColor;
+  }
+
+  const circuit =
+    getCycleCircuitDefinition(
+      route.temperature,
+    );
+
+  if (circuit) {
+    return getCycleCircuitDefaultColor(
+      circuit,
+    );
+  }
+
+  return getCircuitColorStyle(
+    route.temperature,
   );
 }
 
@@ -8809,7 +9119,175 @@ async function moveSelectedSavedRoutesToCycle() {
       : "Os caminhos selecionados já pertencem ao ciclo escolhido.";
 }
 
+function openIndividualRouteColorDialog(
+  route: SavedRoute,
+) {
+  if (route.groupId) {
+    flowMessage.value =
+      "Este caminho pertence a um grupo. Altera a cor do grupo.";
+
+    return;
+  }
+
+  if (route.locked) {
+    flowMessage.value =
+      "O caminho \"" +
+      route.name +
+      "\" está protegido. Desprotege primeiro para alterar a cor.";
+
+    return;
+  }
+
+  editingRouteColorId.value =
+    route.id;
+
+  pendingIndividualRouteColor.value =
+  getSavedRouteGroupColor(route);
+
+  isRouteColorDialogOpen.value =
+    true;
+}
+
+function closeIndividualRouteColorDialog() {
+  isRouteColorDialogOpen.value =
+    false;
+
+  editingRouteColorId.value =
+    null;
+}
+
+async function saveIndividualRouteColor() {
+  const route = savedRoutes.find(
+    (savedRoute) =>
+      savedRoute.id ===
+      editingRouteColorId.value,
+  );
+
+  if (!route) {
+    flowMessage.value =
+      "Não foi possível encontrar o caminho.";
+
+    return;
+  }
+
+  if (route.groupId) {
+    flowMessage.value =
+      "Este caminho pertence a um grupo.";
+
+    return;
+  }
+
+  if (route.locked) {
+    flowMessage.value =
+      "Desprotege primeiro o caminho.";
+
+    return;
+  }
+
+  const selectedColor =
+    pendingIndividualRouteColor.value.trim();
+
+  if (
+    !/^#[0-9a-fA-F]{6}$/.test(
+      selectedColor,
+    )
+  ) {
+    flowMessage.value =
+      "Seleciona uma cor válida.";
+
+    return;
+  }
+
+  route.customColor = selectedColor;
+
+  saveRoutesToStorage();
+
+  circuitMaterialCache.clear();
+
+  isRouteColorDialogOpen.value =
+    false;
+
+  editingRouteColorId.value =
+    null;
+
+  if (
+    countAssignments() > 0 ||
+    flowConnections.length > 0
+  ) {
+    await rebuildManualFlowLayer();
+  }
+
+  flowMessage.value =
+    "A cor do caminho \"" +
+    route.name +
+    "\" foi alterada.";
+}
+
+async function resetIndividualRouteColor(
+  route: SavedRoute,
+) {
+  if (route.groupId) {
+    flowMessage.value =
+      "Retira primeiro o caminho do grupo para repor a cor individual.";
+
+    return;
+  }
+
+  if (route.locked) {
+    flowMessage.value =
+      "O caminho está protegido. Desprotege primeiro para repor a cor.";
+
+    return;
+  }
+
+  delete route.customColor;
+
+  saveRoutesToStorage();
+
+  circuitMaterialCache.clear();
+
+  if (
+    countAssignments() > 0 ||
+    flowConnections.length > 0
+  ) {
+    await rebuildManualFlowLayer();
+  }
+
+  flowMessage.value =
+    "A cor original do caminho \"" +
+    route.name +
+    "\" foi reposta.";
+}
+
+function openRouteGroupColorDialog(
+  route: SavedRoute,
+) {
+  const group =
+    getSavedRouteGroup(route.groupId);
+
+  if (!group) {
+    flowMessage.value =
+      "Este caminho não pertence a nenhum grupo.";
+
+    return;
+  }
+
+  editingRouteGroupId.value =
+    group.id;
+
+  pendingRouteGroupName.value =
+    group.name;
+
+  pendingRouteGroupColor.value =
+    group.color;
+
+  isRouteGroupDialogOpen.value =
+    true;
+}
+
 function openRouteGroupingDialog() {
+  editingRouteGroupId.value = null;
+
   const selectedRoutes = savedRoutes.filter(
     (route) =>
       selectedRouteIdsForGrouping.has(
@@ -8835,7 +9313,79 @@ function openRouteGroupingDialog() {
 }
 
 function closeRouteGroupingDialog() {
+  isRouteGroupDialogOpen.value =
+    false;
+
+  editingRouteGroupId.value =
+    null;
+}
+
+async function saveRouteGroupChanges() {
+  if (!editingRouteGroupId.value) {
+    await groupSelectedSavedRoutes();
+    return;
+  }
+
+  const group =
+    savedRouteGroups.find(
+      (savedGroup) =>
+        savedGroup.id ===
+        editingRouteGroupId.value,
+    );
+
+  if (!group) {
+    flowMessage.value =
+      "Não foi possível encontrar o grupo.";
+
+    return;
+  }
+
+  const groupName =
+    pendingRouteGroupName.value.trim();
+
+  const groupColor =
+    pendingRouteGroupColor.value.trim();
+
+  if (!groupName) {
+    flowMessage.value =
+      "Indica um nome para o grupo.";
+
+    return;
+  }
+
+  if (
+    !/^#[0-9a-fA-F]{6}$/.test(
+      groupColor,
+    )
+  ) {
+    flowMessage.value =
+      "Seleciona uma cor válida.";
+
+    return;
+  }
+
+  group.name = groupName;
+  group.color = groupColor;
+
+  circuitMaterialCache.clear();
+
+  saveRouteGroupsToStorage();
+saveRoutesToStorage();
+
   isRouteGroupDialogOpen.value = false;
+  editingRouteGroupId.value = null;
+
+  if (
+    countAssignments() > 0 ||
+    flowConnections.length > 0
+  ) {
+    await rebuildManualFlowLayer();
+  }
+
+  flowMessage.value =
+    "A cor do grupo \"" +
+    groupName +
+    "\" foi alterada.";
 }
 
 async function groupSelectedSavedRoutes() {
@@ -8881,28 +9431,13 @@ async function groupSelectedSavedRoutes() {
   });
 
   for (const route of selectedRoutes) {
-    const circuit =
-      getCycleCircuitDefinition(
-        route.temperature,
-      );
-
-    if (circuit) {
-      if (!route.originalCircuitColor) {
-        route.originalCircuitColor =
-          circuit.color;
-      }
-
-      circuit.color = groupColor;
-    }
-
-    route.groupId = groupId;
-  }
+  route.groupId = groupId;
+}
 
   circuitMaterialCache.clear();
 
   saveRouteGroupsToStorage();
-  saveRoutesToStorage();
-  saveCycleCircuitDefinitionsToStorage();
+saveRoutesToStorage();
 
   clearRouteGroupingSelection();
 
@@ -8934,49 +9469,13 @@ async function removeSelectedRoutesFromGroup() {
   if (!selectedRoutes.length) {
     flowMessage.value =
       "Seleciona caminhos que pertençam a um grupo.";
+
     return;
   }
 
-  const originalColorsByCircuit =
-    new Map<PipeCircuit, string>();
-
   for (const route of selectedRoutes) {
-    if (route.originalCircuitColor) {
-      originalColorsByCircuit.set(
-        route.temperature,
-        route.originalCircuitColor,
-      );
-    }
-
     delete route.groupId;
     delete route.originalCircuitColor;
-  }
-
-  for (
-    const [
-      circuitKey,
-      originalColor,
-    ] of originalColorsByCircuit
-  ) {
-    const circuitStillGrouped =
-      savedRoutes.some(
-        (route) =>
-          route.temperature === circuitKey &&
-          route.groupId,
-      );
-
-    if (circuitStillGrouped) {
-      continue;
-    }
-
-    const circuit =
-      getCycleCircuitDefinition(
-        circuitKey,
-      );
-
-    if (circuit) {
-      circuit.color = originalColor;
-    }
   }
 
   for (
@@ -8995,7 +9494,10 @@ async function removeSelectedRoutesFromGroup() {
       );
 
     if (!groupStillHasRoutes) {
-      savedRouteGroups.splice(index, 1);
+      savedRouteGroups.splice(
+        index,
+        1,
+      );
     }
   }
 
@@ -9003,7 +9505,6 @@ async function removeSelectedRoutesFromGroup() {
 
   saveRouteGroupsToStorage();
   saveRoutesToStorage();
-  saveCycleCircuitDefinitionsToStorage();
 
   clearRouteGroupingSelection();
 
@@ -9017,7 +9518,7 @@ async function removeSelectedRoutesFromGroup() {
   flowMessage.value =
     selectedRoutes.length +
     " caminho(s) retirado(s) do grupo. " +
-    "As cores originais foram repostas.";
+    "As cores anteriores foram repostas.";
 }
 
 function getSelectedSavedRouteForDirection() {
@@ -9898,7 +10399,11 @@ const geometry = new THREE.ConeGeometry(
   8,
 );
 
-  const material = getCircuitMaterial(temperature);
+  const material =
+  getRouteMaterialForNode(
+    temperature,
+    node,
+  );
 
   const particleCount = Math.max(1, Math.round(length / 0.4));
 
@@ -12637,7 +13142,6 @@ function chunk<T>(items: T[], size: number) {
 
   pointer-events: auto;
 }
-``
 
 .route-direction-dialog__header {
   display: flex;
