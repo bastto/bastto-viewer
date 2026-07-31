@@ -3363,6 +3363,17 @@ for (const circuit of getAllKnownCircuitKeys()) {
 
 isFlowing.value = shouldKeepAnimating && pipeParticles.length > 0;
 
+  if (highlightedSavedRouteId.value) {
+  await enforceActiveSavedRouteHighlight();
+
+  isFlowing.value = false;
+  isCentralSimulationRunning.value = false;
+  isManualFlowAnimationRunning.value = false;
+  isFlowManuallyPaused.value = true;
+
+  return;
+}
+
   await fragmentManager.core.update(true);
 
 }
@@ -4117,16 +4128,41 @@ async function resetRoutePathHighlight(route: SavedRoute) {
 }
 
 async function restoreFlowVisualsAfterRouteHighlight() {
-  if (countAssignments() > 0 || flowConnections.length > 0) {
+  isFlowing.value = false;
+
+  isCentralSimulationRunning.value = false;
+
+  isManualFlowAnimationRunning.value = false;
+
+  isFlowManuallyPaused.value = true;
+
+  if (
+    countAssignments() > 0 ||
+    flowConnections.length > 0
+  ) {
     await rebuildManualFlowLayer();
+
+    isFlowing.value = false;
     return;
   }
 
   await fragmentManager.core.update(true);
 }
 
+function stopFlowForSavedRouteHighlight() {
+  isFlowing.value = false;
+
+  isCentralSimulationRunning.value = false;
+
+  isManualFlowAnimationRunning.value = false;
+
+  isFlowManuallyPaused.value = true;
+
+  clearFlowVisuals(false);
+}
+
 async function clearFlowVisualsForRouteHighlight() {
-  clearFlowVisuals(true);
+  stopFlowForSavedRouteHighlight();
 
   const idsByModel =
     new Map<string, Set<number>>();
@@ -4235,6 +4271,44 @@ function getSavedRouteHighlightModelIdMap(
   return modelIdMap;
 }
 
+async function enforceActiveSavedRouteHighlight() {
+  if (
+    !highlightedSavedRouteId.value ||
+    !modelHighlighter
+  ) {
+    return;
+  }
+
+  const route = savedRoutes.find(
+    (savedRoute) =>
+      savedRoute.id ===
+      highlightedSavedRouteId.value,
+  );
+
+  if (!route) {
+    return;
+  }
+
+  await clearFlowVisualsForRouteHighlight();
+
+  const modelIdMap =
+    getSavedRouteHighlightModelIdMap(
+      route,
+    );
+
+  await modelHighlighter.clear(
+    "saved-route-highlight",
+  );
+
+  await modelHighlighter.highlightByID(
+    "saved-route-highlight",
+    modelIdMap,
+    true,
+  );
+
+  await fragmentManager.core.update(true);
+}
+
 async function toggleSavedRouteHighlight(
   route: SavedRoute,
 ) {
@@ -4285,9 +4359,11 @@ async function toggleSavedRouteHighlight(
     );
 
     highlightedSavedRouteId.value =
-      route.id;
+  route.id;
 
-    await clearFlowVisualsForRouteHighlight();
+stopFlowForSavedRouteHighlight();
+
+await clearFlowVisualsForRouteHighlight();
 
     const modelIdMap =
       getSavedRouteHighlightModelIdMap(
@@ -9547,37 +9623,49 @@ async function openSavedRouteDirectionPanel(
     return;
   }
 
-  selectedSavedRouteDirectionId.value =
-    route.id;
-
-  savedRouteDirectionStarts.value =
-  route.directionStarts
-    ? route.directionStarts.map((node) => ({
-        modelId: node.modelId,
-        localId: node.localId,
-      }))
-    : [];
-
-savedRouteDirectionEnds.value =
-  route.directionEnds
-    ? route.directionEnds.map((node) => ({
-        modelId: node.modelId,
-        localId: node.localId,
-      }))
-    : [];
-
-  isSavedRouteDirectionPanelOpen.value =
+  isApplyingSavedRouteHighlight.value =
     true;
 
-  if (
-    highlightedSavedRouteId.value !==
-    route.id
-  ) {
-    await toggleSavedRouteHighlight(route);
-  }
+  try {
+    stopFlowForSavedRouteHighlight();
 
-  flowMessage.value =
-    "Seleciona um tubo do caminho e define o início. Depois seleciona outro tubo e define o fim.";
+    selectedSavedRouteDirectionId.value =
+      route.id;
+
+    savedRouteDirectionStarts.value =
+      route.directionStarts
+        ? route.directionStarts.map(
+            (node) => ({
+              modelId: node.modelId,
+              localId: node.localId,
+            }),
+          )
+        : [];
+
+    savedRouteDirectionEnds.value =
+      route.directionEnds
+        ? route.directionEnds.map(
+            (node) => ({
+              modelId: node.modelId,
+              localId: node.localId,
+            }),
+          )
+        : [];
+
+    isSavedRouteDirectionPanelOpen.value =
+      true;
+
+    highlightedSavedRouteId.value =
+      route.id;
+
+    await enforceActiveSavedRouteHighlight();
+
+    flowMessage.value =
+      "Seleciona os tubos de início e de fim do caminho.";
+  } finally {
+    isApplyingSavedRouteHighlight.value =
+      false;
+  }
 }
 
 function closeSavedRouteDirectionPanel() {
