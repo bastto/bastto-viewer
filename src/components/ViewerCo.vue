@@ -470,7 +470,10 @@
 </p>
 
 <p
-  v-else-if="savedRoutes.length"
+  v-else-if="
+  activeIfcStorageId &&
+  savedRoutes.length
+"
   class="automatic-analysis-status automatic-analysis-status--ready"
 >
   ✓ {{ savedRoutes.length }} caminho(s) guardado(s)
@@ -2249,6 +2252,13 @@ type PipeDirectionHints = {
   downstream?: any;
 };
 
+type PipeGeometryAxis = {
+  start: THREE.Vector3;
+  end: THREE.Vector3;
+  center: THREE.Vector3;
+  length: number;
+};
+
 type PipeGraphItem = FlowNode & {
   box: any;
   center: any;
@@ -2373,6 +2383,7 @@ const isValveRenamePanelOpen = ref(false);
 const isValveAssociationDetailsOpen = ref(false);
 const valveOriginalDesignations = reactive<Record<string, string>>({});
 const hasLoadedModel = ref(false);
+const activeIfcStorageId = ref("");
 const isElementPanelMinimized = ref(true);
 const isFlowControlsPanelMinimized = ref(true);
 const isSimulationControlPanelMinimized = ref(true);
@@ -2405,6 +2416,249 @@ const SYNCED_PIPE_DIRECTIONS_STORAGE_KEY =
   "bastto-viewer-synced-pipe-directions";
 const VALVE_PIPE_LINKS_STORAGE_KEY =
   "bastto-viewer-valve-pipe-links";
+
+function getIfcStorageKey(
+  baseKey: string,
+) {
+  if (!activeIfcStorageId.value) {
+    return "";
+  }
+
+  return (
+    baseKey +
+    "::" +
+    activeIfcStorageId.value
+  );
+}
+
+function getActiveIfcStorageItem(
+  baseKey: string,
+) {
+  const storageKey =
+    getIfcStorageKey(baseKey);
+
+  if (!storageKey) {
+    return null;
+  }
+
+  return localStorage.getItem(
+    storageKey,
+  );
+}
+
+function setActiveIfcStorageItem(
+  baseKey: string,
+  value: string,
+) {
+  const storageKey =
+    getIfcStorageKey(baseKey);
+
+  if (!storageKey) {
+    return;
+  }
+
+  localStorage.setItem(
+    storageKey,
+    value,
+  );
+}
+
+function removeActiveIfcStorageItem(
+  baseKey: string,
+) {
+  const storageKey =
+    getIfcStorageKey(baseKey);
+
+  if (!storageKey) {
+    return;
+  }
+
+  localStorage.removeItem(
+    storageKey,
+  );
+}
+
+function createIfcStorageId(
+  file: File,
+) {
+  return [
+    file.name
+      .trim()
+      .toLowerCase(),
+
+    file.size,
+
+    file.lastModified,
+  ].join("|");
+}
+
+function clearActiveModelConfigurationFromMemory() {
+  clearFlowLayer();
+
+  savedRoutes.splice(0);
+  savedRouteGroups.splice(0);
+  cycleCircuitDefinitions.splice(0);
+  flowConnections.splice(0);
+  currentRouteConnections.splice(0);
+  routeWaypoints.splice(0);
+  manualRouteNodes.splice(0);
+
+  for (
+    const key of
+      Object.keys(mepElements)
+  ) {
+    delete mepElements[key];
+  }
+
+  for (
+    const key of
+      Object.keys(cycleNames)
+  ) {
+    delete cycleNames[key];
+  }
+
+  for (
+    const key of
+      Object.keys(manualAssignments)
+  ) {
+    delete manualAssignments[key];
+  }
+
+  selectedRouteIdsForGrouping.clear();
+
+  reversedPipeDirections.clear();
+  syncedPipeDirections.clear();
+  hiddenFlowArrowElements.clear();
+  pipeTypeFlowNodes.clear();
+
+  automaticDirectionNeighbors.clear();
+  automaticOrderedCircuitNodes.clear();
+
+  blockedPipes.clear();
+  blockedRoutePipes.clear();
+
+  valveBlockedPipeLinks.clear();
+  valveControlledPipeLinks.clear();
+
+  selectedValveDesignation.value =
+    "nenhuma válvula selecionada";
+
+  selectedValveOriginalDesignation.value =
+    "";
+
+  selectedValveDesignationKey.value =
+    "";
+
+  pendingValveDesignation.value =
+    "";
+
+  selectedValveForPipeLink.value =
+    null;
+
+  highlightedValveFromDropdown.value =
+    null;
+
+  selectedValveAssociationRouteId.value =
+    "";
+
+  highlightedSavedRouteId.value =
+    null;
+
+  selectedSavedRouteDirectionId.value =
+    "";
+
+  savedRouteDirectionStarts.value =
+    [];
+
+  savedRouteDirectionEnds.value =
+    [];
+
+  selectedCycleCircuitKey.value =
+    "";
+
+  routeStart = null;
+  routeEnd = null;
+
+  routeStartLabel.value =
+    "nenhum";
+
+  routeEndLabel.value =
+    "nenhum";
+
+  blockedCount.value = 0;
+
+  pipeStats.supply = 0;
+  pipeStats.return = 0;
+  pipeStats.total = 0;
+
+  waterCycleCount.value = 3;
+  pendingWaterCycleCount.value = 3;
+
+  activeCycleNumber.value = 1;
+
+  hasSystemScanResults.value =
+    false;
+
+  systemScanResults.systemTypes.splice(
+    0,
+  );
+
+  systemScanResults.systemNames.splice(
+    0,
+  );
+
+  scannedSystemGroups.clear();
+
+  hasAutomaticAnalysisResults.value =
+    false;
+
+  automaticAnalysisResults.pipes = 0;
+  automaticAnalysisResults.valves = 0;
+  automaticAnalysisResults.equipment = 0;
+  automaticAnalysisResults.total = 0;
+
+  isFlowing.value = false;
+
+  isFlowAnimationReady.value =
+    false;
+
+  isPreparingFlowAnimation.value =
+    false;
+
+  flowPreparationProgress.value = 0;
+
+  hasFlowPreparationError.value =
+    false;
+}
+
+function loadActiveIfcConfiguration() {
+  if (!activeIfcStorageId.value) {
+    return;
+  }
+
+  loadWaterCycleCountFromStorage();
+  loadCycleNamesFromStorage();
+
+  loadCycleCircuitDefinitionsFromStorage();
+
+  loadMepElementsFromStorage();
+  loadRoutesFromStorage();
+  loadRouteGroupsFromStorage();
+
+  loadReversedDirectionsFromStorage();
+  loadSyncedPipeDirectionsFromStorage();
+
+  loadHiddenFlowArrowsFromStorage();
+  loadPipeTypeFlowNodesFromStorage();
+
+  loadValvePipeLinksFromStorage();
+
+  ensureConfiguredAssignments();
+  ensureCycleNames();
+  ensureCycleCircuitDefinitions();
+
+  updateManualStats();
+}
 
 let world: any;
 let serializer: FRAGS.IfcImporter;
@@ -2649,7 +2903,10 @@ serializer.relations.set(WEBIFC.IFCRELDEFINESBYPROPERTIES, {
 
   await fragmentManager.core.update(true);
 
-  if (savedRoutes.length) {
+  if (
+  activeIfcStorageId.value &&
+  savedRoutes.length
+) {
   await applyAllSavedRoutes();
   await clearBlockedPipes();
 } else {
@@ -2657,18 +2914,6 @@ serializer.relations.set(WEBIFC.IFCRELDEFINESBYPROPERTIES, {
     `Modelo carregado: ${model.modelId}. Seleciona tubos e atribui os circuitos.`;
 }
 });
-
-loadWaterCycleCountFromStorage();
-loadCycleNamesFromStorage();
-loadCycleCircuitDefinitionsFromStorage();
-loadMepElementsFromStorage();
-loadRoutesFromStorage();
-loadRouteGroupsFromStorage();
-loadReversedDirectionsFromStorage();
-loadSyncedPipeDirectionsFromStorage();
-loadHiddenFlowArrowsFromStorage();
-loadPipeTypeFlowNodesFromStorage();
-loadValvePipeLinksFromStorage();
 
   createBimPanel(components, viewport);
   animateFlow();
@@ -2912,9 +3157,14 @@ function resetAllManualConfiguration() {
     "bastto-viewer-valve-pipe-links",
   ];
 
-  for (const storageKey of manualStorageKeys) {
-    localStorage.removeItem(storageKey);
-  }
+  for (
+  const storageKey of
+    manualStorageKeys
+) {
+  removeActiveIfcStorageItem(
+    storageKey,
+  );
+}
 
   window.alert(
     "Toda a configuração manual foi apagada.\n\n" +
@@ -3074,7 +3324,15 @@ const openIfcDialog = () => ifcInput.value?.click();
 
 const convertIFC = async (e: Event) => {
   const file = (e.target as HTMLInputElement).files?.[0];
+
   if (!file) return;
+
+  clearActiveModelConfigurationFromMemory();
+
+activeIfcStorageId.value =
+  createIfcStorageId(file);
+
+loadActiveIfcConfiguration();
 
   isLoading.value = true;
   loadingProgress.value = 0;
@@ -3704,11 +3962,17 @@ if (
   continue;
 }
 
+const geometryAxis =
+  await getPipeGeometryAxis(
+    node,
+  );
+
 addPipeParticles(
   box,
   temperature,
   hints,
   node,
+  geometryAxis,
 );
     }
   }
@@ -5049,23 +5313,26 @@ function elementKey(modelId: string, localId: number) {
 }
 
 function saveMepElementsToStorage() {
-  localStorage.setItem(
+  setActiveIfcStorageItem(
     MEP_ELEMENTS_STORAGE_KEY,
     JSON.stringify(mepElements),
   );
 }
 
 function saveRouteGroupsToStorage() {
-  localStorage.setItem(
+  setActiveIfcStorageItem(
     ROUTE_GROUPS_STORAGE_KEY,
-    JSON.stringify(savedRouteGroups),
+    JSON.stringify(
+      savedRouteGroups,
+    ),
   );
 }
 
 function loadRouteGroupsFromStorage() {
-  const saved = localStorage.getItem(
-    ROUTE_GROUPS_STORAGE_KEY,
-  );
+  const saved =
+    getActiveIfcStorageItem(
+      ROUTE_GROUPS_STORAGE_KEY,
+    );
 
   if (!saved) {
     return;
@@ -5073,10 +5340,15 @@ function loadRouteGroupsFromStorage() {
 
   try {
     const parsed =
-      JSON.parse(saved) as SavedRouteGroup[];
+      JSON.parse(
+        saved,
+      ) as SavedRouteGroup[];
 
     savedRouteGroups.splice(0);
-    savedRouteGroups.push(...parsed);
+
+    savedRouteGroups.push(
+      ...parsed,
+    );
   } catch (error) {
     console.error(
       "Erro ao carregar grupos de caminhos:",
@@ -5086,40 +5358,66 @@ function loadRouteGroupsFromStorage() {
 }
 
 function saveRoutesToStorage() {
-  localStorage.setItem(
+  setActiveIfcStorageItem(
     ROUTES_STORAGE_KEY,
     JSON.stringify(savedRoutes),
   );
 }
 
 function loadRoutesFromStorage() {
-  const saved = localStorage.getItem(ROUTES_STORAGE_KEY);
+  const saved =
+    getActiveIfcStorageItem(
+      ROUTES_STORAGE_KEY,
+    );
 
-  if (!saved) return;
+  if (!saved) {
+    return;
+  }
 
   try {
-    const parsed = JSON.parse(saved) as SavedRoute[];
+    const parsed =
+      JSON.parse(
+        saved,
+      ) as SavedRoute[];
 
     savedRoutes.splice(0);
     savedRoutes.push(...parsed);
   } catch (error) {
-    console.error("Erro ao carregar caminhos guardados:", error);
+    console.error(
+      "Erro ao carregar caminhos guardados:",
+      error,
+    );
   }
 }
 
 function loadMepElementsFromStorage() {
-  const saved = localStorage.getItem(MEP_ELEMENTS_STORAGE_KEY);
+  const saved =
+    getActiveIfcStorageItem(
+      MEP_ELEMENTS_STORAGE_KEY,
+    );
 
-  if (!saved) return;
+  if (!saved) {
+    return;
+  }
 
   try {
-    const parsed = JSON.parse(saved) as Record<string, MepElement>;
+    const parsed =
+      JSON.parse(saved) as Record<
+        string,
+        MepElement
+      >;
 
-    for (const [key, element] of Object.entries(parsed)) {
+    for (
+      const [key, element] of
+        Object.entries(parsed)
+    ) {
       mepElements[key] = element;
     }
   } catch (error) {
-    console.error("Erro ao carregar elementos MEP guardados:", error);
+    console.error(
+      "Erro ao carregar elementos MEP guardados:",
+      error,
+    );
   }
 }
 
@@ -5133,14 +5431,17 @@ function saveSyncedPipeDirectionsToStorage() {
     });
   }
 
-  localStorage.setItem(
-    SYNCED_PIPE_DIRECTIONS_STORAGE_KEY,
-    JSON.stringify(data),
-  );
+  setActiveIfcStorageItem(
+  SYNCED_PIPE_DIRECTIONS_STORAGE_KEY,
+  JSON.stringify(data),
+);
 }
 
 function loadSyncedPipeDirectionsFromStorage() {
-  const saved = localStorage.getItem(SYNCED_PIPE_DIRECTIONS_STORAGE_KEY);
+  const saved =
+  getActiveIfcStorageItem(
+    SYNCED_PIPE_DIRECTIONS_STORAGE_KEY,
+  );
 
   if (!saved) return;
 
@@ -5170,14 +5471,17 @@ function saveReversedDirectionsToStorage() {
     });
   }
 
-  localStorage.setItem(
+  setActiveIfcStorageItem(
     REVERSED_DIRECTIONS_STORAGE_KEY,
     JSON.stringify(data),
   );
 }
 
 function loadReversedDirectionsFromStorage() {
-  const saved = localStorage.getItem(REVERSED_DIRECTIONS_STORAGE_KEY);
+  const saved =
+  getActiveIfcStorageItem(
+    REVERSED_DIRECTIONS_STORAGE_KEY,
+  );
 
   if (!saved) return;
 
@@ -5205,14 +5509,17 @@ function saveValvePipeLinksToStorage() {
     }),
   );
 
-  localStorage.setItem(
-    VALVE_PIPE_LINKS_STORAGE_KEY,
-    JSON.stringify(data),
-  );
+  setActiveIfcStorageItem(
+  VALVE_PIPE_LINKS_STORAGE_KEY,
+  JSON.stringify(data),
+);
 }
 
 function loadValvePipeLinksFromStorage() {
-  const saved = localStorage.getItem(VALVE_PIPE_LINKS_STORAGE_KEY);
+  const saved =
+  getActiveIfcStorageItem(
+    VALVE_PIPE_LINKS_STORAGE_KEY,
+  );
 
   if (!saved) {
     return;
@@ -5235,7 +5542,7 @@ function loadValvePipeLinksFromStorage() {
 }
 
 function savePipeTypeFlowNodesToStorage() {
-  localStorage.setItem(
+  setActiveIfcStorageItem(
     PIPE_TYPE_FLOW_NODES_STORAGE_KEY,
     JSON.stringify(
       [...pipeTypeFlowNodes],
@@ -5244,7 +5551,8 @@ function savePipeTypeFlowNodesToStorage() {
 }
 
 function loadPipeTypeFlowNodesFromStorage() {
-  const saved = localStorage.getItem(
+  const saved =
+  getActiveIfcStorageItem(
     PIPE_TYPE_FLOW_NODES_STORAGE_KEY,
   );
 
@@ -5279,14 +5587,17 @@ function saveHiddenFlowArrowsToStorage() {
     });
   }
 
-  localStorage.setItem(
-    HIDDEN_FLOW_ARROWS_STORAGE_KEY,
-    JSON.stringify(data),
-  );
+  setActiveIfcStorageItem(
+  HIDDEN_FLOW_ARROWS_STORAGE_KEY,
+  JSON.stringify(data),
+);
 }
 
 function loadHiddenFlowArrowsFromStorage() {
-  const saved = localStorage.getItem(HIDDEN_FLOW_ARROWS_STORAGE_KEY);
+  const saved =
+  getActiveIfcStorageItem(
+    HIDDEN_FLOW_ARROWS_STORAGE_KEY,
+  );
 
   if (!saved) return;
 
@@ -5463,7 +5774,9 @@ async function deleteAllElementDefinitions() {
   valveBlockedPipeLinks.clear();
   valveControlledPipeLinks.clear();
 blockedRoutePipes.clear();
-localStorage.removeItem(VALVE_PIPE_LINKS_STORAGE_KEY);
+removeActiveIfcStorageItem(
+  VALVE_PIPE_LINKS_STORAGE_KEY,
+);
 
   for (const [modelId, ids] of idsByModel) {
     const model = loadedModels.get(modelId);
@@ -8150,22 +8463,15 @@ async function updateAutomaticDirectionNeighbors(
     );
 
     while (unvisited.size) {
-      const componentStart = [...unvisited]
-        .map((localId) =>
-          nodesByLocalId.get(localId),
-        )
-        .filter(
-          (
-            node,
-          ): node is FlowNode & {
-            revitElementId: number;
-          } => !!node,
-        )
-        .sort(
-          (firstNode, secondNode) =>
-            firstNode.revitElementId -
-            secondNode.revitElementId,
-        )[0];
+      const firstUnvisitedLocalId =
+        unvisited.values().next().value;
+
+      const componentStart =
+        firstUnvisitedLocalId !== undefined
+          ? nodesByLocalId.get(
+              firstUnvisitedLocalId,
+            )
+          : undefined;
 
       if (!componentStart) {
         break;
@@ -8216,13 +8522,8 @@ async function updateAutomaticDirectionNeighbors(
             ): node is FlowNode & {
               revitElementId: number;
             } => !!node,
-          )
-          .sort(
-            (firstNode, secondNode) =>
-              firstNode.revitElementId -
-              secondNode.revitElementId,
           );
-
+        
         for (
           const nextNode of
             connectedUnvisitedNodes
@@ -8746,22 +9047,39 @@ function ensureCycleCircuitDefinitions() {
 }
 
 function saveCycleCircuitDefinitionsToStorage() {
-  localStorage.setItem(
+  setActiveIfcStorageItem(
     CYCLE_CIRCUITS_STORAGE_KEY,
-    JSON.stringify(cycleCircuitDefinitions),
+    JSON.stringify(
+      cycleCircuitDefinitions,
+    ),
   );
 }
 
 function loadCycleCircuitDefinitionsFromStorage() {
-  const saved = localStorage.getItem(CYCLE_CIRCUITS_STORAGE_KEY);
+  const saved =
+    getActiveIfcStorageItem(
+      CYCLE_CIRCUITS_STORAGE_KEY,
+    );
 
   if (saved) {
     try {
-      const parsed = JSON.parse(saved) as CycleCircuitDefinition[];
-      cycleCircuitDefinitions.splice(0);
-      cycleCircuitDefinitions.push(...parsed);
+      const parsed =
+        JSON.parse(
+          saved,
+        ) as CycleCircuitDefinition[];
+
+      cycleCircuitDefinitions.splice(
+        0,
+      );
+
+      cycleCircuitDefinitions.push(
+        ...parsed,
+      );
     } catch (error) {
-      console.error("Erro ao carregar circuitos dos ciclos:", error);
+      console.error(
+        "Erro ao carregar circuitos dos ciclos:",
+        error,
+      );
     }
   }
 
@@ -9177,28 +9495,43 @@ function getCycleDisplayName(cycleNumber: number) {
 }
 
 function saveCycleNamesToStorage() {
-  localStorage.setItem(
+  setActiveIfcStorageItem(
     WATER_CYCLE_NAMES_STORAGE_KEY,
     JSON.stringify(cycleNames),
   );
 }
 
 function loadCycleNamesFromStorage() {
-  const saved = localStorage.getItem(WATER_CYCLE_NAMES_STORAGE_KEY);
+  const saved =
+    getActiveIfcStorageItem(
+      WATER_CYCLE_NAMES_STORAGE_KEY,
+    );
 
   if (saved) {
     try {
-      const parsed = JSON.parse(saved) as Record<string, string>;
+      const parsed =
+        JSON.parse(
+          saved,
+        ) as Record<
+          string,
+          string
+        >;
 
-      for (const [key, value] of Object.entries(parsed)) {
+      for (
+        const [key, value] of
+          Object.entries(parsed)
+      ) {
         cycleNames[key] = value;
       }
     } catch (error) {
-      console.error("Erro ao carregar nomes dos ciclos:", error);
+      console.error(
+        "Erro ao carregar nomes dos ciclos:",
+        error,
+      );
     }
   }
 
-  ensureCycleNames();
+    ensureCycleNames();
 }
 
 function toggleCycleNamesPanel() {
@@ -9237,22 +9570,41 @@ function getCircuitColorStyle(circuit: PipeCircuit) {
 }
 
 function saveWaterCycleCountToStorage() {
-  localStorage.setItem(
+  setActiveIfcStorageItem(
     WATER_CYCLE_COUNT_STORAGE_KEY,
-    String(waterCycleCount.value),
+    String(
+      waterCycleCount.value,
+    ),
   );
 }
 
 function loadWaterCycleCountFromStorage() {
-  const saved = localStorage.getItem(WATER_CYCLE_COUNT_STORAGE_KEY);
-  const parsed = saved ? Number(saved) : 3;
+  const saved =
+    getActiveIfcStorageItem(
+      WATER_CYCLE_COUNT_STORAGE_KEY,
+    );
 
-  const safeValue = Number.isFinite(parsed)
-    ? Math.max(1, Math.min(12, Math.round(parsed)))
-    : 3;
+  const parsed =
+    saved
+      ? Number(saved)
+      : 3;
 
-  waterCycleCount.value = safeValue;
-  pendingWaterCycleCount.value = safeValue;
+  const safeValue =
+    Number.isFinite(parsed)
+      ? Math.max(
+          1,
+          Math.min(
+            12,
+            Math.round(parsed),
+          ),
+        )
+      : 3;
+
+  waterCycleCount.value =
+    safeValue;
+
+  pendingWaterCycleCount.value =
+    safeValue;
 
   ensureConfiguredAssignments();
 }
@@ -10736,6 +11088,239 @@ function getNodeTemperature(node: FlowNode): PipeCircuit | null {
   return null;
 }
 
+async function getPipeGeometryAxis(
+  node: FlowNode,
+): Promise<PipeGeometryAxis | null> {
+  const model =
+    loadedModels.get(node.modelId);
+
+  if (!model) {
+    return null;
+  }
+
+  try {
+    const geometryGroups =
+      await model.getItemsGeometry([
+        node.localId,
+      ]);
+
+    const meshDataList =
+      geometryGroups[0] ?? [];
+
+    const points: THREE.Vector3[] = [];
+
+    for (const meshData of meshDataList) {
+      const positions =
+        meshData.positions;
+
+      if (
+        !positions ||
+        positions.length < 3
+      ) {
+        continue;
+      }
+
+            const transform =
+        new THREE.Matrix4();
+
+      const rawTransform =
+        meshData.transform as any;
+
+      if (
+        rawTransform instanceof
+        THREE.Matrix4
+      ) {
+        transform.copy(
+          rawTransform,
+        );
+      } else if (
+        rawTransform?.elements &&
+        rawTransform.elements.length === 16
+      ) {
+        transform.fromArray(
+          Array.from(
+            rawTransform.elements,
+          ) as number[],
+        );
+      } else if (
+        Array.isArray(rawTransform) &&
+        rawTransform.length === 16
+      ) {
+        transform.fromArray(
+          rawTransform,
+        );
+      }
+
+      for (
+        let positionIndex = 0;
+        positionIndex <
+        positions.length;
+        positionIndex += 3
+      ) {
+        const point = new THREE.Vector3(
+          positions[positionIndex],
+          positions[positionIndex + 1],
+          positions[positionIndex + 2],
+        );
+
+        point.applyMatrix4(transform);
+
+        points.push(point);
+      }
+    }
+
+    if (points.length < 2) {
+      return null;
+    }
+
+    const center =
+      new THREE.Vector3();
+
+    for (const point of points) {
+      center.add(point);
+    }
+
+    center.divideScalar(
+      points.length,
+    );
+
+    let covarianceXX = 0;
+    let covarianceXY = 0;
+    let covarianceXZ = 0;
+    let covarianceYY = 0;
+    let covarianceYZ = 0;
+    let covarianceZZ = 0;
+
+    for (const point of points) {
+      const offsetX =
+        point.x - center.x;
+
+      const offsetY =
+        point.y - center.y;
+
+      const offsetZ =
+        point.z - center.z;
+
+      covarianceXX +=
+        offsetX * offsetX;
+
+      covarianceXY +=
+        offsetX * offsetY;
+
+      covarianceXZ +=
+        offsetX * offsetZ;
+
+      covarianceYY +=
+        offsetY * offsetY;
+
+      covarianceYZ +=
+        offsetY * offsetZ;
+
+      covarianceZZ +=
+        offsetZ * offsetZ;
+    }
+
+    let axis = new THREE.Vector3(
+      1,
+      1,
+      1,
+    ).normalize();
+
+    for (
+      let iteration = 0;
+      iteration < 20;
+      iteration++
+    ) {
+      const nextAxis =
+        new THREE.Vector3(
+          covarianceXX * axis.x +
+            covarianceXY * axis.y +
+            covarianceXZ * axis.z,
+
+          covarianceXY * axis.x +
+            covarianceYY * axis.y +
+            covarianceYZ * axis.z,
+
+          covarianceXZ * axis.x +
+            covarianceYZ * axis.y +
+            covarianceZZ * axis.z,
+        );
+
+      if (
+        nextAxis.lengthSq() <
+        0.000001
+      ) {
+        return null;
+      }
+
+      axis =
+        nextAxis.normalize();
+    }
+
+    let minimumProjection =
+      Number.POSITIVE_INFINITY;
+
+    let maximumProjection =
+      Number.NEGATIVE_INFINITY;
+
+    for (const point of points) {
+      const projection = point
+        .clone()
+        .sub(center)
+        .dot(axis);
+
+      minimumProjection = Math.min(
+        minimumProjection,
+        projection,
+      );
+
+      maximumProjection = Math.max(
+        maximumProjection,
+        projection,
+      );
+    }
+
+    const length =
+      maximumProjection -
+      minimumProjection;
+
+    if (
+      !Number.isFinite(length) ||
+      length <= 0.001
+    ) {
+      return null;
+    }
+
+    const start = center
+      .clone()
+      .addScaledVector(
+        axis,
+        minimumProjection,
+      );
+
+    const end = center
+      .clone()
+      .addScaledVector(
+        axis,
+        maximumProjection,
+      );
+
+    return {
+      start,
+      end,
+      center,
+      length,
+    };
+  } catch (error) {
+    console.error(
+      "Erro ao calcular o eixo geométrico do tubo:",
+      error,
+    );
+
+    return null;
+  }
+}
+
 async function getNodeCenter(node: FlowNode) {
   const model = loadedModels.get(node.modelId);
   if (!model) return null;
@@ -10834,71 +11419,161 @@ function addPipeParticles(
   temperature: PipeCircuit,
   hints: PipeDirectionHints = {},
   node?: FlowNode,
+  geometryAxis?: PipeGeometryAxis | null,
 ) {
   const size = new THREE.Vector3();
-  const center = new THREE.Vector3();
+  const fallbackCenter =
+    new THREE.Vector3();
 
   box.getSize(size);
-  box.getCenter(center);
+  box.getCenter(fallbackCenter);
 
-  const axis = getLongestAxis(size);
-  const length = Math.max(size.getComponent(axis), 0.1);
+  let start: THREE.Vector3;
+  let end: THREE.Vector3;
 
-  const endpointA = center.clone();
-  const endpointB = center.clone();
+  if (geometryAxis) {
+    const geometryDirection =
+      choosePipeDirection(
+        geometryAxis.start.clone(),
+        geometryAxis.end.clone(),
+        hints,
+      );
 
-  endpointA.setComponent(axis, center.getComponent(axis) - length / 2);
-  endpointB.setComponent(axis, center.getComponent(axis) + length / 2);
+    start = geometryDirection.start;
+    end = geometryDirection.end;
+  } else {
+    const fallbackAxis =
+      getLongestAxis(size);
 
-  let { start, end } = choosePipeDirection(endpointA, endpointB, hints);
+    const fallbackLength = Math.max(
+      size.getComponent(
+        fallbackAxis,
+      ),
+      0.1,
+    );
 
-  if (node && isPipeDirectionReversed(node.modelId, node.localId)) {
+    const endpointA =
+      fallbackCenter.clone();
+
+    const endpointB =
+      fallbackCenter.clone();
+
+    endpointA.setComponent(
+      fallbackAxis,
+      fallbackCenter.getComponent(
+        fallbackAxis,
+      ) -
+        fallbackLength / 2,
+    );
+
+    endpointB.setComponent(
+      fallbackAxis,
+      fallbackCenter.getComponent(
+        fallbackAxis,
+      ) +
+        fallbackLength / 2,
+    );
+
+    const fallbackDirection =
+      choosePipeDirection(
+        endpointA,
+        endpointB,
+        hints,
+      );
+
+    start = fallbackDirection.start;
+    end = fallbackDirection.end;
+  }
+
+  if (
+    node &&
+    isPipeDirectionReversed(
+      node.modelId,
+      node.localId,
+    )
+  ) {
     const originalStart = start;
+
     start = end;
     end = originalStart;
   }
 
-  const direction = end.clone().sub(start).normalize();
+  const direction = end
+    .clone()
+    .sub(start);
 
-const crossSectionSizes = [
-  size.x,
-  size.y,
-  size.z,
-]
-  .filter((dimension) => dimension > 0.001)
-  .sort((first, second) => first - second);
-
-const estimatedPipeDiameter =
-  crossSectionSizes[0] ?? 0.08;
-
-const arrowRadius = THREE.MathUtils.clamp(
-  Math.pow(estimatedPipeDiameter, 0.75) * 0.28,
-  0.025,
-  0.18,
-);
-
-const arrowLength = THREE.MathUtils.clamp(
-  Math.pow(estimatedPipeDiameter, 0.75) * 0.9,
-  0.07,
-  0.48,
-);
-
-const geometry = new THREE.ConeGeometry(
-  arrowRadius,
-  arrowLength,
-  8,
-);
-
-  const material =
-  getRouteMaterialForNode(
-    temperature,
-    node,
+  const length = Math.max(
+    direction.length(),
+    0.1,
   );
 
-  const particleCount = Math.max(1, Math.round(length / 0.4));
+  direction.normalize();
 
-  for (let i = 0; i < particleCount; i++) {
-    const mesh = new THREE.Mesh(geometry, material);
+  const crossSectionSizes = [
+    size.x,
+    size.y,
+    size.z,
+  ]
+    .filter(
+      (dimension) =>
+        dimension > 0.001,
+    )
+    .sort(
+      (first, second) =>
+        first - second,
+    );
+
+  const estimatedPipeDiameter =
+    crossSectionSizes[0] ?? 0.08;
+
+  const arrowRadius =
+    THREE.MathUtils.clamp(
+      Math.pow(
+        estimatedPipeDiameter,
+        0.75,
+      ) * 0.28,
+      0.025,
+      0.18,
+    );
+
+  const arrowLength =
+    THREE.MathUtils.clamp(
+      Math.pow(
+        estimatedPipeDiameter,
+        0.75,
+      ) * 0.9,
+      0.07,
+      0.48,
+    );
+
+  const geometry =
+    new THREE.ConeGeometry(
+      arrowRadius,
+      arrowLength,
+      8,
+    );
+
+  const material =
+    getRouteMaterialForNode(
+      temperature,
+      node,
+    );
+
+  const particleCount = Math.max(
+    1,
+    Math.round(length / 0.4),
+  );
+
+  for (
+    let particleIndex = 0;
+    particleIndex < particleCount;
+    particleIndex++
+  ) {
+    const mesh = new THREE.Mesh(
+      geometry,
+      material,
+    );
+
     mesh.renderOrder = 20;
 
     mesh.quaternion.setFromUnitVectors(
@@ -10914,7 +11589,9 @@ const geometry = new THREE.ConeGeometry(
       mesh,
       start,
       end,
-      offset: i / particleCount,
+      offset:
+        particleIndex /
+        particleCount,
       length,
     });
   }
@@ -11291,17 +11968,13 @@ if (circuit) {
     }
 
     const orderedNodes = [
-  ...systemGroup.nodes,
-].sort(
-  (firstNode, secondNode) =>
-    firstNode.revitElementId -
-    secondNode.revitElementId,
-);
+      ...systemGroup.nodes,
+    ];
 
-await updateAutomaticDirectionNeighbors(
-  circuit.key,
-  orderedNodes,
-);
+    await updateAutomaticDirectionNeighbors(
+      circuit.key,
+      orderedNodes,
+    );
 
 automaticOrderedCircuitNodes.set(
   circuit.key,
@@ -11705,6 +12378,17 @@ async function scanIfcSystems() {
       await scanIfcValveStates();
 
     for (const model of loadedModels.values()) {
+      const pipeSegmentCategories =
+        await model.getItemsOfCategories([
+          /IFCPIPESEGMENT/i,
+        ]);
+
+      const pipeSegmentLocalIds = new Set(
+        Object.values(
+          pipeSegmentCategories,
+        ).flat(),
+      );
+
       const categories =
         await model.getItemsOfCategories([
           /IFCPIPESEGMENT/i,
@@ -11766,44 +12450,19 @@ async function scanIfcSystems() {
             normalizeIfcValue(itemData);
 
 
-          const revitValues =
-  collectRevitFamilyAndTypeValues(
-    rawIfcData,
-  );
-
-const exactRevitType =
-  findRevitTypeValue(rawIfcData);
-
-const normalizedFamily =
-  String(revitValues.family)
-    .trim()
-    .toLowerCase();
-
-const normalizedType =
-  String(
-    exactRevitType ||
-    revitValues.type,
-  )
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-
-const isMultilayerTee =
-  normalizedType.includes("te multicamada");
-
-const isPipeTypeElement =
-  normalizedFamily === "pipe types" &&
-  !isMultilayerTee;
-
-if (isPipeTypeElement) {
-  pipeTypeFlowNodes.add(
-    nodeKey({
-      modelId: model.modelId,
-      localId,
-    }),
-  );
-}
+          if (
+            pipeSegmentLocalIds.has(
+              localId,
+            )
+          ) {
+            pipeTypeFlowNodes.add(
+              nodeKey({
+                modelId:
+                  model.modelId,
+                localId,
+              }),
+            );
+          }
           
           if (isIgnoredAutomaticPathElement(rawIfcData)) {
   const ignoredIds =
@@ -11964,14 +12623,25 @@ const revitElementId =
   " normalmente fechada(s) e " +
   detectedValves.normallyOpenCount +
   " normalmente aberta(s).";
-  } catch (error) {
+    } catch (error) {
     console.error(
       "Erro ao analisar os sistemas IFC:",
       error,
     );
 
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : String(error);
+
     flowMessage.value =
-      "Não foi possível analisar os sistemas IFC.";
+      "Não foi possível analisar os sistemas IFC: " +
+      errorMessage;
+
+    window.alert(
+      "Erro durante o scan do IFC:\n\n" +
+      errorMessage,
+    );
   } finally {
     isSystemScanRunning.value = false;
   }
