@@ -12093,15 +12093,23 @@ function isShutoffValveIfcElement(
       ],
     );
 
-  const familyValue = String(
-    revitValues.family ||
-      (
-        familyFromProperty !==
-          "não encontrado"
-          ? familyFromProperty
-          : ""
-      ),
+  const collectedFamily = String(
+    revitValues.family ?? "",
   ).trim();
+
+  const propertyFamily = String(
+    familyFromProperty ?? "",
+  ).trim();
+
+  const familyValue =
+    collectedFamily &&
+    collectedFamily !==
+      "não encontrado"
+      ? collectedFamily
+      : propertyFamily !==
+          "não encontrado"
+        ? propertyFamily
+        : "";
 
   const normalizedFamily =
     familyValue
@@ -12115,11 +12123,17 @@ function isShutoffValveIfcElement(
       .replace(/\s+/g, " ")
       .trim();
 
+  const isValveFamily =
+    normalizedFamily.includes(
+      "valvula",
+    ) ||
+    normalizedFamily.includes(
+      "valve",
+    );
+
   return {
     isShutoffValve:
-      normalizedFamily.includes(
-        "valvula corte",
-      ),
+      isValveFamily,
 
     familyValue,
 
