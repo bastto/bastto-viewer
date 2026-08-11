@@ -20,13 +20,13 @@
           Agrupamento manual
         </p>
 
-        <h2>
+       <h2>
   {{
     editingRouteGroupId
-      ? 'Editar grupo de caminhos'
-      : 'Agrupar caminhos'
+      ? 'Editar grupo de percursos'
+      : 'Agrupar percursos'
   }}
-</h2>
+</h2> 
       </div>
 
       <button
@@ -119,7 +119,7 @@
           Cor individual
         </p>
 
-        <h2>Alterar cor do caminho</h2>
+        <h2>Alterar cor do percurso</h2>
       </div>
 
       <button
@@ -190,7 +190,7 @@
           Orientação do fluxo
         </p>
 
-        <h2>Definir sentido do caminho</h2>
+        <h2>Definir sentido do percurso</h2>
       </div>
 
       <button
@@ -203,7 +203,7 @@
     </div>
 
     <div class="route-direction-dialog__route">
-      <span>Caminho selecionado</span>
+      <span>Percurso selecionado</span>
 
       <strong>
         {{
@@ -964,9 +964,8 @@
 </div>
 
 <div class="flow-section-title">
-  1. Escolher ciclo e caminho
+  1. Escolher ciclo e circuito
 </div>
-
 
 <label class="flow-cycle-config">
   <span>Ciclo onde vou trabalhar</span>
@@ -988,11 +987,11 @@
   v-if="!getActiveCycleCircuitDefinitions().length"
   class="connection-note workflow-help-note"
 >
-  Este ciclo ainda não tem caminhos. Cria um caminho em baixo para começar.
+  Este ciclo ainda não tem circuitos. Cria um circuito em baixo para começar.
 </p>
 
 <div class="flow-section-title flow-section-title--button">
-  <span>Criar ou editar caminhos deste ciclo</span>
+  <span>Definições dos circuitos deste ciclo</span>
   <button
     type="button"
     class="section-collapse-button"
@@ -1004,7 +1003,7 @@
 
 <div v-if="isCycleCircuitPanelOpen" class="cycle-circuit-panel">
   <label class="flow-cycle-config">
-    <span>Tipo de caminho</span>
+    <span>Tipo de circuito</span>
     <select
   v-model="pendingCycleCircuitKind"
   @change="updatePendingCycleCircuitColorFromKind"
@@ -1018,11 +1017,11 @@
   </label>
 
   <label class="flow-cycle-config">
-    <span>Nome do caminho</span>
+    <span>Nome do circuito</span>
     <input
   v-model="pendingCycleCircuitName"
   type="text"
-  placeholder="Ex: Nome do caminho extra"
+  placeholder="Ex: Nome do circuito"
 />
   </label>
 
@@ -1036,8 +1035,8 @@
 
   <div class="flow-actions flow-actions--single">
     <button type="button" @click="createCycleCircuitDefinition">
-      Criar e selecionar caminho
-    </button>
+  Criar e selecionar circuito
+</button>
 
     <button type="button" @click="saveCycleCircuitDefinitionChanges">
       Guardar alterações
@@ -1048,7 +1047,7 @@
   v-if="!getActiveCycleCircuitDefinitions().length"
   class="connection-note workflow-help-note"
 >
-  Este ciclo ainda não tem caminhos. Cria um caminho para começar.
+  Este ciclo ainda não tem circuitos. Cria um circuito para começar.
 </p>
 
   <div class="cycle-circuit-list">
@@ -1253,18 +1252,18 @@
 
  <div v-if="hasLoadedModel && savedRoutes.length" class="saved-routes">
   <div class="saved-routes-header">
-    <span>
-      Caminhos guardados: {{ savedRoutes.length }}
-    </span>
+  <span>
+    Percursos guardados: {{ savedRoutes.length }}
+  </span>
 
-    <button
-      type="button"
-      class="section-collapse-button"
-      @click="toggleSavedRoutesPanel"
-    >
-      {{ isSavedRoutesPanelOpen ? '−' : '+' }}
-    </button>
-  </div>
+  <button
+    type="button"
+    class="section-collapse-button"
+    @click="toggleSavedRoutesPanel"
+  >
+    {{ isSavedRoutesPanelOpen ? '−' : '+' }}
+  </button>
+</div>
 
   <div
   v-if="isSavedRoutesPanelOpen"
@@ -1310,7 +1309,7 @@
   "
   @click="openRouteGroupingDialog"
 >
-  Agrupar caminhos selecionados
+  Agrupar percursos selecionados
 </button>
 
   <button
@@ -1819,22 +1818,22 @@
   </div>
 
   <div class="central-summary__item">
-    <span>Caminhos guardados</span>
+    <span>Percursos guardados</span>
     <strong>{{ savedRoutes.length }}</strong>
   </div>
 
   <div class="central-summary__item">
-    <span>Caminhos visíveis</span>
+    <span>Percursos visíveis</span>
     <strong>{{ countVisibleSavedRoutes() }}</strong>
   </div>
 
   <div class="central-summary__item">
-    <span>Caminhos ocultos</span>
+    <span>Percursos ocultos</span>
     <strong>{{ countHiddenSavedRoutes() }}</strong>
   </div>
 
   <div class="central-summary__item">
-    <span>Caminhos protegidos</span>
+    <span>Percursos protegidos</span>
     <strong>{{ countLockedSavedRoutes() }}</strong>
   </div>
 
@@ -1894,19 +1893,13 @@
     </div>
 
     <span
-      :class="[
-        'flow-status',
-        isFlowing ? 'flow-status--on' : ''
-      ]"
-    >
-      {{
-        isCentralSimulationRunning
-          ? 'SIM'
-          : isFlowing
-            ? 'ON'
-            : 'OFF'
-      }}
-    </span>
+  :class="[
+    'flow-status',
+    isFlowing ? 'flow-status--on' : ''
+  ]"
+>
+  {{ isFlowing ? 'ON' : 'OFF' }}
+</span>
 
     <button
       type="button"
@@ -2001,19 +1994,83 @@
 
     <div class="flow-actions flow-actions--secondary">
       <button
-        type="button"
-        @click="toggleFlow"
-      >
-        {{ isFlowing ? 'Pausar' : 'Animar' }}
-      </button>
+  type="button"
+  :disabled="isPreparingFlowAnimation"
+  @click="toggleFlow"
+>
+  {{
+    isPreparingFlowAnimation
+      ? 'A preparar...'
+      : isFlowing
+        ? 'Pausar simulação'
+        : 'Iniciar simulação'
+  }}
+</button>
 
       <button
-        type="button"
-        @click="rebuildManualFlowLayer"
-      >
-        Atualizar
-      </button>
+  type="button"
+  :disabled="isPreparingFlowAnimation"
+  @click="rebuildManualFlowLayer"
+>
+  {{
+    isPreparingFlowAnimation
+      ? 'A atualizar...'
+      : 'Atualizar'
+  }}
+</button>
     </div>
+
+    <div
+  v-if="
+    isPreparingFlowAnimation ||
+    isFlowAnimationReady ||
+    hasFlowPreparationError
+  "
+  class="flow-preparation-status"
+>
+  <div class="flow-preparation-status__header">
+    <span>
+      {{
+        hasFlowPreparationError
+  ? 'Erro na preparação'
+  : isPreparingFlowAnimation ||
+      flowPreparationProgress < 100
+    ? 'A preparar animação...'
+    : 'Animação pronta'
+      }}
+    </span>
+
+    <strong>
+      {{ flowPreparationProgress }}%
+    </strong>
+  </div>
+
+  <div
+    class="flow-preparation-progress"
+    role="progressbar"
+    aria-label="Preparação da animação"
+    aria-valuemin="0"
+    aria-valuemax="100"
+    :aria-valuenow="flowPreparationProgress"
+  >
+    <div
+      class="flow-preparation-progress__fill"
+      :class="{
+        'flow-preparation-progress__fill--ready':
+  isFlowAnimationReady &&
+  flowPreparationProgress === 100 &&
+  !hasFlowPreparationError,
+
+        'flow-preparation-progress__fill--error':
+          hasFlowPreparationError
+      }"
+      :style="{
+        width:
+          flowPreparationProgress + '%'
+      }"
+    ></div>
+  </div>
+</div>
 
     <label class="flow-slider">
       <span>Velocidade</span>
@@ -2027,22 +2084,9 @@
       />
     </label>
 
-    <div class="flow-actions flow-actions--single">
-      <button
-        type="button"
-        @click="toggleCentralSimulation"
-      >
-        {{
-          isCentralSimulationRunning
-            ? 'Parar simulação'
-            : 'Simular central'
-        }}
-      </button>
-    </div>
-
     <p class="connection-note">
-      Caminhos guardados: {{ savedRoutes.length }}
-    </p>
+  Percursos guardados: {{ savedRoutes.length }}
+</p>
 
     <p class="connection-note">
       Tubos marcados: {{ pipeStats.total }}
@@ -2132,7 +2176,12 @@ type MepElement = {
   category?: string;
   objectType?: string;
   tag?: string;
-  state?: "open" | "closed" | "on" | "off";
+  systemName?: string;
+systemType?: string;
+ifcNormalState?: string;
+isShutoffValve?: boolean;
+valveIdentificationText?: string;
+state?: "open" | "closed" | "on" | "off";
 };
 
 type PipeParticle = {
@@ -2218,6 +2267,15 @@ const isFlowManuallyPaused = ref(false);
 const loadingProgress = ref(0);
 const loadingFileName = ref("");
 const flowSpeed = ref(0.2);
+const isPreparingFlowAnimation =
+  ref(false);
+const flowPreparationProgress =
+  ref(0);
+const isFlowAnimationReady =
+  ref(false);
+const hasFlowPreparationError =
+  ref(false);
+let flowPreparationRunId = 0;
 const flowMessage = ref("Seleciona tubos no modelo e atribui um circuito.");
 const discardRouteMessage = ref("");
 const waterCycleCount = ref(3);
@@ -3331,51 +3389,183 @@ async function resetAllCircuitHighlights() {
 }
 
 async function rebuildManualFlowLayer() {
-  const wasFlowingBeforeRebuild = isFlowing.value;
+  const currentRunId =
+    ++flowPreparationRunId;
 
-clearFlowVisuals(true);
+  const isCurrentRun = () =>
+    currentRunId ===
+    flowPreparationRunId;
 
-  const hasAssignments = countAssignments() > 0;
-  const hasConnections = flowConnections.length > 0;
+  const setCurrentProgress = (
+    progress: number,
+  ) => {
+    if (!isCurrentRun()) {
+      return;
+    }
 
-  if (!hasAssignments && !hasConnections) {
-    flowMessage.value = "Ainda nao ha tubos marcados.";
-    return;
-  }
+    flowPreparationProgress.value =
+      progress;
+  };
 
-  await resetAllCircuitHighlights();
+  isPreparingFlowAnimation.value = true;
+  isFlowAnimationReady.value = false;
+  hasFlowPreparationError.value = false;
 
-for (const circuit of getAllKnownCircuitKeys()) {
-  if (
-    !shouldShowCircuitInSimulation(circuit)
-  ) {
-    continue;
-  }
+  setCurrentProgress(5);
 
-  await addAssignmentsToScene(circuit);
-}
+  try {
+    clearFlowVisuals(true);
 
-  updateManualStats();
+    const hasAssignments =
+      countAssignments() > 0;
 
-  const shouldKeepAnimating =
-  !isFlowManuallyPaused.value &&
-  (isManualFlowAnimationRunning.value || isCentralSimulationRunning.value);
+    const hasConnections =
+      flowConnections.length > 0;
 
-isFlowing.value = shouldKeepAnimating && pipeParticles.length > 0;
+    if (
+      !hasAssignments &&
+      !hasConnections
+    ) {
+      setCurrentProgress(0);
+      hasFlowPreparationError.value = true;
 
-  if (highlightedSavedRouteId.value) {
-  await enforceActiveSavedRouteHighlight();
+      flowMessage.value =
+        "Ainda não há tubos marcados.";
 
-  isFlowing.value = false;
-  isCentralSimulationRunning.value = false;
-  isManualFlowAnimationRunning.value = false;
-  isFlowManuallyPaused.value = true;
+      return;
+    }
 
+    setCurrentProgress(10);
+
+    await resetAllCircuitHighlights();
+
+if (!isCurrentRun()) {
   return;
 }
 
-  await fragmentManager.core.update(true);
+setCurrentProgress(20);
 
+    const visibleCircuits =
+      getAllKnownCircuitKeys().filter(
+        (circuit) =>
+          shouldShowCircuitInSimulation(
+            circuit,
+          ),
+      );
+
+    const circuitCount =
+      visibleCircuits.length;
+
+    if (!circuitCount) {
+      setCurrentProgress(0);
+      hasFlowPreparationError.value = true;
+
+      flowMessage.value =
+        "Não existem circuitos visíveis para preparar.";
+
+      return;
+    }
+
+    for (
+      let circuitIndex = 0;
+      circuitIndex < circuitCount;
+      circuitIndex++
+    ) {
+      const circuit =
+        visibleCircuits[circuitIndex];
+
+      await addAssignmentsToScene(
+  circuit,
+);
+
+if (!isCurrentRun()) {
+  return;
+}
+
+const completedCircuits =
+  circuitIndex + 1;
+
+      setCurrentProgress(
+  Math.round(
+    20 +
+    (
+      completedCircuits /
+      circuitCount
+    ) *
+    70,
+  ),
+);
+    }
+
+    updateManualStats();
+
+    setCurrentProgress(95);
+
+    const shouldKeepAnimating =
+      !isFlowManuallyPaused.value &&
+      (
+        isManualFlowAnimationRunning.value ||
+        isCentralSimulationRunning.value
+      );
+
+    isFlowing.value =
+      shouldKeepAnimating &&
+      pipeParticles.length > 0;
+
+    if (highlightedSavedRouteId.value) {
+      await enforceActiveSavedRouteHighlight();
+
+      isFlowing.value = false;
+
+      isCentralSimulationRunning.value =
+        false;
+
+      isManualFlowAnimationRunning.value =
+        false;
+
+      isFlowManuallyPaused.value = true;
+
+      if (isCurrentRun()) {
+  setCurrentProgress(100);
+
+  isFlowAnimationReady.value = true;
+  hasFlowPreparationError.value = false;
+}
+
+      return;
+    }
+
+    await fragmentManager.core.update(
+  true,
+);
+
+if (!isCurrentRun()) {
+  return;
+}
+
+setCurrentProgress(100);
+
+isFlowAnimationReady.value = true;
+hasFlowPreparationError.value = false;
+  } catch (error) {
+  console.error(
+    "Erro ao preparar a animação:",
+    error,
+  );
+
+  if (isCurrentRun()) {
+    hasFlowPreparationError.value = true;
+    isFlowAnimationReady.value = false;
+
+    flowMessage.value =
+      "Não foi possível preparar completamente a animação.";
+  }
+  } finally {
+  if (isCurrentRun()) {
+    isPreparingFlowAnimation.value =
+      false;
+  }
+}
 }
 
 async function addAssignmentsToScene(temperature: PipeCircuit) {
@@ -5357,8 +5547,13 @@ function getItemNameFromData(data: any) {
 
 function getValveDesignationOptions() {
   return Object.values(mepElements)
-    .filter((element) => isValveElementType(element.elementType))
-    .map((element) => {
+  .filter(
+    (element) =>
+      isConfirmedShutoffValve(
+        element,
+      ),
+  )
+  .map((element) => {
       const key = elementKey(element.modelId, element.localId);
       const valveKey = nodeKey({
         modelId: element.modelId,
@@ -5377,12 +5572,30 @@ function getValveDesignationOptions() {
           return Number(storedLocalId) === element.localId;
         });
 
-      return {
-        key,
-        label: hasAssociation
-          ? `${displayName} - associada`
-          : `${displayName} - sem associação`,
-      };
+      const systemLabel =
+  element.systemName
+    ? ` · ${element.systemName}`
+    : " · sistema não identificado";
+
+const normalStateLabel =
+  element.elementType ===
+  "normallyClosedValve"
+    ? "NF"
+    : "NA";
+
+return {
+  key,
+
+  label:
+    displayName +
+    systemLabel +
+    ` · ${normalStateLabel}` +
+    (
+      hasAssociation
+        ? " - associada"
+        : " - sem associação"
+    ),
+};
     });
 }
 
@@ -5453,6 +5666,19 @@ async function syncValveDesignationPanelFromNode(node: FlowNode) {
   selectedValveOriginalDesignation.value = originalName;
   selectedValveDesignation.value = element.name || originalName;
   pendingValveDesignation.value = element.name || "";
+
+  const suggestedRoute =
+  getSingleAutomaticRouteForValve(
+    element,
+  );
+
+if (suggestedRoute) {
+  selectedValveAssociationRouteId.value =
+    suggestedRoute.id;
+} else {
+  selectedValveAssociationRouteId.value =
+    "";
+}
 }
 
 async function selectValveDesignationFromDropdown() {
@@ -6490,10 +6716,32 @@ normallyClosedValve: "válvula NF",
   return labels[elementType];
 }
 
-function countMepElementsByType(elementType: MepElementType) {
-  return Object.values(mepElements).filter(
-    (element) => element.elementType === elementType,
-  ).length;
+function countMepElementsByType(
+  elementType: MepElementType,
+) {
+  return Object.values(
+    mepElements,
+  ).filter((element) => {
+    if (
+      elementType ===
+        "normallyOpenValve" ||
+      elementType ===
+        "normallyClosedValve"
+    ) {
+      return (
+        element.elementType ===
+          elementType &&
+        isConfirmedShutoffValve(
+          element,
+        )
+      );
+    }
+
+    return (
+      element.elementType ===
+      elementType
+    );
+  }).length;
 }
 
 function countDefinedMepElements() {
@@ -6513,11 +6761,14 @@ function countVisibleSavedRoutes() {
 }
 
 function countValveElements() {
-  return (
-    countMepElementsByType("isolationValve") +
-    countMepElementsByType("normallyOpenValve") +
-    countMepElementsByType("normallyClosedValve")
-  );
+  return Object.values(
+    mepElements,
+  ).filter(
+    (element) =>
+      isConfirmedShutoffValve(
+        element,
+      ),
+  ).length;
 }
 
 function countReservoirElements() {
@@ -6527,19 +6778,54 @@ function countReservoirElements() {
   );
 }
 
-function getMepElementIdsByType(elementType: MepElementType) {
-  const idsByModel = new Map<string, number[]>();
+function getMepElementIdsByType(
+  elementType: MepElementType,
+) {
+  const idsByModel =
+    new Map<string, number[]>();
 
-  for (const element of Object.values(mepElements)) {
-    if (element.elementType !== elementType) {
+  const mustBeConfirmedShutoffValve =
+    elementType ===
+      "normallyOpenValve" ||
+    elementType ===
+      "normallyClosedValve" ||
+    elementType ===
+      "isolationValve";
+
+  for (
+    const element of
+      Object.values(mepElements)
+  ) {
+    if (
+      element.elementType !==
+      elementType
+    ) {
       continue;
     }
 
-    if (!idsByModel.has(element.modelId)) {
-      idsByModel.set(element.modelId, []);
+    if (
+      mustBeConfirmedShutoffValve &&
+      !isConfirmedShutoffValve(
+        element,
+      )
+    ) {
+      continue;
     }
 
-    idsByModel.get(element.modelId)?.push(element.localId);
+    if (
+      !idsByModel.has(
+        element.modelId,
+      )
+    ) {
+      idsByModel.set(
+        element.modelId,
+        [],
+      );
+    }
+
+    idsByModel
+      .get(element.modelId)
+      ?.push(element.localId);
   }
 
   return idsByModel;
@@ -6603,7 +6889,9 @@ async function clearMepElementsHighlightByType(elementType: MepElementType) {
     : `Não havia elementos para limpar em ${getElementTypeLabel(elementType)}.`;
 }
 
-function isValveElementType(elementType: MepElementType) {
+function isValveElementType(
+  elementType: MepElementType,
+) {
   return (
     elementType === "isolationValve" ||
     elementType === "normallyOpenValve" ||
@@ -6611,13 +6899,59 @@ function isValveElementType(elementType: MepElementType) {
   );
 }
 
-function getNormalValveState(elementType: MepElementType) {
+function isConfirmedShutoffValve(
+  element?: MepElement,
+) {
+  return (
+    !!element &&
+    isValveElementType(
+      element.elementType,
+    ) &&
+    element.isShutoffValve === true
+  );
+}
+
+function getNormalValveState(
+  elementType: MepElementType,
+) {
   if (elementType === "normallyClosedValve") {
     return "closed";
   }
 
   return "open";
 }
+
+function getValveTypeFromIfcState(
+  stateValue?: string | null,
+): MepElementType {
+  const normalizedState = String(
+    stateValue ?? "",
+  )
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\s._-]/g, "");
+
+  const normallyClosedValues = [
+    "nc",
+    "nf",
+    "normallyclosed",
+    "normalmentefechada",
+    "normalmentefechado",
+  ];
+
+  if (
+    normallyClosedValues.includes(
+      normalizedState,
+    )
+  ) {
+    return "normallyClosedValve";
+  }
+
+  return "normallyOpenValve";
+}
+
 
 function getInverseValveState(elementType: MepElementType) {
   return getNormalValveState(elementType) === "closed" ? "open" : "closed";
@@ -8432,6 +8766,74 @@ function loadCycleCircuitDefinitionsFromStorage() {
   }
 
   ensureCycleCircuitDefinitions();
+}
+
+function normalizeSystemMatchText(
+  value?: string,
+) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\s._-]/g, "");
+}
+
+function getCircuitForValveSystem(
+  valve: MepElement,
+) {
+  const normalizedValveSystemName =
+    normalizeSystemMatchText(
+      valve.systemName,
+    );
+
+  if (!normalizedValveSystemName) {
+    return null;
+  }
+
+  return (
+    cycleCircuitDefinitions.find(
+      (circuit) =>
+        normalizeSystemMatchText(
+          circuit.name,
+        ) ===
+        normalizedValveSystemName,
+    ) ?? null
+  );
+}
+
+function getRoutesForValveSystem(
+  valve: MepElement,
+) {
+  const circuit =
+    getCircuitForValveSystem(
+      valve,
+    );
+
+  if (!circuit) {
+    return [] as SavedRoute[];
+  }
+
+  return savedRoutes.filter(
+    (route) =>
+      route.temperature ===
+      circuit.key,
+  );
+}
+
+function getSingleAutomaticRouteForValve(
+  valve: MepElement,
+) {
+  const compatibleRoutes =
+    getRoutesForValveSystem(
+      valve,
+    );
+
+  if (compatibleRoutes.length !== 1) {
+    return null;
+  }
+
+  return compatibleRoutes[0];
 }
 
 function getCycleCircuitDefinition(circuitKey: PipeCircuit) {
@@ -10996,6 +11398,285 @@ function isIgnoredAutomaticPathElement(data: any) {
   );
 }
 
+function isShutoffValveIfcElement(
+  rawIfcData: any,
+) {
+  const revitValues =
+    collectRevitFamilyAndTypeValues(
+      rawIfcData,
+    );
+
+  const familyFromProperty =
+    findIfcPropertyValue(
+      rawIfcData,
+      [
+        "Family",
+        "Família",
+        "Familia",
+        "Revit Family",
+        "RevitFamily",
+        "Family Name",
+        "FamilyName",
+      ],
+    );
+
+  const familyValue = String(
+    revitValues.family ||
+      (
+        familyFromProperty !==
+          "não encontrado"
+          ? familyFromProperty
+          : ""
+      ),
+  ).trim();
+
+  const normalizedFamily =
+    familyValue
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(
+        /[\u0300-\u036f]/g,
+        "",
+      )
+      .replace(/[_-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  return {
+    isShutoffValve:
+      normalizedFamily.includes(
+        "valvula corte",
+      ),
+
+    familyValue,
+
+    normalizedFamily,
+  };
+}
+
+async function scanIfcValveStates() {
+  let detectedValveCount = 0;
+  let normallyClosedCount = 0;
+  let normallyOpenCount = 0;
+
+  for (const model of loadedModels.values()) {
+    const valveCategories =
+  await model.getItemsOfCategories([
+    /IFCVALVE/i,
+    /IFCFLOWCONTROLLER/i,
+    /IFCFLOWFITTING/i,
+    /IFCPIPEFITTING/i,
+    /IFCFLOWTERMINAL/i,
+  ]);
+
+    const valveLocalIds = [
+      ...new Set(
+        Object.values(
+          valveCategories,
+        ).flat(),
+      ),
+    ];
+
+    for (
+      let startIndex = 0;
+      startIndex < valveLocalIds.length;
+      startIndex += 100
+    ) {
+      const currentIds =
+        valveLocalIds.slice(
+          startIndex,
+          startIndex + 100,
+        );
+
+      const itemsData =
+        await model.getItemsData(
+          currentIds,
+          {
+            attributesDefault: true,
+            relations: {
+              IsDefinedBy: {
+                attributes: true,
+                relations: true,
+              },
+              HasAssignments: {
+                attributes: true,
+                relations: false,
+              },
+            },
+          },
+        );
+
+      for (
+        let itemIndex = 0;
+        itemIndex < itemsData.length;
+        itemIndex++
+      ) {
+        const itemData =
+          itemsData[itemIndex];
+
+        const localId =
+          currentIds[itemIndex];
+
+        if (
+          !itemData ||
+          !Number.isFinite(localId)
+        ) {
+          continue;
+        }
+
+        const rawIfcData =
+  normalizeIfcValue(itemData);
+
+const valveIdentification =
+  isShutoffValveIfcElement(
+    rawIfcData,
+  );
+
+const key = elementKey(
+  model.modelId,
+  localId,
+);
+
+const existingElement =
+  mepElements[key];
+
+if (
+  !valveIdentification
+    .isShutoffValve
+) {
+  if (
+    existingElement &&
+    isValveElementType(
+      existingElement.elementType,
+    )
+  ) {
+    delete mepElements[key];
+  }
+
+  continue;
+}
+
+const stateValue =
+  findIfcPropertyValue(
+    rawIfcData,
+    [
+      "State",
+      "Estado",
+      "Valve State",
+      "ValveState",
+    ],
+  );
+
+        const mechanicalSystemName =
+  findMechanicalSystemName(
+    rawIfcData,
+  );
+
+const fallbackSystemName =
+  findIfcPropertyValue(
+    rawIfcData,
+    [
+      "System Name",
+      "SystemName",
+      "System Abbreviation",
+      "SystemAbbreviation",
+    ],
+  );
+
+const systemName =
+  mechanicalSystemName ||
+  (
+    fallbackSystemName !==
+      "não encontrado"
+      ? fallbackSystemName
+      : ""
+  );
+
+const systemType =
+  findIfcPropertyValue(
+    rawIfcData,
+    [
+      "System Type",
+      "SystemType",
+      "System Classification",
+      "SystemClassification",
+    ],
+  );
+
+        const valveType =
+          getValveTypeFromIfcState(
+            stateValue,
+          );
+
+        mepElements[key] = {
+  ...existingElement,
+
+  modelId: model.modelId,
+  localId,
+
+  elementType: valveType,
+
+  circuitType:
+    existingElement
+      ?.circuitType ??
+    "unknown",
+
+  systemName:
+    systemName ||
+    existingElement?.systemName ||
+    "",
+
+  systemType:
+    systemType !== "não encontrado"
+      ? systemType
+      : existingElement?.systemType ||
+        "",
+
+  ifcNormalState:
+  stateValue !== "não encontrado"
+    ? stateValue
+    : "",
+
+isShutoffValve: true,
+
+valveIdentificationText:
+  valveIdentification
+    .identificationText,
+
+isShutoffValve: true,
+
+valveIdentificationText:
+  valveIdentification.familyValue,
+
+state:
+  getNormalValveState(
+    valveType,
+  ),
+};
+
+        detectedValveCount++;
+
+        if (
+          valveType ===
+          "normallyClosedValve"
+        ) {
+          normallyClosedCount++;
+        } else {
+          normallyOpenCount++;
+        }
+      }
+    }
+  }
+
+  saveMepElementsToStorage();
+
+  return {
+    detectedValveCount,
+    normallyClosedCount,
+    normallyOpenCount,
+  };
+}
+
 async function scanIfcSystems() {
   if (!loadedModels.size) {
     flowMessage.value =
@@ -11020,6 +11701,9 @@ async function scanIfcSystems() {
   ignoredAutomaticPathNodes.clear();
 
   try {
+        const detectedValves =
+      await scanIfcValveStates();
+
     for (const model of loadedModels.values()) {
       const categories =
         await model.getItemsOfCategories([
@@ -11273,7 +11957,13 @@ const revitElementId =
     hasSystemScanResults.value = true;
 
     flowMessage.value =
-      "Scan dos sistemas IFC concluído.";
+  "Scan dos sistemas IFC concluído. " +
+  detectedValves.detectedValveCount +
+  " válvula(s) reconhecida(s): " +
+  detectedValves.normallyClosedCount +
+  " normalmente fechada(s) e " +
+  detectedValves.normallyOpenCount +
+  " normalmente aberta(s).";
   } catch (error) {
     console.error(
       "Erro ao analisar os sistemas IFC:",
@@ -11714,24 +12404,60 @@ async function blockSelectedPipes() {
   await rebuildManualFlowLayer();
 }
 
-function toggleFlow() {
-  if (!pipeParticles.length) {
-    flowMessage.value = "Marca pelo menos um tubo antes de iniciar a animação.";
+async function toggleFlow() {
+  if (isPreparingFlowAnimation.value) {
+    flowMessage.value =
+      "Aguarda até a preparação da animação terminar.";
+
     return;
   }
 
   if (isFlowing.value) {
     isFlowing.value = false;
-    isManualFlowAnimationRunning.value = false;
+
+    isManualFlowAnimationRunning.value =
+      false;
+
+    isCentralSimulationRunning.value =
+      false;
+
     isFlowManuallyPaused.value = true;
-    flowMessage.value = "Animação pausada.";
+
+    flowMessage.value =
+      "Simulação pausada.";
+
     return;
   }
 
-  isManualFlowAnimationRunning.value = true;
-  isFlowManuallyPaused.value = false;
+  if (
+    !pipeParticles.length ||
+    !isFlowAnimationReady.value
+  ) {
+    await rebuildManualFlowLayer();
+  }
+
+  if (
+    hasFlowPreparationError.value ||
+    !pipeParticles.length
+  ) {
+    flowMessage.value =
+      "Não existem setas disponíveis para iniciar a simulação.";
+
+    return;
+  }
+
   isFlowing.value = true;
-  flowMessage.value = "Animação iniciada.";
+
+  isManualFlowAnimationRunning.value =
+    true;
+
+  isCentralSimulationRunning.value =
+    false;
+
+  isFlowManuallyPaused.value = false;
+
+  flowMessage.value =
+    "Simulação iniciada.";
 }
 
 function clearFlowVisuals(keepFlowState = false) {
@@ -13432,6 +14158,71 @@ function chunk<T>(items: T[], size: number) {
 .manual-reset-button:focus-visible {
   outline: 2px solid #ff8a80;
   outline-offset: 2px;
+}
+
+.flow-preparation-status {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 10px;
+
+  border: 1px solid
+    rgba(143, 211, 255, 0.25);
+  border-radius: 7px;
+
+  background: rgba(7, 19, 26, 0.58);
+}
+
+.flow-preparation-status__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+
+  color: #dbe9f1;
+  font-size: 0.73rem;
+  font-weight: 800;
+}
+
+.flow-preparation-status__header strong {
+  color: #8fd3ff;
+  font-size: 0.76rem;
+}
+
+.flow-preparation-progress {
+  width: 100%;
+  height: 9px;
+  overflow: hidden;
+
+  border-radius: 999px;
+
+  background: rgba(
+    255,
+    255,
+    255,
+    0.11
+  );
+}
+
+.flow-preparation-progress__fill {
+  width: 0;
+  height: 100%;
+
+  border-radius: inherit;
+
+  background: #ffb300;
+
+  transition:
+    width 180ms ease,
+    background-color 180ms ease;
+}
+
+.flow-preparation-progress__fill--ready {
+  background: #66bb6a;
+}
+
+.flow-preparation-progress__fill--error {
+  background: #ff5252;
 }
 
 @media (max-width: 820px) {
