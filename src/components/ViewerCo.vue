@@ -1485,6 +1485,29 @@
         </button>
 
         <button
+  type="button"
+  :class="{
+    'saved-route-simulation-button--active':
+      isRouteSelectedForSimulation(
+        route.id
+      )
+  }"
+  @click="
+    toggleRouteForSimulation(
+      route.id
+    )
+  "
+>
+  {{
+    isRouteSelectedForSimulation(
+      route.id
+    )
+      ? 'Na simulação'
+      : 'Simular'
+  }}
+</button>
+
+        <button
           v-if="!route.locked"
           type="button"
           @click="deleteSavedRoute(route.id)"
@@ -2887,6 +2910,10 @@ const mepElements = reactive<Record<string, MepElement>>({});
 const savedRoutes = reactive<SavedRoute[]>([]);
 const savedRouteGroups =
   reactive<SavedRouteGroup[]>([]);
+const selectedRouteIdsForSimulation =
+  reactive<Set<string>>(
+    new Set(),
+  );
 const selectedRouteIdsForGrouping =
   reactive<Set<string>>(new Set());
 const isRouteGroupDialogOpen = ref(false);
@@ -4087,7 +4114,22 @@ const hiddenIds = allIds.filter((localId) =>
 );
 
 const ids = allIds.filter(
-  (localId) => !isNodeHiddenBySavedRouteVisibility({ modelId, localId }),
+  (localId) => {
+    const node: FlowNode = {
+      modelId,
+      localId,
+    };
+
+    return (
+      !isNodeHiddenBySavedRouteVisibility(
+        node,
+      ) &&
+      shouldIncludeNodeInRouteSimulation(
+        temperature,
+        node,
+      )
+    );
+  },
 );
 
 if (hiddenIds.length) {
@@ -10680,6 +10722,102 @@ function getSavedRouteGroupColor(
   );
 }
 
+function shouldIncludeNodeInRouteSimulation(
+  circuit: PipeCircuit,
+  node: FlowNode,
+) {
+  if (
+    selectedRouteIdsForSimulation.size === 0
+  ) {
+    return true;
+  }
+
+  return savedRoutes.some(
+    (route) =>
+      selectedRouteIdsForSimulation.has(
+        route.id,
+      ) &&
+      route.temperature === circuit &&
+      !route.hidden &&
+      routeContainsAdaptedNode(
+        route,
+        node,
+      ),
+  );
+}
+
+async function toggleRouteForSimulation(
+  routeId: string,
+) {
+  isFlowing.value = false;
+
+  isManualFlowAnimationRunning.value =
+    false;
+
+  isCentralSimulationRunning.value =
+    false;
+
+  isFlowManuallyPaused.value = false;
+
+  if (
+    selectedRouteIdsForSimulation.has(
+      routeId,
+    )
+  ) {
+    selectedRouteIdsForSimulation.delete(
+      routeId,
+    );
+  } else {
+    selectedRouteIdsForSimulation.add(
+      routeId,
+    );
+  }
+
+  flowMessage.value =
+    selectedRouteIdsForSimulation.size > 0
+      ? "A preparar os percursos selecionados."
+      : "A preparar todos os percursos.";
+
+  await rebuildManualFlowLayer();
+
+  if (
+    hasFlowPreparationError.value ||
+    !pipeParticles.length ||
+    !isFlowAnimationReady.value
+  ) {
+    flowMessage.value =
+      "Não foi possível iniciar a simulação dos percursos selecionados.";
+
+    return;
+  }
+
+  isFlowing.value = true;
+
+  isManualFlowAnimationRunning.value =
+    true;
+
+  isCentralSimulationRunning.value =
+    false;
+
+  isFlowManuallyPaused.value = false;
+
+  flowMessage.value =
+    selectedRouteIdsForSimulation.size > 0
+      ? selectedRouteIdsForSimulation.size +
+        " percurso(s) em simulação."
+      : "Todos os percursos em simulação.";
+}
+
+function isRouteSelectedForSimulation(
+  routeId: string,
+) {
+  return (
+    selectedRouteIdsForSimulation.has(
+      routeId,
+    )
+  );
+}
+
 function toggleRouteSelectionForGrouping(
   routeId: string,
 ) {
@@ -11629,52 +11767,125 @@ function applySavedRouteDirectionPaths(
   );
 
   for (const key of routeNodeKeys) {
-    automaticDirectionNeighbors.delete(key);
+    automaticDirectionNeighbors.delete(
+      key,
+    );
   }
+
+  const directedEdges =
+    new Set<string>();
+
+  const rejectedReverseEdges =
+    new Set<string>();
 
   for (const path of directionPaths) {
     for (
       let nodeIndex = 0;
-      nodeIndex < path.length;
+      nodeIndex < path.length - 1;
       nodeIndex++
     ) {
-      const node = path[nodeIndex];
+      const currentNode =
+        path[nodeIndex];
 
-      const previous =
-        nodeIndex > 0
-          ? path[nodeIndex - 1]
-          : null;
+      const nextNode =
+        path[nodeIndex + 1];
 
-      const next =
-        nodeIndex < path.length - 1
-          ? path[nodeIndex + 1]
-          : null;
+      const currentNodeKey =
+        nodeKey(currentNode);
 
-      const key =
+      const nextNodeKey =
+        nodeKey(nextNode);
+
+      const edgeKey =
+        currentNodeKey +
+        "->" +
+        nextNodeKey;
+
+      const reverseEdgeKey =
+        nextNodeKey +
+        "->" +
+        currentNodeKey;
+
+      if (
+        directedEdges.has(
+          reverseEdgeKey,
+        )
+      ) {
+        rejectedReverseEdges.add(
+          edgeKey,
+        );
+
+        continue;
+      }
+
+      directedEdges.add(
+        edgeKey,
+      );
+
+      const currentDirectionKey =
         automaticDirectionKey(
           route.temperature,
-          node,
+          currentNode,
         );
 
-      const existing =
-        automaticDirectionNeighbors.get(
-          key,
+      const nextDirectionKey =
+        automaticDirectionKey(
+          route.temperature,
+          nextNode,
         );
+
+      const currentDirection =
+        automaticDirectionNeighbors.get(
+          currentDirectionKey,
+        ) ?? {
+          previous: null,
+          next: null,
+        };
+
+      const nextDirection =
+        automaticDirectionNeighbors.get(
+          nextDirectionKey,
+        ) ?? {
+          previous: null,
+          next: null,
+        };
+
+      if (!currentDirection.next) {
+        currentDirection.next = {
+          modelId:
+            nextNode.modelId,
+          localId:
+            nextNode.localId,
+        };
+      }
+
+      if (!nextDirection.previous) {
+        nextDirection.previous = {
+          modelId:
+            currentNode.modelId,
+          localId:
+            currentNode.localId,
+        };
+      }
 
       automaticDirectionNeighbors.set(
-        key,
-        {
-          previous:
-            existing?.previous ??
-            previous,
+        currentDirectionKey,
+        currentDirection,
+      );
 
-          next:
-            next ??
-            existing?.next ??
-            null,
-        },
+      automaticDirectionNeighbors.set(
+        nextDirectionKey,
+        nextDirection,
       );
     }
+  }
+
+  if (rejectedReverseEdges.size > 0) {
+    console.warn(
+      "Foram ignoradas ligações com sentidos contraditórios no percurso:",
+      route.name,
+      [...rejectedReverseEdges],
+    );
   }
 }
 
@@ -11722,6 +11933,59 @@ async function applyAndSaveSavedRouteDirection() {
       savedRouteDirectionStarts.value,
       savedRouteDirectionEnds.value,
     );
+
+    const directedEdges =
+    new Set<string>();
+
+  const conflictingEdges =
+    new Set<string>();
+
+  for (const path of directionPaths) {
+    for (
+      let nodeIndex = 0;
+      nodeIndex < path.length - 1;
+      nodeIndex++
+    ) {
+      const currentNode =
+        path[nodeIndex];
+
+      const nextNode =
+        path[nodeIndex + 1];
+
+      const edgeKey =
+        nodeKey(currentNode) +
+        "->" +
+        nodeKey(nextNode);
+
+      const reverseEdgeKey =
+        nodeKey(nextNode) +
+        "->" +
+        nodeKey(currentNode);
+
+      if (
+        directedEdges.has(
+          reverseEdgeKey,
+        )
+      ) {
+        conflictingEdges.add(
+          edgeKey,
+        );
+
+        continue;
+      }
+
+      directedEdges.add(
+        edgeKey,
+      );
+    }
+  }
+
+  if (conflictingEdges.size > 0) {
+    flowMessage.value =
+      "Não foi possível guardar o sentido porque alguns ramos usam os mesmos tubos em sentidos opostos. Revê os inícios e os fins definidos.";
+
+    return;
+  }
 
   if (!directionPaths.length) {
     flowMessage.value =
