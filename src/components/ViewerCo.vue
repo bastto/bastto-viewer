@@ -2891,6 +2891,9 @@ let world: any;
 let serializer: FRAGS.IfcImporter;
 let fragmentManager: OBC.FragmentsManager;
 let modelHighlighter: OBCF.Highlighter;
+
+const persistentCircuitHighlightStyles =
+  new Set<string>();
 let bimGridPanel: HTMLElement | null = null;
 let bimGridViewport: HTMLElement | null = null;
 let fragmentBytes: ArrayBuffer | null = null;
@@ -3218,66 +3221,60 @@ function toggleIfcPanelCollapsed() {
 }
 
 async function restoreSelectedCircuitColors(
-  previousSelection: SelectionMap,
+  _previousSelection: SelectionMap,
 ) {
-    if (
+  if (
     isApplyingSavedRouteHighlight.value ||
     highlightedSavedRouteId.value
   ) {
     return;
   }
 
-  const idsByCircuitAndModel = new Map<
-    string,
-    {
-      circuit: PipeCircuit;
-      modelId: string;
-      localIds: number[];
-    }
-  >();
+  const idsByCircuitAndModel =
+    new Map<
+      string,
+      {
+        circuit: PipeCircuit;
+        modelId: string;
+        localIds: number[];
+      }
+    >();
 
   for (
-    const [modelId, localIds] of
-      previousSelection
+    const circuit of
+      getAllKnownCircuitKeys()
   ) {
-    for (const localId of localIds) {
-      const node: FlowNode = {
-        modelId,
-        localId,
-      };
+    const assignmentMap =
+      manualAssignments[circuit];
 
-      const circuit =
-        getNodeTemperature(node);
+    if (!assignmentMap) {
+      continue;
+    }
 
-      if (
-        !circuit ||
-        !shouldShowCircuitInSimulation(
-          circuit,
-        )
-      ) {
-        continue;
-      }
+    if (
+      !shouldShowCircuitInSimulation(
+        circuit,
+      )
+    ) {
+      continue;
+    }
 
-      const groupKey =
-        circuit + "|" + modelId;
-
-      const existingGroup =
-        idsByCircuitAndModel.get(groupKey);
-
-      if (existingGroup) {
-        existingGroup.localIds.push(
-          localId,
-        );
-
+    for (
+      const [modelId, localIds] of
+        assignmentMap
+    ) {
+      if (!localIds.size) {
         continue;
       }
 
       idsByCircuitAndModel.set(
-        groupKey,
+        circuit + "|" + modelId,
         {
           circuit,
           modelId,
-          localIds: [localId],
+          localIds: [
+            ...localIds,
+          ],
         },
       );
     }
@@ -3293,64 +3290,78 @@ async function restoreSelectedCircuitColors(
     const model =
       loadedModels.get(modelId);
 
-    if (!model || !localIds.length) {
+    if (
+      !model ||
+      !localIds.length
+    ) {
       continue;
     }
 
     const idsByColor =
-  new Map<string, number[]>();
+      new Map<string, number[]>();
 
-for (const localId of localIds) {
-  const node: FlowNode = {
-    modelId,
-    localId,
-  };
+    for (const localId of localIds) {
+      const node: FlowNode = {
+        modelId,
+        localId,
+      };
 
-  const visibleRoute =
-    savedRoutes.find(
-      (route) =>
-        !route.hidden &&
-        route.temperature === circuit &&
-        routeContainsAdaptedNode(
-          route,
-          node,
+      const visibleRoute =
+        savedRoutes.find(
+          (route) =>
+            !route.hidden &&
+            route.temperature ===
+              circuit &&
+            routeContainsAdaptedNode(
+              route,
+              node,
+            ),
+        );
+
+      const color =
+        visibleRoute
+          ? getSavedRouteGroupColor(
+              visibleRoute,
+            )
+          : getCircuitColorStyle(
+              circuit,
+            );
+
+      const colorIds =
+        idsByColor.get(color) ?? [];
+
+      colorIds.push(localId);
+
+      idsByColor.set(
+        color,
+        colorIds,
+      );
+    }
+
+    for (
+      const [color, colorLocalIds] of
+        idsByColor
+    ) {
+      await model.highlight(
+        colorLocalIds,
+        createHighlight(
+          Number(
+            color.replace(
+              "#",
+              "0x",
+            ),
+          ),
+          circuit +
+            "-persistent-" +
+            color,
         ),
-    );
-
-  const color = visibleRoute
-    ? getSavedRouteGroupColor(
-        visibleRoute,
-      )
-    : getCircuitColorStyle(circuit);
-
-  const colorIds =
-    idsByColor.get(color) ?? [];
-
-  colorIds.push(localId);
-
-  idsByColor.set(
-    color,
-    colorIds,
-  );
-}
-
-for (
-  const [color, colorLocalIds] of
-    idsByColor
-) {
-  await model.highlight(
-    colorLocalIds,
-    createHighlight(
-      Number(
-        color.replace("#", "0x"),
-      ),
-      circuit + "-restore-" + color,
-    ),
-  );
-}
+      );
+    }
   }
 
-  await fragmentManager.core.update(true);
+  await fragmentManager.core.update(
+    true,
+  );
 }
 
 function resetAllManualConfiguration() {
@@ -3959,7 +3970,13 @@ async function rebuildManualFlowLayer() {
 
         setCurrentProgress(10);
 
-    await reapplyAllSavedRouteDirections();
+        await reapplyAllSavedRouteDirections();
+
+    if (!isCurrentRun()) {
+      return;
+    }
+
+    await clearPersistentCircuitHighlights();
 
     if (!isCurrentRun()) {
       return;
@@ -4183,14 +4200,17 @@ for (
   const [color, colorLocalIds] of
     idsByColor
 ) {
-  await model.highlight(
+  const persistentStyleName =
+    "persistent-circuit-" +
+    temperature +
+    "-" +
+    color.replace("#", "");
+
+  await applyPersistentCircuitHighlight(
+    persistentStyleName,
+    color,
+    modelId,
     colorLocalIds,
-    createHighlight(
-      Number(
-        color.replace("#", "0x"),
-      ),
-      temperature + "-" + color,
-    ),
   );
 }
 
@@ -4904,79 +4924,11 @@ function stopFlowForSavedRouteHighlight() {
 async function clearFlowVisualsForRouteHighlight() {
   stopFlowForSavedRouteHighlight();
 
-  const idsByModel =
-    new Map<string, Set<number>>();
+  await clearPersistentCircuitHighlights();
 
-  function addNode(
-    modelId: string,
-    localId: number,
-  ) {
-    const modelIds =
-      idsByModel.get(modelId) ??
-      new Set<number>();
-
-    modelIds.add(localId);
-
-    idsByModel.set(
-      modelId,
-      modelIds,
-    );
-  }
-
-  // Recolher todos os elementos atribuídos aos circuitos.
-  for (const circuit of getAllKnownCircuitKeys()) {
-    const assignmentMap =
-      manualAssignments[circuit];
-
-    if (!assignmentMap) {
-      continue;
-    }
-
-    for (
-      const [modelId, localIds] of
-        assignmentMap
-    ) {
-      for (const localId of localIds) {
-        addNode(modelId, localId);
-      }
-    }
-  }
-
-  // Recolher também todos os elementos
-  // existentes nos caminhos guardados.
-  for (const route of savedRoutes) {
-    for (const node of route.path) {
-      addNode(
-        node.modelId,
-        node.localId,
-      );
-    }
-  }
-
-  // Remover as cores de todos os elementos.
-  for (
-    const [modelId, localIds] of
-      idsByModel
-  ) {
-    const model = loadedModels.get(modelId);
-
-    if (!model || !localIds.size) {
-      continue;
-    }
-
-    await model.resetHighlight(
-      [...localIds],
-    );
-  }
-
-  // Forçar a atualização antes de aplicar o azul.
-  await fragmentManager.core.update(true);
-
-  await new Promise<void>((resolve) => {
-    requestAnimationFrame(() => {
-      resolve();
-    });
-  });
+  await fragmentManager.core.update(
+    true,
+  );
 }
 
 function getSavedRouteHighlightModelIdMap(
@@ -12596,6 +12548,79 @@ function flattenItemText(value: unknown): string {
       .join(" ");
   }
   return String(value);
+}
+
+async function clearPersistentCircuitHighlights() {
+  if (!modelHighlighter) {
+    return;
+  }
+
+  const styleNames = [
+    ...persistentCircuitHighlightStyles,
+  ];
+
+  for (const styleName of styleNames) {
+    await modelHighlighter.clear(
+      styleName,
+    );
+  }
+
+  persistentCircuitHighlightStyles.clear();
+
+  await fragmentManager.core.update(
+    true,
+  );
+}
+
+async function applyPersistentCircuitHighlight(
+  styleName: string,
+  color: string,
+  modelId: string,
+  localIds: number[],
+) {
+  if (
+    !modelHighlighter ||
+    localIds.length === 0
+  ) {
+    return;
+  }
+
+  if (
+    !modelHighlighter.styles.has(
+      styleName,
+    )
+  ) {
+    modelHighlighter.styles.set(
+      styleName,
+      {
+        color: new THREE.Color(
+          color,
+        ),
+        opacity: 0.9,
+        transparent: true,
+        renderedFaces:
+          FRAGS.RenderedFaces.TWO,
+      },
+    );
+  }
+
+  persistentCircuitHighlightStyles.add(
+    styleName,
+  );
+
+  const modelIdMap:
+  Record<string, Set<number>> = {};
+
+modelIdMap[modelId] =
+  new Set<number>(
+    localIds,
+  );
+
+  await modelHighlighter.highlightByID(
+    styleName,
+    modelIdMap,
+    false,
+  );
 }
 
 function createHighlight(color: number, customId: string): FRAGS.MaterialDefinition {
