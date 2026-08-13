@@ -10,6 +10,19 @@
   <div ref="containerRef" class="full-screen">
 
   <div
+  v-if="selectedTubeRouteInfo"
+  class="selected-tube-route-banner"
+>
+  <span class="selected-tube-route-banner__label">
+    Percurso do elemento selecionado
+  </span>
+
+  <strong>
+    {{ selectedTubeRouteInfo }}
+  </strong>
+</div>
+
+  <div
   v-if="isRouteGroupDialogOpen"
   class="route-group-dialog-backdrop"
 >
@@ -2541,6 +2554,8 @@ const savedRouteDirectionEnds =
 const isCentralSummaryOpen = ref(false);
 const selectedCount = ref(0);
 const selectedMepElementInfo = ref("Nenhum elemento classificado selecionado.");
+const selectedTubeRouteInfo =
+  ref("");
 const selectedIfcDetailsText = ref("");
 const isIfcDetailsPanelOpen = ref(false);
 const isAutomaticAnalysisRunning = ref(false);
@@ -3477,6 +3492,8 @@ updatePropertiesTable({ modelIdMap });
 
 await showSelectedMepElementInfo();
 
+updateSelectedTubeRouteInfo();
+
 addSelectedNodeToManualRoute();
 
 if (isManualRouteRecording.value && manualRouteNodes.length > 0) {
@@ -3509,6 +3526,8 @@ highlighter.events.select.onClear.add(
 
     selectedMepElementInfo.value =
       "Nenhum elemento classificado selecionado.";
+
+    selectedTubeRouteInfo.value = "";
 
     updatePropertiesTable({
       modelIdMap: {},
@@ -14329,6 +14348,51 @@ function isPipeBlockedForRoute(routeId: string, node: FlowNode) {
   return blockedRoutePipes.has(routeBlockedPipeKey(routeId, node));
 }
 
+function updateSelectedTubeRouteInfo() {
+  const selectedNode =
+    getFirstSelectedNode();
+
+  if (!selectedNode) {
+    selectedTubeRouteInfo.value = "";
+
+    return;
+  }
+
+  const routesWithSelectedNode =
+    savedRoutes.filter(
+      (route) =>
+        routeContainsAdaptedNode(
+          route,
+          selectedNode,
+        ),
+    );
+
+  if (
+    routesWithSelectedNode.length === 0
+  ) {
+    selectedTubeRouteInfo.value =
+      "O elemento selecionado não pertence a nenhum percurso guardado.";
+
+    return;
+  }
+
+  const routeNames = [
+    ...new Set(
+      routesWithSelectedNode.map(
+        (route) =>
+          route.name,
+      ),
+    ),
+  ];
+
+  selectedTubeRouteInfo.value =
+    routeNames.length === 1
+      ? routeNames[0]
+      : routeNames.length +
+        " percursos: " +
+        routeNames.join(" · ");
+}
+
 function routeContainsAdaptedNode(route: SavedRoute, node: FlowNode) {
   const loadedModelIds = [...loadedModels.keys()];
   const fallbackModelId = loadedModelIds[0];
@@ -16413,5 +16477,47 @@ function chunk<T>(items: T[], size: number) {
 .valve-management-list::-webkit-scrollbar-thumb {
   border-radius: 999px;
   background: rgba(143, 211, 255, 0.55);
+}
+
+.selected-tube-route-banner {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  width: max-content;
+  max-width: min(
+    42rem,
+    calc(100vw - 4rem)
+  );
+  padding: 0.7rem 1rem;
+  border: 1px solid
+    rgba(143, 211, 255, 0.7);
+  border-radius: 0.6rem;
+  background:
+    rgba(13, 22, 28, 0.94);
+  box-shadow:
+    0 0.5rem 1.5rem
+    rgba(0, 0, 0, 0.35);
+  color: #ffffff;
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.selected-tube-route-banner__label {
+  color: #8fd3ff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.selected-tube-route-banner strong {
+  font-size: 0.95rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 </style>
