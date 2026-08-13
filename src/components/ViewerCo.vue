@@ -1433,6 +1433,18 @@
   Definir sentido
 </button>
 
+<button
+  v-if="!route.locked"
+  type="button"
+  @click="
+    syncSelectedPipesForSavedRoute(
+      route
+    )
+  "
+>
+  Sincronizar sentido
+</button>
+
         <button
           v-if="!route.locked"
           type="button"
@@ -4633,6 +4645,7 @@ function saveAutomaticRoutes() {
   if (!automaticOrderedCircuitNodes.size) {
     flowMessage.value =
       "Cria primeiro os caminhos automáticos.";
+
     return;
   }
 
@@ -4648,27 +4661,49 @@ function saveAutomaticRoutes() {
     }
 
     const circuit =
-      getCycleCircuitDefinition(circuitKey);
+      getCycleCircuitDefinition(
+        circuitKey,
+      );
 
     if (!circuit) {
       continue;
     }
 
-    const alreadyExists = savedRoutes.some(
-      (route) =>
-        route.temperature === circuitKey &&
-        route.path.length === orderedNodes.length &&
-        route.path.every(
-          (node, index) =>
-            isSameNode(
-              node,
-              orderedNodes[index],
-            ),
+    const automaticNodeKeys =
+      new Set(
+        orderedNodes.map(
+          (node) =>
+            nodeKey({
+              modelId: node.modelId,
+              localId: node.localId,
+            }),
         ),
-    );
+      );
 
-    if (alreadyExists) {
+    const existingRoute =
+      savedRoutes.find(
+        (route) => {
+          if (
+            route.temperature !==
+              circuitKey ||
+            route.path.length !==
+              orderedNodes.length
+          ) {
+            return false;
+          }
+
+          return route.path.every(
+            (node) =>
+              automaticNodeKeys.has(
+                nodeKey(node),
+              ),
+          );
+        },
+      );
+
+    if (existingRoute) {
       existingCount++;
+
       continue;
     }
 
@@ -4679,15 +4714,21 @@ function saveAutomaticRoutes() {
 
     savedRoutes.push({
       id: crypto.randomUUID(),
+
       name:
         circuit.name +
         " - Caminho " +
         routeNumber,
+
       temperature: circuitKey,
-      path: orderedNodes.map((node) => ({
-        modelId: node.modelId,
-        localId: node.localId,
-      })),
+
+      path: orderedNodes.map(
+        (node) => ({
+          modelId: node.modelId,
+          localId: node.localId,
+        }),
+      ),
+
       hidden: false,
       locked: false,
     });
@@ -4701,7 +4742,7 @@ function saveAutomaticRoutes() {
     savedCount +
     " caminho(s) automático(s) guardado(s). " +
     existingCount +
-    " já estavam guardado(s).";
+    " caminho(s) existente(s) mantido(s) com a respetiva configuração.";
 }
 
 function saveCurrentRoute() {
@@ -8995,6 +9036,134 @@ async function showSelectedFlowArrows() {
   flowMessage.value = shownCount
     ? `${shownCount} elemento(s) voltaram a mostrar setas.`
     : "Os elementos selecionados já mostravam setas.";
+}
+
+async function syncSelectedPipesForSavedRoute(
+  route: SavedRoute,
+) {
+  if (route.locked) {
+    flowMessage.value =
+      'O percurso "' +
+      route.name +
+      '" está protegido. Desprotege primeiro.';
+
+    return;
+  }
+
+  if (!selectedCount.value) {
+    flowMessage.value =
+      "Seleciona primeiro um ou mais tubos desse percurso.";
+
+    return;
+  }
+
+  let changedCount = 0;
+  let ignoredCount = 0;
+
+  for (
+    const [modelId, localIds] of
+      selectedItems
+  ) {
+    const syncedSet =
+      getSyncedDirectionSet(
+        modelId,
+      );
+
+    for (const localId of localIds) {
+      const node: FlowNode = {
+        modelId,
+        localId,
+      };
+
+      if (
+        !routeContainsAdaptedNode(
+          route,
+          node,
+        )
+      ) {
+        ignoredCount++;
+
+        continue;
+      }
+
+      if (syncedSet.has(localId)) {
+        syncedSet.delete(localId);
+      } else {
+        syncedSet.add(localId);
+      }
+
+      toggleReversedPipeDirection(
+        modelId,
+        localId,
+      );
+
+      changedCount++;
+    }
+
+    if (syncedSet.size === 0) {
+      syncedPipeDirections.delete(
+        modelId,
+      );
+    }
+  }
+
+  if (!changedCount) {
+    flowMessage.value =
+      ignoredCount > 0
+        ? "Os tubos selecionados não pertencem a este percurso."
+        : "Nenhum tubo foi sincronizado.";
+
+    return;
+  }
+
+  saveSyncedPipeDirectionsToStorage();
+  saveReversedDirectionsToStorage();
+
+  selectedRouteIdsForSimulation.add(
+    route.id,
+  );
+
+  isFlowing.value = false;
+
+  isManualFlowAnimationRunning.value =
+    false;
+
+  isCentralSimulationRunning.value =
+    false;
+
+  isFlowManuallyPaused.value = false;
+
+  await rebuildManualFlowLayer();
+
+  if (
+    !hasFlowPreparationError.value &&
+    isFlowAnimationReady.value &&
+    pipeParticles.length > 0
+  ) {
+    isFlowing.value = true;
+
+    isManualFlowAnimationRunning.value =
+      true;
+
+    isCentralSimulationRunning.value =
+      false;
+
+    isFlowManuallyPaused.value = false;
+  }
+
+  flowMessage.value =
+    changedCount +
+    " tubo(s) sincronizado(s) no percurso " +
+    '"' +
+    route.name +
+    '".' +
+    (
+      ignoredCount > 0
+        ? " " +
+          ignoredCount +
+          " elemento(s) ignorado(s) por não pertencerem ao percurso."
+        : ""
+    );
 }
 
 async function reverseSelectedPipesDirection() {
