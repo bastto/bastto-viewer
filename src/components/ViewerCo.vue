@@ -10,6 +10,212 @@
   <div ref="containerRef" class="full-screen">
 
   <div
+  v-if="isAutomaticValveAssociationPreviewOpen"
+  class="automatic-valve-preview-backdrop"
+>
+  <div class="automatic-valve-preview-dialog">
+    <div class="automatic-valve-preview-header">
+      <div>
+        <p class="flow-panel__eyebrow">
+          Associação automática
+        </p>
+
+        <h2>
+          Rever associações das válvulas
+        </h2>
+      </div>
+
+      <button
+        type="button"
+        class="section-collapse-button"
+        @click="
+          closeAutomaticValveAssociationPreview
+        "
+      >
+        ×
+      </button>
+    </div>
+
+    <p class="connection-note">
+      Confirma apenas as propostas corretas.
+      Nenhuma associação foi ainda guardada.
+    </p>
+
+    <div
+      class="flow-actions flow-actions--secondary"
+    >
+      <button
+        type="button"
+        @click="
+          selectAllSafeValveAssociationPreviews
+        "
+      >
+        Selecionar propostas seguras
+      </button>
+
+      <button
+        type="button"
+        @click="
+          clearAutomaticValveAssociationPreviewSelection
+        "
+      >
+        Desmarcar todas
+      </button>
+    </div>
+
+    <p class="connection-note">
+      Propostas selecionadas:
+      {{
+        getAcceptedAutomaticValvePreviewCount()
+      }}
+    </p>
+
+    <div class="automatic-valve-preview-list">
+      <article
+        v-for="
+          preview in
+          automaticValveAssociationPreviews
+        "
+        :key="preview.valveKey"
+        class="automatic-valve-preview-item"
+        :class="{
+          'automatic-valve-preview-item--safe':
+            preview.status === 'safe',
+          'automatic-valve-preview-item--warning':
+            preview.status !== 'safe',
+          'automatic-valve-preview-item--accepted':
+            preview.accepted
+        }"
+      >
+        <label
+          class="automatic-valve-preview-selection"
+        >
+          <input
+            type="checkbox"
+            :checked="preview.accepted"
+            :disabled="
+              preview.status !== 'safe'
+            "
+            @change="
+              toggleAutomaticValvePreviewAcceptance(
+                preview
+              )
+            "
+          />
+
+          <strong>
+            {{ preview.valveLabel }}
+          </strong>
+        </label>
+
+        <dl class="automatic-valve-preview-details">
+          <div>
+            <dt>Tipo normal</dt>
+
+            <dd>
+              {{ preview.normalStateLabel }}
+            </dd>
+          </div>
+
+          <div>
+            <dt>Estado atual</dt>
+
+            <dd>
+              {{ preview.currentStateLabel }}
+            </dd>
+          </div>
+
+          <div>
+            <dt>Percurso proposto</dt>
+
+            <dd>
+              {{ preview.routeName }}
+            </dd>
+          </div>
+
+          <div>
+            <dt>Distância</dt>
+
+            <dd>
+              {{
+                preview.distance === null
+                  ? 'não calculada'
+                  : preview.distance.toFixed(3) +
+                    ' m'
+              }}
+            </dd>
+          </div>
+
+          <div>
+            <dt>Tubos a jusante</dt>
+
+            <dd>
+              {{ preview.downstreamPipeCount }}
+            </dd>
+          </div>
+
+          <div>
+            <dt>Resultado</dt>
+
+            <dd>
+              {{
+                getAutomaticValvePreviewStatusLabel(
+                  preview.status
+                )
+              }}
+            </dd>
+          </div>
+        </dl>
+
+        <div
+  class="flow-actions flow-actions--single"
+>
+  <button
+    type="button"
+    :disabled="
+      !preview.routeId ||
+      !preview.closestNode
+    "
+    @click="
+      highlightAutomaticValveAssociationPreview(
+        preview
+      )
+    "
+  >
+    Realçar proposta no modelo
+  </button>
+</div>
+      </article>
+    </div>
+
+    <div
+      class="flow-actions flow-actions--secondary"
+    >
+      <button
+        type="button"
+        @click="
+          closeAutomaticValveAssociationPreview
+        "
+      >
+        Cancelar
+      </button>
+
+      <button
+  type="button"
+  :disabled="
+    getAcceptedAutomaticValvePreviewCount() === 0
+  "
+  @click="
+    confirmAutomaticValveAssociationPreviews
+  "
+>
+  Confirmar associações selecionadas
+</button>
+    </div>
+  </div>
+</div>
+
+  <div
   v-if="selectedTubeRouteInfo"
   class="selected-tube-route-banner"
 >
@@ -30,16 +236,21 @@
     <div class="route-group-dialog__header">
       <div>
         <p class="flow-panel__eyebrow">
-          Agrupamento manual
-        </p>
+  {{
+    editingRouteGroupId
+      ? 'Edição de grupo'
+      : 'União de percursos'
+  }}
+</p>
 
        <h2>
   {{
     editingRouteGroupId
       ? 'Editar grupo de percursos'
-      : 'Agrupar percursos'
+      : 'Unir percursos'
   }}
-</h2> 
+</h2>
+
       </div>
 
       <button
@@ -52,7 +263,13 @@
     </div>
 
     <label class="route-group-dialog__field">
-      <span>Nome do grupo</span>
+      <span>
+  {{
+    editingRouteGroupId
+      ? 'Nome do grupo'
+      : 'Nome do novo percurso'
+  }}
+</span>
 
       <input
         v-model="pendingRouteGroupName"
@@ -61,7 +278,13 @@
     </label>
 
     <label class="route-group-dialog__field">
-      <span>Cor comum dos caminhos</span>
+      <span>
+  {{
+    editingRouteGroupId
+      ? 'Cor comum dos caminhos'
+      : 'Cor do novo percurso'
+  }}
+</span>
 
       <div class="route-group-color-control">
         <input
@@ -78,8 +301,12 @@
         ></span>
 
         <strong>
-          Esta será a cor dos caminhos.
-        </strong>
+  {{
+    editingRouteGroupId
+      ? 'Esta será a cor dos caminhos.'
+      : 'Esta será a cor do novo percurso.'
+  }}
+</strong>
       </div>
     </label>
 
@@ -91,11 +318,12 @@
   </template>
 
   <template v-else>
-    Serão agrupados
-    {{ selectedRouteIdsForGrouping.size }}
-    caminhos. Ao retirar um caminho do grupo,
-    a respetiva cor original será reposta.
-  </template>
+  Serão unidos
+  {{ selectedRouteIdsForGrouping.size }}
+  percursos num único percurso. Os tubos
+  repetidos serão incluídos apenas uma vez.
+  Poderás desfazer a união posteriormente.
+</template>
 </p>
 
     <div class="flow-actions flow-actions--secondary">
@@ -112,10 +340,10 @@
   @click="saveRouteGroupChanges"
 >
   {{
-    editingRouteGroupId
-      ? 'Guardar alterações'
-      : 'Confirmar agrupamento'
-  }}
+  editingRouteGroupId
+    ? 'Guardar alterações'
+    : 'Unir percursos'
+}}
 </button>
     </div>
   </div>
@@ -376,7 +604,7 @@
     ]"
     @click="activeApplicationTab = 'automatic'"
   >
-    Análise automática
+    Análise Automática
   </button>
 
   <button
@@ -695,7 +923,7 @@
   </div>
 </section>
       <section
-  v-if="activeApplicationTab === 'manual'"
+  v-if="false"
   class="flow-panel"
   :class="{ 'flow-panel--minimized': isElementPanelMinimized }"
   aria-label="Element classification controls"
@@ -904,6 +1132,121 @@
       </section>
 
 <section
+  v-if="
+    activeApplicationTab === 'manual'
+  "
+  :class="[
+    'flow-panel',
+    {
+      'flow-panel--minimized':
+        isIfcInformationPanelMinimized
+    }
+  ]"
+  aria-label="Dados IFC do elemento selecionado"
+>
+  <div class="flow-panel__header">
+    <div>
+      <p class="flow-panel__eyebrow">
+        Elemento selecionado
+      </p>
+
+      <h2>
+        Dados IFC
+      </h2>
+    </div>
+
+    <button
+      type="button"
+      class="flow-panel__toggle"
+      @click="
+        toggleIfcInformationPanelMinimized
+      "
+    >
+      {{
+        isIfcInformationPanelMinimized
+          ? '+'
+          : '−'
+      }}
+    </button>
+  </div>
+
+  <div
+    v-if="
+      !isIfcInformationPanelMinimized
+    "
+    class="flow-panel__content"
+  >
+    <p class="selection-count">
+      Selecionados:
+      {{ selectedCount }}
+    </p>
+
+    <div class="selected-mep-info">
+      {{ selectedMepElementInfo }}
+    </div>
+
+    <p class="connection-note">
+      Seleciona um elemento no modelo para
+      consultar os respetivos dados IFC.
+    </p>
+
+    <div
+      class="
+        flow-actions
+        flow-actions--single
+      "
+    >
+      <button
+        type="button"
+        :disabled="
+          selectedCount === 0
+        "
+        @click="
+          extractSelectedIfcInformation
+        "
+      >
+        Extrair dados IFC do selecionado
+      </button>
+    </div>
+
+    <div
+      v-if="selectedIfcDetailsText"
+      class="
+        flow-section-title
+        flow-section-title--button
+      "
+    >
+      <span>
+        Dados IFC extraídos
+      </span>
+
+      <button
+        type="button"
+        class="section-collapse-button"
+        @click="
+          isIfcDetailsPanelOpen =
+            !isIfcDetailsPanelOpen
+        "
+      >
+        {{
+          isIfcDetailsPanelOpen
+            ? '−'
+            : '+'
+        }}
+      </button>
+    </div>
+
+    <pre
+      v-if="
+        selectedIfcDetailsText &&
+        isIfcDetailsPanelOpen
+      "
+      class="ifc-details-output"
+    >{{ selectedIfcDetailsText }}</pre>
+  </div>
+</section>
+
+<section
   v-if="activeApplicationTab === 'manual'"
   :class="['flow-panel', isFlowControlsPanelMinimized ? 'flow-panel--minimized' : '']"
   aria-label="Water flow controls"
@@ -926,9 +1269,37 @@
   <div class="flow-panel__content">
     <p class="selection-count">Selecionados: {{ selectedCount }}</p>
 
-    <div class="flow-section-title">
-  Configuração da central
+<div
+  class="
+    flow-section-title
+    flow-section-title--button
+  "
+>
+  <span>
+    Configurar ciclos e circuitos
+  </span>
+
+  <button
+    type="button"
+    class="section-collapse-button"
+    @click="
+      isCycleConfigurationSectionOpen =
+        !isCycleConfigurationSectionOpen
+    "
+  >
+    {{
+      isCycleConfigurationSectionOpen
+        ? '−'
+        : '+'
+    }}
+  </button>
 </div>
+
+<div
+  v-if="
+    isCycleConfigurationSectionOpen
+  "
+>
 
 <label class="flow-cycle-config">
   <span>Número de ciclos de água</span>
@@ -1124,6 +1495,7 @@
      <button
   v-if="isCycleCircuitColorChanged(circuit) && !circuit.locked"
   type="button"
+  class="saved-route-action--reset-color"
   @click="resetCycleCircuitColor(circuit.key)"
 >
   Repor cor
@@ -1141,33 +1513,247 @@
   </div>
 </div>
 
+</div>
+
+<div
+  class="
+    flow-section-title
+    flow-section-title--button
+  "
+>
+  <span>
+    Ações sobre tubos selecionados
+  </span>
+
+  <button
+    type="button"
+    class="section-collapse-button"
+    @click="
+      isSelectedPipeActionsSectionOpen =
+        !isSelectedPipeActionsSectionOpen
+    "
+  >
+    {{
+      isSelectedPipeActionsSectionOpen
+        ? '−'
+        : '+'
+    }}
+  </button>
+</div>
+
+<div
+  v-if="
+    isSelectedPipeActionsSectionOpen
+  "
+>
+  <p class="connection-note">
+    Estas ações atuam apenas nos tubos
+    atualmente selecionados no modelo.
+  </p>
+
     <div class="flow-actions flow-actions--secondary">
-      <button type="button" @click="clearSelectedManualAssignments">
-        Limpar marca selecionada
-      </button>
+      <button
+  type="button"
+  :disabled="
+    selectedCount === 0
+  "
+  @click="
+    clearSelectedManualAssignments
+  "
+>
+  Limpar marca selecionada
+</button>
 
       <button type="button" @click="clearManualAssignments">
-        Limpar todas as marcas
+      Limpar todas as marcações
       </button>
 
-      <button type="button" @click="reverseSelectedPipesDirection">
-        Sincronizar sentido
-      </button>
+      <button
+  type="button"
+  :disabled="
+    selectedCount === 0
+  "
+  @click="
+    reverseSelectedPipesDirection
+  "
+>
+  Sincronizar sentido
+</button>
     </div>
 
     <div class="flow-actions flow-actions--secondary">
-      <button type="button" @click="hideSelectedFlowArrows">
-        Ocultar setas
-      </button>
-
-      <button type="button" @click="showSelectedFlowArrows">
-        Mostrar setas
-      </button>
+      <button
+  type="button"
+  :disabled="
+    selectedCount === 0
+  "
+  @click="
+    hideSelectedFlowArrows
+  "
+>
+  Ocultar setas
+</button>
+      <button
+  type="button"
+  :disabled="
+    selectedCount === 0
+  "
+  @click="
+    showSelectedFlowArrows
+  "
+>
+  Mostrar setas
+</button>
+    </div>
     </div>
 
-    <div class="flow-section-title">
-  2. Criar percurso
+    <div
+  class="
+    flow-section-title
+    flow-section-title--button
+  "
+>
+  <span>
+    Editar caminho existente
+  </span>
+
+  <button
+    type="button"
+    class="section-collapse-button"
+    @click="
+      isEditRouteSectionOpen =
+        !isEditRouteSectionOpen
+    "
+  >
+    {{
+      isEditRouteSectionOpen
+        ? '−'
+        : '+'
+    }}
+  </button>
 </div>
+
+<div v-if="isEditRouteSectionOpen">
+
+<label class="flow-cycle-config">
+  <span>
+    Caminho a editar
+  </span>
+
+  <select
+  v-model="
+    selectedSavedRouteIdForEditing
+  "
+  @change="
+    highlightSavedRouteForEditing
+  "
+>
+    <option value="">
+      Selecionar caminho...
+    </option>
+
+    <option
+      v-for="route in getFilteredSavedRoutes()"
+      :key="
+        'edit-saved-route-' +
+        route.id
+      "
+      :value="route.id"
+      :disabled="route.locked"
+    >
+      {{
+        route.name +
+        (
+          route.locked
+            ? ' · protegido'
+            : ''
+        )
+      }}
+    </option>
+  </select>
+</label>
+
+<p class="connection-note">
+  Para adicionar: define primeiro o tubo novo
+  e depois um tubo do caminho como referência.
+</p>
+
+<p class="connection-note">
+  Seleciona tubos para os adicionar ou retirar
+  do caminho escolhido.
+</p>
+
+<p class="connection-note">
+  Ao adicionar tubos, o sentido atual será
+  apagado e terá de ser definido novamente.
+</p>
+
+<div
+  class="flow-actions flow-actions--single"
+>
+  <button
+    type="button"
+    :disabled="
+      !selectedSavedRouteIdForEditing ||
+      selectedCount === 0
+    "
+    @click="
+      addSelectedPipesToEditedRoute
+    "
+  >
+    Adicionar tubos selecionados ao caminho
+  </button>
+
+  <button
+    type="button"
+    :disabled="
+      !selectedSavedRouteIdForEditing ||
+      selectedCount === 0
+    "
+    @click="
+      removeSelectedPipesFromEditedRoute
+    "
+  >
+    Retirar tubos selecionados do caminho
+  </button>
+</div>
+</div>
+
+<div
+  class="
+    flow-section-title
+    flow-section-title--button
+  "
+>
+  <span>
+    Criar novo caminho
+  </span>
+
+  <button
+    type="button"
+    class="section-collapse-button"
+    @click="
+      isCreateRouteSectionOpen =
+        !isCreateRouteSectionOpen
+    "
+  >
+    {{
+      isCreateRouteSectionOpen
+        ? '−'
+        : '+'
+    }}
+  </button>
+</div>
+
+<div v-if="isCreateRouteSectionOpen">
+
+<p class="connection-note">
+  Início: {{ routeStartLabel }}
+</p>
+
+<p class="connection-note">
+  Fim: {{ routeEndLabel }}
+</p>
 
     <div class="flow-actions flow-actions--single">
   <button
@@ -1265,6 +1851,7 @@
 <p v-if="discardRouteMessage" class="discard-route-message">
   {{ discardRouteMessage }}
 </p>
+</div>
 
  <div v-if="hasLoadedModel && savedRoutes.length" class="saved-routes">
   <div class="saved-routes-header">
@@ -1285,6 +1872,41 @@
   v-if="isSavedRoutesPanelOpen"
   class="saved-route-group-actions"
 >
+
+<label class="saved-route-search">
+  <span>
+    Procurar percurso
+  </span>
+
+  <div class="saved-route-search__control">
+    <input
+      v-model="savedRouteSearchText"
+      type="search"
+      placeholder="Escreve o nome do percurso..."
+    />
+
+    <button
+      v-if="savedRouteSearchText"
+      type="button"
+      class="saved-route-search__clear"
+      title="Limpar pesquisa"
+      @click="savedRouteSearchText = ''"
+    >
+      ×
+    </button>
+  </div>
+</label>
+
+<p
+  v-if="savedRouteSearchText"
+  class="connection-note"
+>
+  {{ getFilteredSavedRoutes().length }}
+  de
+  {{ savedRoutes.length }}
+  percurso(s) encontrado(s)
+</p>
+
   <span>
     Selecionados:
     {{ selectedRouteIdsForGrouping.size }}
@@ -1318,6 +1940,18 @@
   Mover selecionados para o ciclo
 </button>
 
+<button
+  type="button"
+  :disabled="
+    selectedRouteIdsForGrouping.size !== 2
+  "
+  @click="
+    compareSelectedSavedRoutes
+  "
+>
+  Comparar percursos
+</button>
+
   <button
   type="button"
   :disabled="
@@ -1325,18 +1959,8 @@
   "
   @click="openRouteGroupingDialog"
 >
-  Agrupar percursos selecionados
+  Unir percursos selecionados
 </button>
-
-  <button
-    type="button"
-    :disabled="
-      selectedRouteIdsForGrouping.size < 1
-    "
-    @click="removeSelectedRoutesFromGroup"
-  >
-    Retirar do grupo
-  </button>
 
   <button
     type="button"
@@ -1350,10 +1974,21 @@
 </div>
 
   <div v-if="isSavedRoutesPanelOpen" class="saved-routes-list">
-    <div
-      v-for="route in savedRoutes"
-      :key="route.id"
-      class="saved-route-item"
+
+  <p
+  v-if="
+    savedRouteSearchText &&
+    getFilteredSavedRoutes().length === 0
+  "
+  class="saved-route-search__empty"
+>
+  Não foi encontrado nenhum percurso com esse nome.
+</p>
+
+  <div
+    v-for="route in getFilteredSavedRoutes()"
+    :key="route.id"
+    class="saved-route-item"
       :class="{
   'saved-route-item--locked': route.locked,  
   'saved-route-item--highlighted': highlightedSavedRouteId === route.id,
@@ -1361,21 +1996,36 @@
 }"
     >
 
-    <label class="saved-route-group-checkbox">
-  <input
-    type="checkbox"
-    :checked="
-      isRouteSelectedForGrouping(route.id)
-    "
-    @change="
-      toggleRouteSelectionForGrouping(
+    <div class="saved-route-top-line">
+  <label class="saved-route-group-checkbox">
+    <input
+      type="checkbox"
+      :checked="
+        isRouteSelectedForGrouping(
+          route.id
+        )
+      "
+      @change="
+        toggleRouteSelectionForGrouping(
+          route.id
+        )
+      "
+    />
+
+    <span>Selecionar</span>
+  </label>
+
+  <span
+    v-if="
+      isRouteSelectedForSimulation(
         route.id
       )
     "
-  />
-
-  <span>Selecionar</span>
-</label>
+    class="saved-route-simulation-status"
+    title="Percurso incluído na simulação"
+    aria-label="Percurso incluído na simulação"
+  ></span>
+</div>
 
       <div class="saved-route-select saved-route-select--details">
   <span class="saved-route-text">
@@ -1387,36 +2037,70 @@
   }"
 ></span>
           <strong>
-            <span v-if="route.locked" class="route-lock-icon">🔒</span>
-            {{ route.name }}
-          </strong>
+  <span
+    v-if="route.locked"
+    class="route-lock-icon"
+  >
+    🔒
+  </span>
+
+  <span
+    v-if="isSavedRouteBlocked(route)"
+    class="route-partial-block-icon"
+    :title="
+      'Este percurso contém tubos bloqueados por válvulas. ' +
+      getValveLabelForBlockedRoute(route)
+    "
+  >
+    ◉
+  </span>
+
+  {{ route.name }}
+</strong>
 
           <small>
           Grupo: {{ getSavedRouteGroupName(route) }} ·
             {{ getRouteCircuitDisplayLabel(route) }} ·
 {{ getRoutePipeCount(route) }} tubo(s) ·
 {{ getRouteVisibilityLabel(route) }} ·
-{{ getRouteProtectionLabel(route) }} ·
-{{ getRouteBlockedLabel(route) }}
+{{ getRouteProtectionLabel(route) }}
+
 <span v-if="isSavedRouteBlocked(route)">
-  · {{ getValveLabelForBlockedRoute(route) }}
+  · Bloqueio parcial
 </span>
+
+<span
+  v-if="
+    route.needsDirectionRedefinition
+  "
+>
+  · Sentido por definir
+</span>
+
           </small>
         </span>
       </div>
 
-      <div>
-        <button type="button" @click="applySavedRoute(route)">
-          Aplicar
-        </button>
+      <div
+  class="saved-route-actions"
+  :class="{
+    'saved-route-actions--locked':
+      route.locked
+  }"
+>
 
-        <button type="button" @click="toggleSavedRouteHighlight(route)">
+        <button
+  type="button"
+  class="saved-route-action--highlight"
+  @click="toggleSavedRouteHighlight(route)"
+>
   {{ highlightedSavedRouteId === route.id ? 'Limpar realce' : 'Realçar' }}
 </button>
 
         <button
           v-if="!route.hidden"
           type="button"
+          class="saved-route-action--visibility"
           @click="setSavedRouteVisibility(route.id, false)"
         >
           Ocultar
@@ -1425,14 +2109,32 @@
         <button
           v-else
           type="button"
+          class="saved-route-action--visibility"
           @click="setSavedRouteVisibility(route.id, true)"
         >
           Mostrar
         </button>
 
         <button
+  v-if="!route.locked"
+  type="button"
+  class="saved-route-action--arrows"
+  :disabled="selectedCount === 0"
+  @click="
+    toggleSelectedFlowArrows
+  "
+>
+  {{
+    areSelectedFlowArrowsHidden()
+      ? 'Mostrar setas selecionadas'
+      : 'Ocultar setas selecionadas'
+  }}
+</button>
+
+        <button
           v-if="!route.locked"
           type="button"
+          class="saved-route-action--reverse"
           @click="reverseSavedRoute(route.id)"
         >
           Inverter
@@ -1441,6 +2143,7 @@
         <button
   v-if="!route.locked"
   type="button"
+  class="saved-route-action--direction"
   @click="openSavedRouteDirectionPanel(route)"
 >
   Definir sentido
@@ -1449,6 +2152,7 @@
 <button
   v-if="!route.locked"
   type="button"
+  class="saved-route-action--sync"
   @click="
     syncSelectedPipesForSavedRoute(
       route
@@ -1461,6 +2165,7 @@
         <button
           v-if="!route.locked"
           type="button"
+          class="saved-route-action--rename"
           @click="renameSavedRoute(route.id)"
         >
           Renomear
@@ -1469,6 +2174,7 @@
         <button
   v-if="route.groupId"
   type="button"
+  class="saved-route-action--color"
   @click="openRouteGroupColorDialog(route)"
 >
   Alterar cor do grupo
@@ -1480,6 +2186,7 @@
     !route.locked
   "
   type="button"
+  class="saved-route-action--color"
   @click="
     openIndividualRouteColorDialog(
       route
@@ -1496,6 +2203,7 @@
     route.customColor
   "
   type="button"
+  class="saved-route-action--reset-color"
   @click="
     resetIndividualRouteColor(
       route
@@ -1505,18 +2213,30 @@
   Repor cor
 </button>
 
-        <button type="button" @click="toggleSavedRouteProtection(route.id)">
+        <button
+  type="button"
+  class="saved-route-action--protect"
+  @click="
+    toggleSavedRouteProtection(
+      route.id
+    )
+  "
+>
           {{ route.locked ? 'Desproteger' : 'Proteger' }}
         </button>
 
         <button
   type="button"
-  :class="{
+  :class="[
+  'saved-route-action--simulation',
+  {
     'saved-route-simulation-button--active':
       isRouteSelectedForSimulation(
         route.id
       )
-  }"
+  }
+]"
+
   @click="
     toggleRouteForSimulation(
       route.id
@@ -1532,20 +2252,41 @@
   }}
 </button>
 
-        <button
-          v-if="!route.locked"
-          type="button"
-          @click="deleteSavedRoute(route.id)"
-        >
-          Apagar
-                </button>
+<button
+  v-if="
+    route.mergeBackup &&
+    !route.locked
+  "
+  type="button"
+  class="saved-route-action--undo-merge"
+  @click="
+    undoSavedRouteMerge(
+      route.id
+    )
+  "
+>
+  Desfazer união
+</button>
+
+<button
+  v-if="!route.locked"
+  type="button"
+  class="
+    saved-route-action--delete
+    flow-button--danger
+  "
+  @click="
+    deleteSavedRoute(
+      route.id
+    )
+  "
+>
+  Apagar
+</button>
       </div>
     </div>
   </div>
 </div>
-
-    <p class="connection-note">Inicio: {{ routeStartLabel }}</p>
-    <p class="connection-note">Fim: {{ routeEndLabel }}</p>
 
     <div class="flow-section-title flow-section-title--button">
   <span>Estatísticas dos caminhos</span>
@@ -1588,7 +2329,13 @@
     <dd>{{ blockedCount }}</dd>
   </div>
 </dl>
-    <p class="flow-note">{{ flowMessage }}</p>
+
+<p
+  v-if="isPathStatsPanelOpen"
+  class="flow-note"
+>
+  {{ flowMessage }}
+</p>
   </div>
 </section>
 
@@ -1598,17 +2345,18 @@
     'flow-panel',
     isSimulationControlPanelMinimized ? 'flow-panel--minimized' : ''
   ]"
-  aria-label="Simulation control"
+  aria-label="Gestão e controlo de válvulas"
 >  
         <div class="flow-panel__header">
           <div>
-            <p class="flow-panel__eyebrow">Simulação</p>
-            <h2>Controlo</h2>
-          </div>
+            <p class="flow-panel__eyebrow">
+  Elementos hidráulicos
+</p>
 
-          <span :class="['flow-status', isFlowing ? 'flow-status--on' : '']">
-            {{ isCentralSimulationRunning ? 'SIM' : isFlowing ? 'ON' : 'OFF' }}
-          </span>
+<h2>
+  Válvulas
+</h2>
+          </div>
 
           <button
             type="button"
@@ -1623,7 +2371,9 @@
           <p class="selection-count">Selecionados: {{ selectedCount }}</p>
 
       <div class="flow-section-title flow-section-title--button">
-  <span>Designação</span>
+  <span>
+  Selecionar e controlar válvulas
+</span>
 
   <button
     type="button"
@@ -1634,35 +2384,242 @@
   </button>
 </div>
 
-<p class="connection-note valve-name-line">
-  Válvula: {{ selectedValveDesignation }}
+<div v-if="isValveDesignationPanelOpen">
+<p class="connection-note workflow-help-note">
+  Escolhe uma válvula para a localizar, consultar
+  o estado atual, abrir, fechar ou editar.
+  A indicação NA/NF é apenas informativa.
 </p>
 
-<div v-if="isValveDesignationPanelOpen">
-  <label class="flow-cycle-config">
-    <span>Selecionar válvula para editar</span>
+<div class="valve-designation-dropdown">
+  <span class="valve-designation-dropdown__label">
+  Válvula
+</span>
 
-    <select
-      v-model="selectedValveDesignationKey"
-      @change="selectValveDesignationFromDropdown"
+  <button
+    type="button"
+    class="valve-designation-dropdown__button"
+    @click="
+      isValveDesignationDropdownOpen =
+        !isValveDesignationDropdownOpen
+    "
+  >
+    <span>
+      {{
+        selectedValveDesignationKey
+          ? (
+              getValveDesignationOptions()
+                .find(
+                  (option) =>
+                    option.key ===
+                    selectedValveDesignationKey
+                )?.label ??
+              'Selecionar válvula...'
+            )
+          : 'Selecionar válvula...'
+      }}
+    </span>
+
+    <span
+      class="valve-designation-dropdown__arrow"
     >
-      <option value="">
-        Selecionar válvula...
-      </option>
+      {{
+        isValveDesignationDropdownOpen
+          ? '▲'
+          : '▼'
+      }}
+    </span>
+  </button>
 
-      <option
-        v-for="option in getValveDesignationOptions()"
-        :key="option.key"
-        :value="option.key"
-      >
-        {{ option.label }}
-      </option>
-    </select>
-  </label>
+  <div
+    v-if="
+      isValveDesignationDropdownOpen
+    "
+    class="valve-designation-dropdown__menu"
+  >
+    <button
+      v-for="
+        option in
+        getValveDesignationOptions()
+      "
+      :key="option.key"
+      type="button"
+      :class="[
+        'valve-designation-dropdown__option',
+        {
+          'valve-designation-dropdown__option--selected':
+            option.key ===
+            selectedValveDesignationKey
+        }
+      ]"
+      @click="
+        selectValveDesignationOption(
+          option.key
+        )
+      "
+    >
+      {{ option.label }}
+    </button>
+  </div>
+</div>
+
+<div
+  v-if="selectedValveDesignationKey"
+  class="selected-valve-summary"
+>
+  <p>
+    <strong>
+      Estado atual:
+    </strong>
+
+    {{ getSelectedValveStateLabel() }}
+  </p>
+
+  <p>
+    <strong>
+      Associação:
+    </strong>
+
+    {{ getSelectedValveAssociationStatusLabel() }}
+  </p>
+
+  <p>
+    <strong>
+      Nome original:
+    </strong>
+
+    {{
+      selectedValveOriginalDesignation ||
+      'não disponível'
+    }}
+  </p>
+</div>
+
+  <div
+  class="
+    flow-section-title
+    flow-section-title--button
+  "
+>
+  <span>
+    Classificar válvulas
+  </span>
+
+  <button
+    type="button"
+    class="section-collapse-button"
+    @click="
+      isValveClassificationPanelOpen =
+        !isValveClassificationPanelOpen
+    "
+  >
+    {{
+      isValveClassificationPanelOpen
+        ? '−'
+        : '+'
+    }}
+  </button>
+</div>
+
+<div
+  v-if="isValveClassificationPanelOpen"
+>
+  <p class="selection-count">
+    Elementos selecionados:
+    {{ selectedCount }}
+  </p>
+
+  <div class="selected-mep-info">
+    {{ selectedMepElementInfo }}
+  </div>
 
   <p class="connection-note">
-    Nome original: {{ selectedValveOriginalDesignation || 'nenhuma válvula selecionada' }}
+    Seleciona uma válvula no modelo e define
+    se é normalmente aberta ou normalmente
+    fechada. Esta indicação é apenas informativa.
   </p>
+
+  <div
+    class="
+      flow-actions
+      flow-actions--secondary
+    "
+  >
+    <button
+      type="button"
+      :disabled="
+        selectedCount === 0
+      "
+      @click="
+        defineSelectedElementsAs(
+          'normallyOpenValve'
+        )
+      "
+    >
+      Definir como válvula NA
+    </button>
+
+    <button
+      type="button"
+      :disabled="
+        selectedCount === 0
+      "
+      @click="
+        defineSelectedElementsAs(
+          'normallyClosedValve'
+        )
+      "
+    >
+      Definir como válvula NF
+    </button>
+  </div>
+
+  <div
+    class="
+      flow-actions
+      flow-actions--single
+    "
+  >
+    <button
+      type="button"
+      class="flow-button--danger"
+      :disabled="
+        selectedCount === 0
+      "
+      @click="
+        deleteSelectedElementDefinitions
+      "
+    >
+      Apagar definição selecionada
+    </button>
+  </div>
+
+  <dl class="flow-stats">
+    <div>
+      <dt>Válvulas NA</dt>
+
+      <dd>
+        {{
+          countMepElementsByType(
+            'normallyOpenValve'
+          )
+        }}
+      </dd>
+    </div>
+
+    <div>
+      <dt>Válvulas NF</dt>
+
+      <dd>
+        {{
+          countMepElementsByType(
+            'normallyClosedValve'
+          )
+        }}
+      </dd>
+    </div>
+  </dl>
+</div>
 
     <div
     class="flow-section-title flow-section-title--button"
@@ -1738,6 +2695,35 @@
       </label>
     </div>
 
+    <div
+  class="flow-actions flow-actions--secondary"
+>
+  <button
+    type="button"
+    :disabled="
+      getValveManagementOptions().length === 0 ||
+      areAllManagedValvesSelected()
+    "
+    @click="
+      selectAllManagedValves
+    "
+  >
+    Selecionar todas
+  </button>
+
+  <button
+    type="button"
+    :disabled="
+      selectedValveKeysForManagement.size === 0
+    "
+    @click="
+      clearValveManagementSelection
+    "
+  >
+    Desmarcar todas
+  </button>
+</div>
+
     <p class="connection-note">
       Selecionadas:
       {{
@@ -1778,39 +2764,43 @@
       </button>
     </div>
 
-    <div
-      class="flow-actions flow-actions--single"
-    >
-      <button
-        type="button"
-        :disabled="
-          selectedValveKeysForManagement.size === 0
-        "
-        @click="
-          toggleSelectedManagedValvesState
-        "
-      >
-        Abrir/fechar selecionadas
-      </button>
-
-      <button
-  type="button"
-  :disabled="
-    selectedValveKeysForManagement.size === 0
-  "
-  @click="
-    resetSelectedManagedValvesToNormal
-  "
+<div
+  class="flow-actions flow-actions--secondary"
 >
-  Repor estado normal
-</button>
-    </div>
+  <button
+    type="button"
+    :disabled="
+      selectedValveKeysForManagement.size === 0
+    "
+    @click="
+      setSelectedManagedValvesState(
+        'open'
+      )
+    "
+  >
+    Abrir selecionadas
+  </button>
 
-    <p class="connection-note">
-      “Abrir/fechar” alterna cada válvula entre
-      aberta e fechada, respeitando se a válvula
-      é NA ou NF.
-    </p>
+  <button
+    type="button"
+    :disabled="
+      selectedValveKeysForManagement.size === 0
+    "
+    @click="
+      setSelectedManagedValvesState(
+        'closed'
+      )
+    "
+  >
+    Fechar selecionadas
+  </button>
+</div>
+
+<p class="connection-note">
+  Abre ou fecha manualmente as válvulas
+  selecionadas. A indicação NA/NF é apenas
+  informativa.
+</p>
 
     <div
       class="flow-actions flow-actions--secondary"
@@ -1892,12 +2882,10 @@
 </div>
 </div>
 
-<p class="connection-note">
-  Estado: {{ getSelectedValveStateLabel() }} · {{ getSelectedValveAssociationStatusLabel() }}
-</p>
-
 <div class="flow-section-title flow-section-title--button valve-details-title">
-  <span>Detalhes da associação</span>
+  <span>
+  Associação da válvula ao caminho
+</span>
   <button
     type="button"
     class="section-collapse-button"
@@ -1907,7 +2895,8 @@
   </button>
 </div>
 
-<div v-if="isValveAssociationDetailsOpen" class="valve-association-summary">
+<div v-if="isValveAssociationDetailsOpen">
+  <div class="valve-association-summary">
   <p>
     <strong>Caminho:</strong>
     {{ getSelectedValveControlledRouteLabel() }}
@@ -1929,33 +2918,11 @@
   </p>
 </div>
 
-
-<div class="flow-section-title">
-  Ações da válvula
-</div>
-
-<div class="valve-actions-layout">
-  <div class="valve-normal-state-badge">
-    {{ getSelectedValveNormalTypeLabel() }}
-  </div>
-
-  <div class="flow-actions flow-actions--single valve-actions-buttons">
-  <button
-    type="button"
-    :class="[
-      'valve-switch-button',
-      isSelectedValveInInverseState() ? 'valve-switch-button--active' : ''
-    ]"
-    @click="toggleSelectedValvesNormalInverseState"
-  >
-    {{ getSelectedValveSwitchLabel() }}
-  </button>
-</div>
-</div>
-
-<div class="flow-section-title">
-  Associação da válvula ao caminho
-</div>
+<p class="connection-note workflow-help-note">
+  Uma válvula associada bloqueia os tubos
+  controlados quando está fechada e volta a
+  permitir o fluxo quando é aberta.
+</p>
 
 <label class="flow-cycle-config">
   <span>Caminho controlado pela válvula</span>
@@ -1977,20 +2944,89 @@
   </select>
 </label>
 
-<label class="flow-cycle-config">
-  <span>Troca de circuito a jusante</span>
-  <select v-model="selectedValveSwitchMode">
-    <option value="none">
-      Não trocar
-    </option>
-    <option value="switchToSupply">
-      Trocar para ida
-    </option>
-    <option value="switchToReturn">
-      Trocar para retorno
-    </option>
-  </select>
-</label>
+<div class="flow-actions flow-actions--single">
+  <button
+  type="button"
+  :disabled="
+    isPreparingAutomaticValveAssociations
+  "
+  @click="
+    handleAutomaticValveAssociationClick
+  "
+>
+  {{
+    isPreparingAutomaticValveAssociations
+      ? 'A calcular ' +
+        automaticValveAssociationProgress +
+        ' de ' +
+        automaticValveAssociationTotal +
+        '...'
+      : 'Associar automaticamente todas'
+  }}
+</button>
+
+<div
+  v-if="
+    isPreparingAutomaticValveAssociations
+  "
+  class="automatic-valve-calculation-status"
+>
+  <div
+    class="
+      automatic-valve-calculation-status__header
+    "
+  >
+    <span>
+      A calcular associações automáticas
+    </span>
+
+    <strong>
+      {{
+        automaticValveAssociationProgress
+      }}
+      /
+      {{
+        automaticValveAssociationTotal
+      }}
+    </strong>
+  </div>
+
+  <div
+    class="
+      automatic-valve-calculation-progress
+    "
+  >
+    <div
+      class="
+        automatic-valve-calculation-progress__fill
+      "
+      :style="{
+        width:
+          (
+            automaticValveAssociationTotal > 0
+              ? (
+                  automaticValveAssociationProgress /
+                  automaticValveAssociationTotal
+                ) * 100
+              : 0
+          ) + '%'
+      }"
+    ></div>
+  </div>
+
+  <p class="connection-note">
+    Aguarda enquanto as válvulas são comparadas
+    com os caminhos protegidos.
+  </p>
+</div>
+</div>
+
+<p class="connection-note">
+  Serão processadas apenas as válvulas de
+  corte que ainda não tenham associação.
+  Os casos ambíguos serão ignorados para
+  revisão manual.
+</p>
 
 <div class="flow-actions flow-actions--secondary">
   <button type="button" @click="linkSelectedPipesToPreparedValve">
@@ -2005,11 +3041,366 @@
     Remover associação
   </button>
 </div>
+</div>
+        </div>
+      </section>
+    
+<section
+  v-if="activeApplicationTab === 'manual'"
+  class="flow-panel manual-reset-section"
+  aria-label="Reposição total da configuração manual"
+>
+  <div class="flow-section-title">
+    Reposição total
+  </div>
 
-          <p class="connection-note">
-            Bloqueios ativos: {{ blockedCount }}
-          </p>
-         <template v-if="hasLoadedModel">
+  <p class="manual-reset-section__description">
+    Apaga todos os caminhos guardados, grupos, sentidos
+    definidos ou invertidos, setas ocultadas, circuitos
+    personalizados, associações de válvulas e restantes
+    configurações manuais.
+  </p>
+
+  <button
+    type="button"
+    class="manual-reset-button"
+    @click="resetAllManualConfiguration"
+  >
+    Apagar toda a configuração manual
+  </button>
+</section>
+
+    <section
+  v-if="activeApplicationTab === 'simulation'"
+  :class="[
+    'flow-panel',
+    isSimulationControlPanelMinimized
+      ? 'flow-panel--minimized'
+      : ''
+  ]"
+  aria-label="Simulação da central"
+>
+  <div class="flow-panel__header">
+    <div>
+      <p class="flow-panel__eyebrow">Simulação</p>
+      <h2>Controlo da central</h2>
+    </div>
+
+    <span
+  :class="[
+    'flow-status',
+    isFlowing ? 'flow-status--on' : ''
+  ]"
+>
+  {{ isFlowing ? 'ON' : 'OFF' }}
+</span>
+
+    <button
+      type="button"
+      class="flow-panel__toggle"
+      @click="toggleSimulationControlPanelMinimized"
+    >
+      {{ isSimulationControlPanelMinimized ? '+' : '−' }}
+    </button>
+  </div>
+
+  <div class="flow-panel__content">
+
+  <div
+  class="
+    flow-section-title
+    flow-section-title--button
+  "
+>
+  <span>
+    Ciclos visíveis
+  </span>
+
+  <button
+    type="button"
+    class="section-collapse-button"
+    @click="
+      isSimulationCyclesSectionOpen =
+        !isSimulationCyclesSectionOpen
+    "
+  >
+    {{
+      isSimulationCyclesSectionOpen
+        ? '−'
+        : '+'
+    }}
+  </button>
+</div>
+
+<div v-if="isSimulationCyclesSectionOpen">
+  <div class="simulation-cycle-selection">
+    <label
+      v-for="
+        cycleNumber in waterCycleCount
+      "
+      :key="
+        'simulation-cycle-' +
+        cycleNumber
+      "
+      class="simulation-cycle-option"
+    >
+      <input
+        type="checkbox"
+        :checked="
+          isSimulationCycleSelected(
+            cycleNumber
+          )
+        "
+        @change="
+          toggleSimulationCycleSelection(
+            cycleNumber
+          )
+        "
+      />
+
+      <span>
+        {{
+          getCycleDisplayName(
+            cycleNumber
+          )
+        }}
+      </span>
+    </label>
+  </div>
+
+  <div
+    class="
+      flow-actions
+      flow-actions--secondary
+    "
+  >
+    <button
+      type="button"
+      @click="
+        selectAllSimulationCycles
+      "
+    >
+      Todos
+    </button>
+
+    <button
+      type="button"
+      @click="
+        clearSimulationCycleSelection
+      "
+    >
+      Nenhum
+    </button>
+  </div>
+
+  <div
+    class="
+      flow-actions
+      flow-actions--single
+    "
+  >
+    <button
+      type="button"
+      :disabled="
+        selectedSimulationCycles.size ===
+        0
+      "
+      :class="{
+        'cycle-view-button--active':
+          isCycleViewFilterActive
+      }"
+      @click="
+        applySimulationCycleFilter
+      "
+    >
+      Aplicar visualização
+    </button>
+  </div>
+
+  <p
+    v-if="isCycleViewFilterActive"
+    class="
+      automatic-analysis-status
+      automatic-analysis-status--ready
+    "
+  >
+    Ciclos visíveis:
+    {{
+      getSelectedSimulationCyclesLabel()
+    }}
+  </p>
+
+  <p
+    v-else
+    class="connection-note"
+  >
+    Todos os ciclos estão visíveis.
+  </p>
+</div>
+
+<div
+  class="
+    flow-section-title
+    flow-section-title--button
+  "
+>
+  <span>
+    Animação
+  </span>
+
+  <button
+    type="button"
+    class="section-collapse-button"
+    @click="
+      isSimulationAnimationSectionOpen =
+        !isSimulationAnimationSectionOpen
+    "
+  >
+    {{
+      isSimulationAnimationSectionOpen
+        ? '−'
+        : '+'
+    }}
+  </button>
+</div>
+
+<div
+  v-if="
+    isSimulationAnimationSectionOpen
+  "
+>
+  <div
+    class="
+      flow-actions
+      flow-actions--secondary
+    "
+  >
+    <button
+      type="button"
+      :disabled="
+        isPreparingFlowAnimation
+      "
+      @click="
+        updateFlowAnimationWithoutStarting
+      "
+    >
+      {{
+        isPreparingFlowAnimation
+          ? 'A atualizar...'
+          : 'Atualizar'
+      }}
+    </button>
+
+    <button
+      type="button"
+      :disabled="
+        isPreparingFlowAnimation
+      "
+      @click="
+        toggleFlow
+      "
+    >
+      {{
+        isPreparingFlowAnimation
+          ? 'A preparar...'
+          : isFlowing
+            ? 'Pausar simulação'
+            : 'Iniciar simulação'
+      }}
+    </button>
+  </div>
+
+  <div
+    v-if="
+      isPreparingFlowAnimation ||
+      isFlowAnimationReady ||
+      hasFlowPreparationError
+    "
+    class="flow-preparation-status"
+  >
+    <div
+      class="
+        flow-preparation-status__header
+      "
+    >
+      <span>
+        {{
+          hasFlowPreparationError
+            ? 'Erro na preparação'
+            : isPreparingFlowAnimation ||
+                flowPreparationProgress <
+                  100
+              ? 'A preparar animação...'
+              : 'Animação pronta'
+        }}
+      </span>
+
+      <strong>
+        {{ flowPreparationProgress }}%
+      </strong>
+    </div>
+
+    <div
+      class="flow-preparation-progress"
+      role="progressbar"
+      aria-label="Preparação da animação"
+      aria-valuemin="0"
+      aria-valuemax="100"
+      :aria-valuenow="
+        flowPreparationProgress
+      "
+    >
+      <div
+        class="
+          flow-preparation-progress__fill
+        "
+        :class="{
+          'flow-preparation-progress__fill--ready':
+            isFlowAnimationReady &&
+            flowPreparationProgress ===
+              100 &&
+            !hasFlowPreparationError,
+
+          'flow-preparation-progress__fill--error':
+            hasFlowPreparationError
+        }"
+        :style="{
+          width:
+            flowPreparationProgress +
+            '%'
+        }"
+      ></div>
+    </div>
+  </div>
+
+  <label class="flow-slider">
+    <span>
+      Velocidade
+    </span>
+
+    <input
+      v-model.number="flowSpeed"
+      type="range"
+      min="0.2"
+      max="3"
+      step="0.1"
+    />
+  </label>
+</div>
+
+    <p class="connection-note">
+  Percursos guardados: {{ savedRoutes.length }}
+</p>
+
+    <p class="connection-note">
+      Tubos marcados: {{ pipeStats.total }}
+    </p>
+
+    <p class="connection-note">
+      Bloqueios ativos: {{ blockedCount }}
+    </p>
+
+    <template v-if="hasLoadedModel">
   <div class="flow-section-title flow-section-title--button">
     <span>Resumo da central</span>
 
@@ -2084,253 +3475,6 @@
     </div>
   </div>
 </template>
-        </div>
-      </section>
-    
-<section
-  v-if="activeApplicationTab === 'manual'"
-  class="flow-panel manual-reset-section"
-  aria-label="Reposição total da configuração manual"
->
-  <div class="flow-section-title">
-    Reposição total
-  </div>
-
-  <p class="manual-reset-section__description">
-    Apaga todos os caminhos guardados, grupos, sentidos
-    definidos ou invertidos, setas ocultadas, circuitos
-    personalizados, associações de válvulas e restantes
-    configurações manuais.
-  </p>
-
-  <button
-    type="button"
-    class="manual-reset-button"
-    @click="resetAllManualConfiguration"
-  >
-    Apagar toda a configuração manual
-  </button>
-</section>
-
-    <section
-  v-if="activeApplicationTab === 'simulation'"
-  :class="[
-    'flow-panel',
-    isSimulationControlPanelMinimized
-      ? 'flow-panel--minimized'
-      : ''
-  ]"
-  aria-label="Simulação da central"
->
-  <div class="flow-panel__header">
-    <div>
-      <p class="flow-panel__eyebrow">Simulação</p>
-      <h2>Controlo da central</h2>
-    </div>
-
-    <span
-  :class="[
-    'flow-status',
-    isFlowing ? 'flow-status--on' : ''
-  ]"
->
-  {{ isFlowing ? 'ON' : 'OFF' }}
-</span>
-
-    <button
-      type="button"
-      class="flow-panel__toggle"
-      @click="toggleSimulationControlPanelMinimized"
-    >
-      {{ isSimulationControlPanelMinimized ? '+' : '−' }}
-    </button>
-  </div>
-
-  <div class="flow-panel__content">
-    <div class="flow-section-title">
-      Animação
-    </div>
-
-    <div class="flow-section-title">
-  Ciclos visualizados
-</div>
-
-<div class="simulation-cycle-selection">
-  <label
-    v-for="cycleNumber in waterCycleCount"
-    :key="`simulation-cycle-${cycleNumber}`"
-    class="simulation-cycle-option"
-  >
-    <input
-      type="checkbox"
-      :checked="
-        isSimulationCycleSelected(
-          cycleNumber
-        )
-      "
-      @change="
-        toggleSimulationCycleSelection(
-          cycleNumber
-        )
-      "
-    />
-
-    <span>
-      {{ getCycleDisplayName(cycleNumber) }}
-    </span>
-  </label>
-</div>
-
-<div class="flow-actions flow-actions--secondary">
-  <button
-    type="button"
-    @click="selectAllSimulationCycles"
-  >
-    Selecionar todos
-  </button>
-
-  <button
-    type="button"
-    @click="clearSimulationCycleSelection"
-  >
-    Limpar seleção
-  </button>
-</div>
-
-<div class="flow-actions flow-actions--single">
-  <button
-    type="button"
-    :disabled="
-      selectedSimulationCycles.size === 0
-    "
-    :class="{
-      'cycle-view-button--active':
-        isCycleViewFilterActive
-    }"
-    @click="applySimulationCycleFilter"
-  >
-    Visualizar ciclos selecionados
-  </button>
-
-  <button
-    type="button"
-    @click="showAllSimulationCycles"
-  >
-    Mostrar todos os ciclos
-  </button>
-</div>
-
-<p
-  v-if="isCycleViewFilterActive"
-  class="automatic-analysis-status automatic-analysis-status--ready"
->
-  Ciclos visíveis:
-  {{ getSelectedSimulationCyclesLabel() }}
-</p>
-
-    <div class="flow-actions flow-actions--secondary">
-      <button
-  type="button"
-  :disabled="isPreparingFlowAnimation"
-  @click="toggleFlow"
->
-  {{
-    isPreparingFlowAnimation
-      ? 'A preparar...'
-      : isFlowing
-        ? 'Pausar simulação'
-        : 'Iniciar simulação'
-  }}
-</button>
-
-      <button
-  type="button"
-  :disabled="isPreparingFlowAnimation"
-  @click="rebuildManualFlowLayer"
->
-  {{
-    isPreparingFlowAnimation
-      ? 'A atualizar...'
-      : 'Atualizar'
-  }}
-</button>
-    </div>
-
-    <div
-  v-if="
-    isPreparingFlowAnimation ||
-    isFlowAnimationReady ||
-    hasFlowPreparationError
-  "
-  class="flow-preparation-status"
->
-  <div class="flow-preparation-status__header">
-    <span>
-      {{
-        hasFlowPreparationError
-  ? 'Erro na preparação'
-  : isPreparingFlowAnimation ||
-      flowPreparationProgress < 100
-    ? 'A preparar animação...'
-    : 'Animação pronta'
-      }}
-    </span>
-
-    <strong>
-      {{ flowPreparationProgress }}%
-    </strong>
-  </div>
-
-  <div
-    class="flow-preparation-progress"
-    role="progressbar"
-    aria-label="Preparação da animação"
-    aria-valuemin="0"
-    aria-valuemax="100"
-    :aria-valuenow="flowPreparationProgress"
-  >
-    <div
-      class="flow-preparation-progress__fill"
-      :class="{
-        'flow-preparation-progress__fill--ready':
-  isFlowAnimationReady &&
-  flowPreparationProgress === 100 &&
-  !hasFlowPreparationError,
-
-        'flow-preparation-progress__fill--error':
-          hasFlowPreparationError
-      }"
-      :style="{
-        width:
-          flowPreparationProgress + '%'
-      }"
-    ></div>
-  </div>
-</div>
-
-    <label class="flow-slider">
-      <span>Velocidade</span>
-
-      <input
-        v-model.number="flowSpeed"
-        type="range"
-        min="0.2"
-        max="3"
-        step="0.1"
-      />
-    </label>
-
-    <p class="connection-note">
-  Percursos guardados: {{ savedRoutes.length }}
-</p>
-
-    <p class="connection-note">
-      Tubos marcados: {{ pipeStats.total }}
-    </p>
-
-    <p class="connection-note">
-      Bloqueios ativos: {{ blockedCount }}
-    </p>
 
     <p class="flow-note">
       {{ flowMessage }}
@@ -2433,6 +3577,46 @@ type FlowNode = {
   localId: number;
 };
 
+type ProtectedRouteDirection = {
+  node: FlowNode;
+  previous: FlowNode | null;
+  next: FlowNode | null;
+  reversed: boolean;
+};
+
+type SavedRouteMergeSource = {
+  id: string;
+  name: string;
+  temperature: PipeCircuit;
+  path: FlowNode[];
+  hidden?: boolean;
+  locked?: boolean;
+  groupId?: string;
+  originalCircuitColor?: string;
+  customColor?: string;
+  directionStarts?: FlowNode[];
+  directionEnds?: FlowNode[];
+  needsDirectionRedefinition?: boolean;
+  protectedDirections?: ProtectedRouteDirection[];
+  mergeBackup?: SavedRouteMergeBackup;
+};
+
+type SavedRouteMergeBackup = {
+  sourceRoutes: SavedRouteMergeSource[];
+
+  sourceValveLinks: Array<{
+    valveKey: string;
+    linkedPipes: ValveControlledPipeLink[];
+  }>;
+
+  sourceBlockedValveLinks: Array<{
+    valveKey: string;
+    linkedPipes: ValveControlledPipeLink[];
+  }>;
+
+  sourceSimulationRouteIds: string[];
+};
+
 type SavedRoute = {
   id: string;
   name: string;
@@ -2444,13 +3628,26 @@ type SavedRoute = {
   originalCircuitColor?: string;
   customColor?: string;
   directionStarts?: FlowNode[];
-directionEnds?: FlowNode[];
+  directionEnds?: FlowNode[];
+  needsDirectionRedefinition?: boolean;
+  protectedDirections?: ProtectedRouteDirection[];
+  mergeBackup?: SavedRouteMergeBackup;
 };
 
 type SavedRouteGroup = {
   id: string;
   name: string;
   color: string;
+};
+
+type RouteComparisonResult = {
+  firstRoute: SavedRoute;
+  secondRoute: SavedRoute;
+  firstOnlyNodes: string[];
+  secondOnlyNodes: string[];
+  commonNodeCount: number;
+  overlapPercentage: number;
+  exactDuplicate: boolean;
 };
 
 type SavedReversedDirection = {
@@ -2469,6 +3666,45 @@ type ValveSwitchMode =
   | "switchToSupply"
   | "switchToReturn";
 
+type AutomaticValveRouteMatch = {
+  route: SavedRoute;
+  closestNode: FlowNode;
+  distance: number;
+  ambiguous: boolean;
+  alternativeRouteName?: string;
+  alternativeDistance?: number;
+};
+
+type AutomaticValveAssociationPreview = {
+  valveKey: string;
+
+  valveNode: FlowNode;
+
+  valveLabel: string;
+
+  normalStateLabel: string;
+
+  currentStateLabel: string;
+
+  routeId: string | null;
+
+  routeName: string;
+
+  closestNode: FlowNode | null;
+
+  distance: number | null;
+
+  downstreamPipeCount: number;
+
+  status:
+    | "safe"
+    | "noMatch"
+    | "noDownstream"
+    | "ambiguous";
+
+  accepted: boolean;
+};
+
 type ValveControlledPipeLink = FlowNode & {
   temperature: PipeCircuit;
   routeId: string;
@@ -2486,9 +3722,9 @@ type PipeDirectionHints = {
 };
 
 type PipeGeometryAxis = {
-  start: THREE.Vector3;
-  end: THREE.Vector3;
-  center: THREE.Vector3;
+  start: any;
+  end: any;
+  center: any;
   length: number;
 };
 
@@ -2537,8 +3773,14 @@ const pendingCycleCircuitName = ref("");
 const pendingCycleCircuitColor = ref("#2e7d32");
 const selectedCycleCircuitKey = ref("");
 const isIfcPanelCollapsed = ref(false);
+const isCycleConfigurationSectionOpen =
+  ref(false);
+const isSelectedPipeActionsSectionOpen =
+  ref(false);
 const isCycleNamesPanelOpen = ref(false);
 const isSavedRoutesPanelOpen = ref(true);
+const savedRouteSearchText =
+  ref("");
 const isPathStatsPanelOpen = ref(false);
 const highlightedSavedRouteId = ref<string | null>(null);
 const isApplyingSavedRouteHighlight = ref(false);
@@ -2551,6 +3793,10 @@ const savedRouteDirectionStarts =
 
 const savedRouteDirectionEnds =
   ref<FlowNode[]>([]);
+const isSimulationCyclesSectionOpen =
+  ref(true);
+const isSimulationAnimationSectionOpen =
+  ref(true);
 const isCentralSummaryOpen = ref(false);
 const selectedCount = ref(0);
 const selectedMepElementInfo = ref("Nenhum elemento classificado selecionado.");
@@ -2612,8 +3858,12 @@ const selectedValveDesignation = ref("nenhuma válvula selecionada");
 const pendingValveDesignation = ref("");
 const selectedValveOriginalDesignation = ref("");
 const selectedValveDesignationKey = ref("");
+const isValveDesignationDropdownOpen =
+  ref(false);
 const highlightedValveFromDropdown = ref<FlowNode | null>(null);
 const isValveDesignationPanelOpen = ref(false);
+const isValveClassificationPanelOpen =
+  ref(false);
 const isValveRenamePanelOpen = ref(false);
 const isValveAssociationDetailsOpen = ref(false);
 const valveOriginalDesignations =
@@ -2632,9 +3882,23 @@ const highlightedValveKeysForManagement =
   );
 const isValveManagementPanelOpen =
   ref(false);
+const automaticValveAssociationPreviews =
+  reactive<
+    AutomaticValveAssociationPreview[]
+  >([]);
+const isAutomaticValveAssociationPreviewOpen =
+  ref(false);
+const isPreparingAutomaticValveAssociations =
+  ref(false);
+const automaticValveAssociationProgress =
+  ref(0);
+const automaticValveAssociationTotal =
+  ref(0);
 const hasLoadedModel = ref(false);
 const activeIfcStorageId = ref("");
 const isElementPanelMinimized = ref(true);
+const isIfcInformationPanelMinimized =
+  ref(true);
 const isFlowControlsPanelMinimized = ref(true);
 const isSimulationControlPanelMinimized = ref(true);
 const routeStartLabel = ref("nenhum");
@@ -2777,6 +4041,27 @@ function clearActiveModelConfigurationFromMemory() {
   }
 
   selectedRouteIdsForGrouping.clear();
+
+selectedRouteIdsForSimulation.clear();
+
+selectedSavedRouteIdForEditing.value =
+  "";
+
+automaticValveAssociationPreviews.splice(
+  0,
+);
+
+automaticValveAssociationProgress.value =
+  0;
+
+automaticValveAssociationTotal.value =
+  0;
+
+isAutomaticValveAssociationPreviewOpen.value =
+  false;
+
+isPreparingAutomaticValveAssociations.value =
+  false;
 
   reversedPipeDirections.clear();
   syncedPipeDirections.clear();
@@ -2936,6 +4221,12 @@ const currentRouteConnections = reactive<FlowConnection[]>([]);
 const routeWaypoints = reactive<FlowNode[]>([]);
 const manualRouteNodes = reactive<FlowNode[]>([]);
 const isManualRouteRecording = ref(false);
+const selectedSavedRouteIdForEditing =
+  ref("");
+const isCreateRouteSectionOpen =
+  ref(false);
+const isEditRouteSectionOpen =
+  ref(false);
 const mepElements = reactive<Record<string, MepElement>>({});
 const savedRoutes = reactive<SavedRoute[]>([]);
 const savedRouteGroups =
@@ -2963,7 +4254,6 @@ const editingRouteColorId =
 
 const pendingIndividualRouteColor =
   ref("#8fd3ff");
-const isRouteGroupingPanelOpen = ref(false);
 let routeStart: FlowNode | null = null;
 let routeEnd: FlowNode | null = null;
 let ignoredManualRouteNodeAfterRemove: FlowNode | null = null;
@@ -2990,7 +4280,7 @@ const mepElementHighlightColors: Record<MepElementType, number> = {
   reservoirWithoutResistance: 0xff6600,
 };
 
-const circuitMaterialCache = new Map<string, THREE.MeshBasicMaterial>();
+const circuitMaterialCache = new Map<string, any>();
 
 function getCircuitColor(circuit: PipeCircuit) {
   const definition = getCycleCircuitDefinition(circuit);
@@ -3031,6 +4321,143 @@ function getCircuitMaterial(circuit: PipeCircuit) {
   return material;
 }
 
+function getRoutesForNode(
+  node: FlowNode,
+  options: {
+    circuit?: PipeCircuit;
+    visibleOnly?: boolean;
+    simulationOnly?: boolean;
+  } = {},
+) {
+  const matchingRoutes = savedRoutes.filter((route) => {
+    if (options.visibleOnly && route.hidden) {
+      return false;
+    }
+
+    if (
+      options.circuit &&
+      route.temperature !== options.circuit
+    ) {
+      return false;
+    }
+
+    if (
+      options.simulationOnly &&
+      selectedRouteIdsForSimulation.size > 0 &&
+      !selectedRouteIdsForSimulation.has(route.id)
+    ) {
+      return false;
+    }
+
+    return routeContainsAdaptedNode(route, node);
+  });
+
+  return matchingRoutes.sort(compareRoutesForVisualPriority);
+}
+
+function getSimulationRoutesForNode(
+  node: FlowNode,
+  circuit?: PipeCircuit,
+) {
+  return getRoutesForNode(node, {
+    circuit,
+    visibleOnly: true,
+    simulationOnly: true,
+  });
+}
+
+function compareRoutesForVisualPriority(
+  firstRoute: SavedRoute,
+  secondRoute: SavedRoute,
+) {
+  const nameComparison = firstRoute.name.localeCompare(
+    secondRoute.name,
+    "pt",
+    {
+      sensitivity: "base",
+      numeric: true,
+    },
+  );
+
+  if (nameComparison !== 0) {
+    return nameComparison;
+  }
+
+  return firstRoute.id.localeCompare(secondRoute.id);
+}
+
+function getVisualRouteForNode(
+  node: FlowNode,
+  circuit?: PipeCircuit,
+) {
+  const routes = getRoutesForNode(node, {
+    circuit,
+    visibleOnly: true,
+    simulationOnly: true,
+  });
+
+  return routes[0] ?? null;
+}
+
+function shouldColorNode(
+  circuit: PipeCircuit,
+  node: FlowNode,
+) {
+  if (
+    selectedSavedRouteIdForEditing.value
+  ) {
+    const editingRoute =
+      savedRoutes.find(
+        (route) =>
+          route.id ===
+          selectedSavedRouteIdForEditing.value,
+      );
+
+    return (
+      !!editingRoute &&
+      !editingRoute.hidden &&
+      routeContainsAdaptedNode(
+        editingRoute,
+        node,
+      )
+    );
+  }
+
+  if (
+    selectedRouteIdsForSimulation.size > 0
+  ) {
+    return getVisualRouteForNode(node, circuit) !== null;
+  }
+
+  if (
+    isNodeHiddenBySavedRouteVisibility(node)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function shouldCreateArrowForNode(
+  circuit: PipeCircuit,
+  node: FlowNode,
+) {
+  if (
+    selectedSavedRouteIdForEditing.value
+  ) {
+    return false;
+  }
+
+
+  return (
+    shouldColorNode(circuit, node) &&
+    shouldIncludeNodeInRouteSimulation(
+      circuit,
+      node,
+    )
+  );
+}
+
 function getRouteMaterialForNode(
   circuit: PipeCircuit,
   node?: FlowNode,
@@ -3040,15 +4467,7 @@ function getRouteMaterialForNode(
   }
 
   const visibleRoute =
-    savedRoutes.find(
-      (route) =>
-        !route.hidden &&
-        route.temperature === circuit &&
-        routeContainsAdaptedNode(
-          route,
-          node,
-        ),
-    );
+    getVisualRouteForNode(node, circuit);
 
   if (!visibleRoute) {
     return getCircuitMaterial(circuit);
@@ -3257,6 +4676,8 @@ async function restoreSelectedCircuitColors(
     return;
   }
 
+  await clearPersistentCircuitHighlights();
+
   const idsByCircuitAndModel =
     new Map<
       string,
@@ -3333,16 +4754,19 @@ async function restoreSelectedCircuitColors(
         localId,
       };
 
+      if (
+        !shouldColorNode(
+          circuit,
+          node,
+        )
+      ) {
+        continue;
+      }
+
       const visibleRoute =
-        savedRoutes.find(
-          (route) =>
-            !route.hidden &&
-            route.temperature ===
-              circuit &&
-            routeContainsAdaptedNode(
-              route,
-              node,
-            ),
+        getVisualRouteForNode(
+          node,
+          circuit,
         );
 
       const color =
@@ -3369,19 +4793,17 @@ async function restoreSelectedCircuitColors(
       const [color, colorLocalIds] of
         idsByColor
     ) {
-      await model.highlight(
+      const persistentStyleName =
+        "persistent-circuit-" +
+        circuit +
+        "-" +
+        color.replace("#", "");
+
+      await applyPersistentCircuitHighlight(
+        persistentStyleName,
+        color,
+        modelId,
         colorLocalIds,
-        createHighlight(
-          Number(
-            color.replace(
-              "#",
-              "0x",
-            ),
-          ),
-          circuit +
-            "-persistent-" +
-            color,
-        ),
       );
     }
   }
@@ -3424,6 +4846,7 @@ function resetAllManualConfiguration() {
     "bastto-viewer-pipe-type-flow-nodes",
     "bastto-viewer-synced-pipe-directions",
     "bastto-viewer-valve-pipe-links",
+    "bastto-viewer-excluded-valves",
   ];
 
   for (
@@ -3499,6 +4922,15 @@ addSelectedNodeToManualRoute();
 if (isManualRouteRecording.value && manualRouteNodes.length > 0) {
   await updateManualRoutePreviewHighlight();
   return;
+}
+
+const selectedValveNode =
+  getFirstSelectedValveNode();
+
+if (selectedValveNode) {
+  await syncValveDesignationPanelFromNode(
+    selectedValveNode,
+  );
 }
 
 await syncSelectedValveAssociationRoute();
@@ -3919,8 +5351,110 @@ async function resetAllCircuitHighlights() {
   });
 }
 
+function applyProtectedRouteDirections(
+  route: SavedRoute,
+) {
+  const protectedDirections =
+    route.protectedDirections ?? [];
+
+  for (
+    const direction of
+      protectedDirections
+  ) {
+    const directionKey =
+      automaticDirectionKey(
+        route.temperature,
+        direction.node,
+      );
+
+    if (
+      direction.previous ||
+      direction.next
+    ) {
+      automaticDirectionNeighbors.set(
+        directionKey,
+        {
+          previous:
+            direction.previous
+              ? {
+                  modelId:
+                    direction.previous
+                      .modelId,
+
+                  localId:
+                    direction.previous
+                      .localId,
+                }
+              : null,
+
+          next:
+            direction.next
+              ? {
+                  modelId:
+                    direction.next
+                      .modelId,
+
+                  localId:
+                    direction.next
+                      .localId,
+                }
+              : null,
+        },
+      );
+    }
+
+    let reversedIds =
+      reversedPipeDirections.get(
+        direction.node.modelId,
+      );
+
+    if (direction.reversed) {
+      if (!reversedIds) {
+        reversedIds =
+          new Set<number>();
+
+        reversedPipeDirections.set(
+          direction.node.modelId,
+          reversedIds,
+        );
+      }
+
+      reversedIds.add(
+        direction.node.localId,
+      );
+
+      continue;
+    }
+
+    reversedIds?.delete(
+      direction.node.localId,
+    );
+
+    if (
+      reversedIds &&
+      reversedIds.size === 0
+    ) {
+      reversedPipeDirections.delete(
+        direction.node.modelId,
+      );
+    }
+  }
+}
+
 async function reapplyAllSavedRouteDirections() {
-  for (const route of savedRoutes) {
+  const editableRoutes =
+    savedRoutes.filter(
+      (route) =>
+        !route.locked,
+    );
+
+  const protectedRoutes =
+    savedRoutes.filter(
+      (route) =>
+        route.locked,
+    );
+
+  for (const route of editableRoutes) {
     const starts =
       route.directionStarts ?? [];
 
@@ -3950,9 +5484,48 @@ async function reapplyAllSavedRouteDirections() {
       directionPaths,
     );
   }
+
+  let createdSnapshots = false;
+
+  for (
+    const route of
+      protectedRoutes
+  ) {
+    if (
+      !route
+        .protectedDirections
+        ?.length
+    ) {
+      const protectedDirections =
+        await createProtectedRouteDirections(
+          route,
+        );
+
+      if (
+        protectedDirections.length
+      ) {
+        route.protectedDirections =
+          protectedDirections;
+
+        createdSnapshots = true;
+      }
+    }
+
+    applyProtectedRouteDirections(
+      route,
+    );
+  }
+
+  if (createdSnapshots) {
+  saveRoutesToStorage();
 }
 
-async function rebuildManualFlowLayer() {
+saveReversedDirectionsToStorage();
+}
+
+async function rebuildManualFlowLayer(
+  shouldReapplySavedDirections = true,
+) {
   const currentRunId =
     ++flowPreparationRunId;
 
@@ -4001,7 +5574,9 @@ async function rebuildManualFlowLayer() {
 
         setCurrentProgress(10);
 
-        await reapplyAllSavedRouteDirections();
+        if (shouldReapplySavedDirections) {
+  await reapplyAllSavedRouteDirections();
+}
 
     if (!isCurrentRun()) {
       return;
@@ -4172,7 +5747,7 @@ const ids = allIds.filter(
       !isNodeHiddenBySavedRouteVisibility(
         node,
       ) &&
-      shouldIncludeNodeInRouteSimulation(
+      shouldCreateArrowForNode(
         temperature,
         node,
       )
@@ -4196,15 +5771,9 @@ for (const localId of ids) {
   };
 
   const visibleRoute =
-    savedRoutes.find(
-      (route) =>
-        !route.hidden &&
-        route.temperature ===
-          temperature &&
-        routeContainsAdaptedNode(
-          route,
-          node,
-        ),
+    getVisualRouteForNode(
+      node,
+      temperature,
     );
 
   const color =
@@ -4268,6 +5837,15 @@ const node = {
   modelId,
   localId,
 };
+
+if (
+  !shouldCreateArrowForNode(
+    temperature,
+    node,
+  )
+) {
+  continue;
+}
 
 if (
   !pipeTypeFlowNodes.has(
@@ -4858,73 +6436,993 @@ flowMessage.value =
   "Caminho atual descartado. Caminhos guardados mantidos.";
 }
 
-async function deleteSavedRoute(routeId: string) {
-  const index = savedRoutes.findIndex(
-    (route) => route.id === routeId,
+async function undoSavedRouteMerge(
+  routeId: string,
+) {
+  const mergedRouteIndex =
+    savedRoutes.findIndex(
+      (route) =>
+        route.id === routeId,
+    );
+
+  if (mergedRouteIndex === -1) {
+    flowMessage.value =
+      "Não foi possível encontrar o percurso unido.";
+
+    return;
+  }
+
+  const mergedRoute =
+    savedRoutes[mergedRouteIndex];
+
+  const mergeBackup =
+    mergedRoute.mergeBackup;
+
+  if (!mergeBackup) {
+    flowMessage.value =
+      "Este percurso não foi criado através de uma união.";
+
+    return;
+  }
+
+  if (mergedRoute.locked) {
+    flowMessage.value =
+      'O percurso "' +
+      mergedRoute.name +
+      '" está protegido. Desprotege primeiro.';
+
+    return;
+  }
+
+  const shouldUndo =
+    window.confirm(
+      "Tens a certeza de que queres desfazer esta união?\n\n" +
+      'O percurso unido "' +
+      mergedRoute.name +
+      '" será eliminado e serão recuperados ' +
+      mergeBackup.sourceRoutes.length +
+      " percursos anteriores.",
+    );
+
+  if (!shouldUndo) {
+    flowMessage.value =
+      "A reposição dos percursos anteriores foi cancelada.";
+
+    return;
+  }
+
+  if (
+    highlightedSavedRouteId.value ===
+    mergedRoute.id
+  ) {
+    await modelHighlighter?.clear(
+      "saved-route-highlight",
+    );
+
+    highlightedSavedRouteId.value =
+      null;
+  }
+
+  selectedRouteIdsForSimulation.delete(
+    mergedRoute.id,
   );
 
-  if (index === -1) return;
+  selectedRouteIdsForGrouping.delete(
+    mergedRoute.id,
+  );
+
+  savedRoutes.splice(
+    mergedRouteIndex,
+    1,
+  );
+
+  for (
+    const sourceRoute of
+      mergeBackup.sourceRoutes
+  ) {
+    const restoredRoute: SavedRoute = {
+      id: sourceRoute.id,
+      name: sourceRoute.name,
+
+      temperature:
+        sourceRoute.temperature,
+
+      path: sourceRoute.path.map(
+        (node) => ({
+          modelId: node.modelId,
+          localId: node.localId,
+        }),
+      ),
+
+      hidden: sourceRoute.hidden,
+      locked: sourceRoute.locked,
+      groupId: sourceRoute.groupId,
+
+      originalCircuitColor:
+        sourceRoute.originalCircuitColor,
+
+      customColor:
+        sourceRoute.customColor,
+
+      directionStarts:
+        sourceRoute.directionStarts?.map(
+          (node) => ({
+            modelId: node.modelId,
+            localId: node.localId,
+          }),
+        ),
+
+      directionEnds:
+        sourceRoute.directionEnds?.map(
+          (node) => ({
+            modelId: node.modelId,
+            localId: node.localId,
+          }),
+        ),
+
+        mergeBackup:
+  sourceRoute.mergeBackup
+    ? JSON.parse(
+        JSON.stringify(
+          sourceRoute.mergeBackup,
+        ),
+      )
+    : undefined,
+    };
+
+    savedRoutes.push(
+      restoredRoute,
+    );
+  }
+
+  for (
+    const sourceRoute of
+      mergeBackup.sourceRoutes
+  ) {
+    for (const node of sourceRoute.path) {
+      for (
+        const circuit of
+          getAllKnownCircuitKeys()
+      ) {
+        getAssignmentSet(
+          circuit,
+          node.modelId,
+        ).delete(
+          node.localId,
+        );
+      }
+
+      getAssignmentSet(
+        sourceRoute.temperature,
+        node.modelId,
+      ).add(
+        node.localId,
+      );
+    }
+  }
+
+  for (
+    const sourceValveLink of
+      mergeBackup.sourceValveLinks
+  ) {
+    valveControlledPipeLinks.set(
+      sourceValveLink.valveKey,
+
+      sourceValveLink.linkedPipes.map(
+        (linkedPipe) => ({
+          ...linkedPipe,
+        }),
+      ),
+    );
+  }
+
+  for (
+    const sourceBlockedValveLink of
+      mergeBackup.sourceBlockedValveLinks ??
+      []
+  ) {
+    valveBlockedPipeLinks.set(
+      sourceBlockedValveLink.valveKey,
+
+      sourceBlockedValveLink.linkedPipes.map(
+        (linkedPipe) => ({
+          ...linkedPipe,
+        }),
+      ),
+    );
+  }
+
+  for (
+    const sourceRouteId of
+      mergeBackup.sourceSimulationRouteIds
+  ) {
+    selectedRouteIdsForSimulation.add(
+      sourceRouteId,
+    );
+  }
+
+  circuitMaterialCache.clear();
+
+  saveRoutesToStorage();
+  saveValvePipeLinksToStorage();
+
+  updateManualStats();
+  updateBlockedCount();
+
+  flowConnections.splice(0);
+
+  if (
+    countAssignments() > 0 ||
+    savedRoutes.length > 0
+  ) {
+    await applyAllSavedRoutes();
+  } else {
+    clearFlowVisuals();
+
+    await fragmentManager.core.update(
+      true,
+    );
+  }
+
+  flowMessage.value =
+    'A união "' +
+    mergedRoute.name +
+    '" foi desfeita. Foram recuperados ' +
+    mergeBackup.sourceRoutes.length +
+    " percursos anteriores.";
+}
+
+async function addSelectedPipesToEditedRoute() {
+  const route =
+    savedRoutes.find(
+      (savedRoute) =>
+        savedRoute.id ===
+        selectedSavedRouteIdForEditing.value,
+    );
+
+  if (!route) {
+    flowMessage.value =
+      "Seleciona primeiro o caminho que queres editar.";
+
+    return;
+  }
+
+  if (route.locked) {
+    flowMessage.value =
+      'O caminho "' +
+      route.name +
+      '" está protegido. Desprotege primeiro.';
+
+    return;
+  }
+
+  if (!selectedCount.value) {
+    flowMessage.value =
+      "Seleciona primeiro um ou mais tubos no modelo.";
+
+    return;
+  }
+
+  const nodesToAdd: FlowNode[] = [];
+
+  const nodesToAddKeys =
+    new Set<string>();
+
+  for (
+    const [modelId, localIds] of
+      selectedItems
+  ) {
+    for (const localId of localIds) {
+      const selectedNode: FlowNode = {
+        modelId,
+        localId,
+      };
+
+      if (
+        routeContainsAdaptedNode(
+          route,
+          selectedNode,
+        )
+      ) {
+        continue;
+      }
+
+      const selectedKey =
+        nodeKey(
+          selectedNode,
+        );
+
+      if (
+        nodesToAddKeys.has(
+          selectedKey,
+        )
+      ) {
+        continue;
+      }
+
+      nodesToAddKeys.add(
+        selectedKey,
+      );
+
+      nodesToAdd.push({
+        modelId,
+        localId,
+      });
+    }
+  }
+
+  if (!nodesToAdd.length) {
+    flowMessage.value =
+      "Todos os tubos selecionados já pertencem ao caminho.";
+
+    return;
+  }
+
+  const shouldAdd =
+    window.confirm(
+      "Queres adicionar " +
+        nodesToAdd.length +
+        ' tubo(s) ao caminho "' +
+        route.name +
+        '"?\n\n' +
+        "O sentido atual será apagado e terás de o definir novamente.",
+    );
+
+  if (!shouldAdd) {
+    flowMessage.value =
+      "Adição dos tubos cancelada.";
+
+    return;
+  }
+
+  route.path.push(
+    ...nodesToAdd.map(
+      (node) => ({
+        modelId:
+          node.modelId,
+
+        localId:
+          node.localId,
+      }),
+    ),
+  );
+
+  delete route.directionStarts;
+  delete route.directionEnds;
+
+  route.needsDirectionRedefinition =
+    true;
+
+  route.locked =
+    false;
+
+  selectedRouteIdsForSimulation.delete(
+    route.id,
+  );
+
+  for (
+    const routeNode of
+      route.path
+  ) {
+    const reversedIds =
+      reversedPipeDirections.get(
+        routeNode.modelId,
+      );
+
+    reversedIds?.delete(
+      routeNode.localId,
+    );
+
+    if (
+      reversedIds &&
+      reversedIds.size === 0
+    ) {
+      reversedPipeDirections.delete(
+        routeNode.modelId,
+      );
+    }
+
+    const syncedIds =
+      syncedPipeDirections.get(
+        routeNode.modelId,
+      );
+
+    syncedIds?.delete(
+      routeNode.localId,
+    );
+
+    if (
+      syncedIds &&
+      syncedIds.size === 0
+    ) {
+      syncedPipeDirections.delete(
+        routeNode.modelId,
+      );
+    }
+  }
+
+  for (
+    const addedNode of
+      nodesToAdd
+  ) {
+    for (
+      const circuitKey of
+        getAllKnownCircuitKeys()
+    ) {
+      getAssignmentSet(
+        circuitKey,
+        addedNode.modelId,
+      ).delete(
+        addedNode.localId,
+      );
+    }
+
+    getAssignmentSet(
+      route.temperature,
+      addedNode.modelId,
+    ).add(
+      addedNode.localId,
+    );
+  }
+
+  saveRoutesToStorage();
+  saveReversedDirectionsToStorage();
+  saveSyncedPipeDirectionsToStorage();
+
+  updateManualStats();
+
+  isFlowing.value =
+    false;
+
+  isManualFlowAnimationRunning.value =
+    false;
+
+  isCentralSimulationRunning.value =
+    false;
+
+  isFlowManuallyPaused.value =
+    true;
+
+  await applyAllSavedRoutes();
+
+  await enforceActiveSavedRouteHighlight();
+
+  flowMessage.value =
+    nodesToAdd.length +
+    ' tubo(s) adicionado(s) ao caminho "' +
+    route.name +
+    '". Define novamente o sentido antes de proteger ou simular.';
+}
+
+
+async function removeSelectedPipesFromEditedRoute() {
+  const route =
+    savedRoutes.find(
+      (savedRoute) =>
+        savedRoute.id ===
+        selectedSavedRouteIdForEditing.value,
+    );
+
+  if (!route) {
+    flowMessage.value =
+      "Seleciona primeiro o caminho que queres editar.";
+
+    return;
+  }
+
+  if (route.locked) {
+    flowMessage.value =
+      'O caminho "' +
+      route.name +
+      '" está protegido. Desprotege primeiro.';
+
+    return;
+  }
+
+  if (!selectedCount.value) {
+    flowMessage.value =
+      "Seleciona primeiro um ou mais tubos no modelo.";
+
+    return;
+  }
+
+  const selectedNodeKeys =
+    new Set<string>();
+
+  for (
+    const [modelId, localIds] of
+      selectedItems
+  ) {
+    for (const localId of localIds) {
+      selectedNodeKeys.add(
+        elementKey(
+          modelId,
+          localId,
+        ),
+      );
+    }
+  }
+
+  const adaptedRouteNodes =
+    getAdaptedSavedRouteNodes(
+      route,
+    );
+
+  const indexesToRemove =
+    new Set<number>();
+
+  for (
+    let nodeIndex = 0;
+    nodeIndex < adaptedRouteNodes.length;
+    nodeIndex++
+  ) {
+    const node =
+      adaptedRouteNodes[nodeIndex];
+
+    if (
+      selectedNodeKeys.has(
+        elementKey(
+          node.modelId,
+          node.localId,
+        ),
+      )
+    ) {
+      indexesToRemove.add(
+        nodeIndex,
+      );
+    }
+  }
+
+  if (!indexesToRemove.size) {
+    flowMessage.value =
+      "Nenhum dos tubos selecionados pertence ao caminho escolhido.";
+
+    return;
+  }
+
+  if (
+    route.path.length -
+      indexesToRemove.size <
+    2
+  ) {
+    window.alert(
+      "Não é possível retirar estes tubos.\n\n" +
+      "O caminho ficaria com menos de dois tubos. " +
+      "Se já não precisares do caminho, utiliza Apagar.",
+    );
+
+    return;
+  }
+
+  const removedNodes =
+    route.path.filter(
+      (_node, nodeIndex) =>
+        indexesToRemove.has(
+          nodeIndex,
+        ),
+    );
+
+  const removedNodeKeys =
+    new Set(
+      removedNodes.map(
+        (node) =>
+          nodeKey(node),
+      ),
+    );
+
+  const removesDirectionNode =
+    (
+      route.directionStarts ?? []
+    ).some(
+      (node) =>
+        removedNodeKeys.has(
+          nodeKey(node),
+        ),
+    ) ||
+    (
+      route.directionEnds ?? []
+    ).some(
+      (node) =>
+        removedNodeKeys.has(
+          nodeKey(node),
+        ),
+    );
+
+  const confirmationMessage =
+    "Queres retirar " +
+    indexesToRemove.size +
+    ' tubo(s) do caminho "' +
+    route.name +
+    '"?\n\n' +
+    "Os tubos não serão apagados do IFC. " +
+    "Deixarão apenas de pertencer a este caminho." +
+    (
+      removesDirectionNode
+        ? "\n\nAtenção: a seleção inclui tubos usados como início ou fim. " +
+          "O sentido definido neste caminho será removido."
+        : ""
+    );
+
+  const shouldRemove =
+    window.confirm(
+      confirmationMessage,
+    );
+
+  if (!shouldRemove) {
+    flowMessage.value =
+      "Remoção dos tubos cancelada.";
+
+    return;
+  }
+
+  route.path =
+    route.path.filter(
+      (_node, nodeIndex) =>
+        !indexesToRemove.has(
+          nodeIndex,
+        ),
+    );
+
+  if (removesDirectionNode) {
+    delete route.directionStarts;
+    delete route.directionEnds;
+  }
+
+  for (
+    const [
+      valveKey,
+      linkedPipes,
+    ] of valveControlledPipeLinks
+  ) {
+    const remainingLinks =
+      linkedPipes.filter(
+        (linkedPipe) =>
+          !(
+            linkedPipe.routeId ===
+              route.id &&
+            removedNodeKeys.has(
+              nodeKey(linkedPipe),
+            )
+          ),
+      );
+
+    if (remainingLinks.length) {
+      valveControlledPipeLinks.set(
+        valveKey,
+        remainingLinks,
+      );
+    } else {
+      valveControlledPipeLinks.delete(
+        valveKey,
+      );
+
+      valveBlockedPipeLinks.delete(
+        valveKey,
+      );
+    }
+  }
+
+  for (
+    const [
+      valveKey,
+      linkedPipes,
+    ] of valveBlockedPipeLinks
+  ) {
+    const remainingBlockedLinks =
+      linkedPipes.filter(
+        (linkedPipe) =>
+          !(
+            linkedPipe.routeId ===
+              route.id &&
+            removedNodeKeys.has(
+              nodeKey(linkedPipe),
+            )
+          ),
+      );
+
+    if (remainingBlockedLinks.length) {
+      valveBlockedPipeLinks.set(
+        valveKey,
+        remainingBlockedLinks,
+      );
+    } else {
+      valveBlockedPipeLinks.delete(
+        valveKey,
+      );
+    }
+  }
+
+  for (const removedNode of removedNodes) {
+    const adaptedRemovedNode =
+      getAdaptedSavedRouteNodes({
+        ...route,
+        path: [removedNode],
+      })[0];
+
+    if (!adaptedRemovedNode) {
+      continue;
+    }
+
+    const isUsedByAnotherRoute =
+      savedRoutes.some(
+        (otherRoute) =>
+          otherRoute.id !== route.id &&
+          routeContainsAdaptedNode(
+            otherRoute,
+            adaptedRemovedNode,
+          ),
+      );
+
+    if (isUsedByAnotherRoute) {
+      continue;
+    }
+
+    for (
+      const circuitKey of
+        getAllKnownCircuitKeys()
+    ) {
+      getAssignmentSet(
+        circuitKey,
+        adaptedRemovedNode.modelId,
+      ).delete(
+        adaptedRemovedNode.localId,
+      );
+    }
+
+    hiddenFlowArrowElements
+      .get(
+        adaptedRemovedNode.modelId,
+      )
+      ?.delete(
+        adaptedRemovedNode.localId,
+      );
+
+    reversedPipeDirections
+      .get(
+        adaptedRemovedNode.modelId,
+      )
+      ?.delete(
+        adaptedRemovedNode.localId,
+      );
+
+    syncedPipeDirections
+      .get(
+        adaptedRemovedNode.modelId,
+      )
+      ?.delete(
+        adaptedRemovedNode.localId,
+      );
+  }
+
+  saveRoutesToStorage();
+  saveValvePipeLinksToStorage();
+  saveHiddenFlowArrowsToStorage();
+  saveReversedDirectionsToStorage();
+  saveSyncedPipeDirectionsToStorage();
+
+  updateBlockedCount();
+  updateManualStats();
+
+  flowConnections.splice(0);
+
+  await applyAllSavedRoutes();
+
+  isFlowing.value = false;
+
+  isManualFlowAnimationRunning.value =
+    false;
+
+  isCentralSimulationRunning.value =
+    false;
+
+  isFlowManuallyPaused.value = true;
+
+  await enforceActiveSavedRouteHighlight();
+
+  flowMessage.value =
+    indexesToRemove.size +
+    ' tubo(s) retirado(s) do caminho "' +
+    route.name +
+    '".';
+}
+
+async function deleteSavedRoute(
+  routeId: string,
+) {
+  const index = savedRoutes.findIndex(
+    (route) =>
+      route.id === routeId,
+  );
+
+  if (index === -1) {
+    return;
+  }
 
   const route = savedRoutes[index];
 
-if (route.locked) {
-  flowMessage.value =
-    "O caminho \"" +
+  if (route.locked) {
+    flowMessage.value =
+      'O caminho "' +
+      route.name +
+      '" está protegido. Desprotege primeiro para apagar.';
+
+    return;
+  }
+
+let deleteConfirmationMessage =
+  'Queres mesmo apagar o caminho "' +
+  route.name +
+  '"?\n\n' +
+  "Esta ação é irreversível.";
+
+if (route.mergeBackup) {
+  deleteConfirmationMessage =
+    'O caminho "' +
     route.name +
-    "\" está protegido. Desprotege primeiro para apagar.";
+    '" foi criado através de uma união.\n\n' +
+    "Se o apagares, o histórico necessário para " +
+    "recuperar os caminhos anteriores também será eliminado.\n\n" +
+    'Para os recuperar, cancela e usa "Desfazer união".\n\n' +
+    "Queres mesmo apagar este caminho?";
+}
+
+const shouldDeleteRoute =
+  window.confirm(
+    deleteConfirmationMessage,
+  );
+
+if (!shouldDeleteRoute) {
+  flowMessage.value =
+    'A eliminação do caminho "' +
+    route.name +
+    '" foi cancelada.';
+
   return;
 }
 
-if (highlightedSavedRouteId.value === routeId) {
-  highlightedSavedRouteId.value = null;
-}
 
-savedRoutes.splice(index, 1);
+  if (
+    highlightedSavedRouteId.value ===
+    routeId
+  ) {
+    await modelHighlighter?.clear(
+      "saved-route-highlight",
+    );
 
-  const idsByModel = new Map<string, number[]>();
-
-  for (const node of route.path) {
-    for (const circuit of getAllKnownCircuitKeys()) {
-  getAssignmentSet(circuit, node.modelId).delete(node.localId);
-}
-
-    reversedPipeDirections.get(node.modelId)?.delete(node.localId);
-
-if (reversedPipeDirections.get(node.modelId)?.size === 0) {
-  reversedPipeDirections.delete(node.modelId);
-}
-
-    if (!idsByModel.has(node.modelId)) {
-      idsByModel.set(node.modelId, []);
-    }
-
-    idsByModel.get(node.modelId)?.push(node.localId);
+    highlightedSavedRouteId.value =
+      null;
   }
 
-  for (const [modelId, ids] of idsByModel) {
-    const model = loadedModels.get(modelId);
+  savedRoutes.splice(
+    index,
+    1,
+  );
 
-    if (model && ids.length) {
-      await model.resetHighlight(ids);
+  selectedRouteIdsForSimulation.delete(
+    routeId,
+  );
+
+  selectedRouteIdsForGrouping.delete(
+    routeId,
+  );
+
+  const exclusiveIdsByModel =
+    new Map<string, number[]>();
+
+  for (const node of route.path) {
+    const isUsedByAnotherRoute =
+      savedRoutes.some(
+        (remainingRoute) =>
+          remainingRoute.path.some(
+            (remainingNode) =>
+              isSameNode(
+                remainingNode,
+                node,
+              ),
+          ),
+      );
+
+    if (isUsedByAnotherRoute) {
+      continue;
+    }
+
+    for (
+      const circuit of
+        getAllKnownCircuitKeys()
+    ) {
+      getAssignmentSet(
+        circuit,
+        node.modelId,
+      ).delete(
+        node.localId,
+      );
+    }
+
+    reversedPipeDirections
+      .get(node.modelId)
+      ?.delete(node.localId);
+
+    if (
+      reversedPipeDirections
+        .get(node.modelId)
+        ?.size === 0
+    ) {
+      reversedPipeDirections.delete(
+        node.modelId,
+      );
+    }
+
+    syncedPipeDirections
+      .get(node.modelId)
+      ?.delete(node.localId);
+
+    if (
+      syncedPipeDirections
+        .get(node.modelId)
+        ?.size === 0
+    ) {
+      syncedPipeDirections.delete(
+        node.modelId,
+      );
+    }
+
+    const modelIds =
+      exclusiveIdsByModel.get(
+        node.modelId,
+      ) ?? [];
+
+    modelIds.push(
+      node.localId,
+    );
+
+    exclusiveIdsByModel.set(
+      node.modelId,
+      modelIds,
+    );
+  }
+
+  for (
+    const [modelId, localIds] of
+      exclusiveIdsByModel
+  ) {
+    const model =
+      loadedModels.get(modelId);
+
+    if (
+      model &&
+      localIds.length > 0
+    ) {
+      await model.resetHighlight(
+        localIds,
+      );
     }
   }
 
   flowConnections.splice(0);
 
   saveRoutesToStorage();
-
   saveReversedDirectionsToStorage();
+  saveSyncedPipeDirectionsToStorage();
 
   updateManualStats();
 
-  if (countAssignments() > 0 || flowConnections.length > 0) {
+  if (
+    countAssignments() > 0 ||
+    flowConnections.length > 0
+  ) {
     await rebuildManualFlowLayer();
   } else {
     clearFlowVisuals();
-    await fragmentManager.core.update(true);
+
+    await fragmentManager.core.update(
+      true,
+    );
   }
 
-  flowMessage.value = "Caminho apagado.";
+  flowMessage.value =
+    'O caminho "' +
+    route.name +
+    '" foi apagado. Os tubos pertencentes a outros caminhos foram mantidos.';
 }
 
 async function resetRoutePathHighlight(route: SavedRoute) {
@@ -4985,6 +7483,10 @@ async function clearFlowVisualsForRouteHighlight() {
   stopFlowForSavedRouteHighlight();
 
   await clearPersistentCircuitHighlights();
+
+  for (const model of loadedModels.values()) {
+    await model.resetHighlight();
+  }
 
   await fragmentManager.core.update(
     true,
@@ -5059,6 +7561,49 @@ async function enforceActiveSavedRouteHighlight() {
   );
 
   await fragmentManager.core.update(true);
+}
+
+async function highlightSavedRouteForEditing() {
+  const selectedRoute =
+    savedRoutes.find(
+      (route) =>
+        route.id ===
+        selectedSavedRouteIdForEditing.value,
+    );
+
+  if (!selectedRoute) {
+    if (
+      highlightedSavedRouteId.value
+    ) {
+      const highlightedRoute =
+        savedRoutes.find(
+          (route) =>
+            route.id ===
+            highlightedSavedRouteId.value,
+        );
+
+      if (highlightedRoute) {
+        await toggleSavedRouteHighlight(
+          highlightedRoute,
+        );
+      }
+    }
+
+    return;
+  }
+
+  if (
+    highlightedSavedRouteId.value ===
+    selectedRoute.id
+  ) {
+    return;
+  }
+
+  await toggleSavedRouteHighlight(
+    selectedRoute,
+  );
+
+  await rebuildManualFlowLayer();
 }
 
 async function toggleSavedRouteHighlight(
@@ -5260,25 +7805,305 @@ route.directionEnds =
     "\" invertido.";
 }
 
-function toggleSavedRouteProtection(routeId: string) {
-  const route = savedRoutes.find(
-    (savedRoute) => savedRoute.id === routeId,
-  );
+async function createProtectedRouteDirections(
+  route: SavedRoute,
+) {
+  const protectedDirections:
+    ProtectedRouteDirection[] = [];
+
+  for (const node of route.path) {
+    const directionKey =
+      automaticDirectionKey(
+        route.temperature,
+        node,
+      );
+
+    const automaticNeighbors =
+      automaticDirectionNeighbors.get(
+        directionKey,
+      );
+
+    let previous:
+      FlowNode | null =
+        automaticNeighbors?.previous
+          ? {
+              modelId:
+                automaticNeighbors
+                  .previous.modelId,
+
+              localId:
+                automaticNeighbors
+                  .previous.localId,
+            }
+          : null;
+
+    let next:
+      FlowNode | null =
+        automaticNeighbors?.next
+          ? {
+              modelId:
+                automaticNeighbors
+                  .next.modelId,
+
+              localId:
+                automaticNeighbors
+                  .next.localId,
+            }
+          : null;
+
+    if (
+      !previous ||
+      !next
+    ) {
+      for (
+        const connection of
+          flowConnections
+      ) {
+        if (
+          connection.temperature !==
+          route.temperature
+        ) {
+          continue;
+        }
+
+        if (
+          !previous &&
+          isSameNode(
+            connection.to,
+            node,
+          )
+        ) {
+          previous = {
+            modelId:
+              connection.from.modelId,
+
+            localId:
+              connection.from.localId,
+          };
+        }
+
+        if (
+          !next &&
+          isSameNode(
+            connection.from,
+            node,
+          )
+        ) {
+          next = {
+            modelId:
+              connection.to.modelId,
+
+            localId:
+              connection.to.localId,
+          };
+        }
+      }
+    }
+
+    protectedDirections.push({
+      node: {
+        modelId:
+          node.modelId,
+
+        localId:
+          node.localId,
+      },
+
+      previous,
+
+      next,
+
+      reversed:
+        isPipeDirectionReversed(
+          node.modelId,
+          node.localId,
+        ),
+    });
+  }
+
+  return protectedDirections;
+}
+
+function getProtectedDirectionConflict(
+  route: SavedRoute,
+  directions:
+    ProtectedRouteDirection[],
+) {
+  const newDirectionsByNode =
+    new Map(
+      directions.map(
+        (direction) => [
+          nodeKey(
+            direction.node,
+          ),
+          direction,
+        ],
+      ),
+    );
+
+  for (
+    const otherRoute of
+      savedRoutes
+  ) {
+    if (
+      otherRoute.id === route.id ||
+      !otherRoute.locked ||
+      !otherRoute
+        .protectedDirections
+        ?.length
+    ) {
+      continue;
+    }
+
+    for (
+      const otherDirection of
+        otherRoute
+          .protectedDirections
+    ) {
+      const newDirection =
+        newDirectionsByNode.get(
+          nodeKey(
+            otherDirection.node,
+          ),
+        );
+
+      if (!newDirection) {
+        continue;
+      }
+
+      const oppositeNext =
+        newDirection.next &&
+        otherDirection.previous &&
+        isSameNode(
+          newDirection.next,
+          otherDirection.previous,
+        );
+
+      const oppositePrevious =
+        newDirection.previous &&
+        otherDirection.next &&
+        isSameNode(
+          newDirection.previous,
+          otherDirection.next,
+        );
+
+      if (
+        oppositeNext ||
+        oppositePrevious
+      ) {
+        return {
+          otherRoute,
+          node:
+            newDirection.node,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+async function toggleSavedRouteProtection(
+  routeId: string,
+) {
+  const route =
+    savedRoutes.find(
+      (savedRoute) =>
+        savedRoute.id === routeId,
+    );
 
   if (!route) {
     return;
   }
 
-  route.locked = !route.locked;
-
-  saveRoutesToStorage();
-
   if (route.locked) {
-    flowMessage.value = `Caminho "${route.name}" protegido.`;
+    route.locked = false;
+
+    delete route.protectedDirections;
+
+    saveRoutesToStorage();
+
+    flowMessage.value =
+      'Caminho "' +
+      route.name +
+      '" desprotegido.';
+
     return;
   }
 
-  flowMessage.value = `Caminho "${route.name}" desprotegido.`;
+  if (
+    route.needsDirectionRedefinition
+  ) {
+    window.alert(
+      "Não é possível proteger este caminho.\n\n" +
+        "Foram adicionados tubos e o sentido tem de ser definido novamente.",
+    );
+
+    flowMessage.value =
+      'Define novamente o sentido do caminho "' +
+      route.name +
+      '" antes de o proteger.';
+
+    return;
+  }
+
+  const protectedDirections =
+    await createProtectedRouteDirections(
+      route,
+    );
+
+  if (!protectedDirections.length) {
+  window.alert(
+    "Não foi possível proteger este caminho.\n\n" +
+      "O caminho não contém tubos para congelar.",
+  );
+
+  flowMessage.value =
+    'O caminho "' +
+    route.name +
+    '" não contém tubos para proteger.';
+
+  return;
+}
+
+  const conflict =
+    getProtectedDirectionConflict(
+      route,
+      protectedDirections,
+    );
+
+  if (conflict) {
+  const conflictMessage =
+    "Não foi possível proteger este caminho.\n\n" +
+    "O tubo #" +
+    conflict.node.localId +
+    ' tem um sentido oposto no caminho protegido "' +
+    conflict.otherRoute.name +
+    '".';
+
+  window.alert(
+    conflictMessage,
+  );
+
+  flowMessage.value =
+    "Existe um conflito de sentido entre caminhos protegidos.";
+
+  return;
+}
+
+  route.protectedDirections =
+    protectedDirections;
+
+  route.locked = true;
+
+  saveRoutesToStorage();
+
+  flowMessage.value =
+    'Caminho "' +
+    route.name +
+    '" protegido com ' +
+    protectedDirections.length +
+    " sentido(s) de tubo congelado(s).";
 }
 
 function renameSavedRoute(routeId: string) {
@@ -5311,26 +8136,6 @@ function renameSavedRoute(routeId: string) {
 
   flowMessage.value =
     `Caminho renomeado para "${trimmedName}".`;
-}
-
-async function applySavedRoutesWithoutScan() {
-  if (!loadedModels.size) {
-    flowMessage.value =
-      "Carrega primeiro o ficheiro IFC.";
-    return;
-  }
-
-  if (!savedRoutes.length) {
-    flowMessage.value =
-      "Não existem caminhos guardados.";
-    return;
-  }
-
-  await applyAllSavedRoutes();
-
-  flowMessage.value =
-    savedRoutes.length +
-    " caminho(s) guardado(s) aplicado(s) sem repetir o scan.";
 }
 
 async function applyAllSavedRoutes() {
@@ -5384,17 +8189,6 @@ async function applyAllSavedRoutes() {
 
   flowMessage.value =
     `${appliedCount} caminho(s) guardado(s) aplicado(s).`;
-}
-
-async function clearConnections() {
-  flowConnections.splice(0);
-  routeWaypoints.splice(0);
-  routeStart = null;
-  routeEnd = null;
-  routeStartLabel.value = "nenhum";
-  routeEndLabel.value = "nenhum";
-  await rebuildManualFlowLayer();
-  flowMessage.value = "Caminho automatico removido.";
 }
 
 async function addConnectionsToScene() {
@@ -5600,6 +8394,265 @@ function shortestPath(graph: Map<string, Map<string, number>>, start: string, en
   }
 
   return path[0] === start ? path : [];
+}
+
+function compareSavedRoutePaths(
+  firstRoute: SavedRoute,
+  secondRoute: SavedRoute,
+): RouteComparisonResult {
+  const firstNodeKeys =
+    new Set(
+      firstRoute.path.map(
+        (node) => nodeKey(node),
+      ),
+    );
+
+  const secondNodeKeys =
+    new Set(
+      secondRoute.path.map(
+        (node) => nodeKey(node),
+      ),
+    );
+
+  const firstOnlyNodes = [
+    ...firstNodeKeys,
+  ].filter(
+    (nodeKeyValue) =>
+      !secondNodeKeys.has(
+        nodeKeyValue,
+      ),
+  );
+
+  const secondOnlyNodes = [
+    ...secondNodeKeys,
+  ].filter(
+    (nodeKeyValue) =>
+      !firstNodeKeys.has(
+        nodeKeyValue,
+      ),
+  );
+
+  const commonNodeCount = [
+    ...firstNodeKeys,
+  ].filter(
+    (nodeKeyValue) =>
+      secondNodeKeys.has(
+        nodeKeyValue,
+      ),
+  ).length;
+
+  const totalUniqueNodeCount =
+    new Set([
+      ...firstNodeKeys,
+      ...secondNodeKeys,
+    ]).size;
+
+  const overlapPercentage =
+    totalUniqueNodeCount > 0
+      ? Math.round(
+          (
+            commonNodeCount /
+            totalUniqueNodeCount
+          ) * 100,
+        )
+      : 0;
+
+  const exactDuplicate =
+    firstNodeKeys.size ===
+      secondNodeKeys.size &&
+    firstOnlyNodes.length === 0 &&
+    secondOnlyNodes.length === 0;
+
+  return {
+    firstRoute,
+    secondRoute,
+    firstOnlyNodes,
+    secondOnlyNodes,
+    commonNodeCount,
+    overlapPercentage,
+    exactDuplicate,
+  };
+}
+
+function compareSelectedSavedRoutes() {
+  const selectedRoutes =
+    savedRoutes.filter(
+      (route) =>
+        selectedRouteIdsForGrouping.has(
+          route.id,
+        ),
+    );
+
+  if (selectedRoutes.length !== 2) {
+    flowMessage.value =
+      "Seleciona exatamente dois percursos para comparar.";
+
+    return;
+  }
+
+  const comparison =
+    compareSavedRoutePaths(
+      selectedRoutes[0],
+      selectedRoutes[1],
+    );
+
+const firstRouteHasValveLinks =
+  [
+    ...valveControlledPipeLinks.values(),
+  ].some(
+    (linkedPipes) =>
+      linkedPipes.some(
+        (linkedPipe) =>
+          linkedPipe.routeId ===
+          comparison.firstRoute.id,
+      ),
+  );
+
+const secondRouteHasValveLinks =
+  [
+    ...valveControlledPipeLinks.values(),
+  ].some(
+    (linkedPipes) =>
+      linkedPipes.some(
+        (linkedPipe) =>
+          linkedPipe.routeId ===
+          comparison.secondRoute.id,
+      ),
+  );
+
+const firstRouteHasDirection =
+  (
+    comparison.firstRoute
+      .directionStarts?.length ?? 0
+  ) > 0 &&
+  (
+    comparison.firstRoute
+      .directionEnds?.length ?? 0
+  ) > 0;
+
+const secondRouteHasDirection =
+  (
+    comparison.secondRoute
+      .directionStarts?.length ?? 0
+  ) > 0 &&
+  (
+    comparison.secondRoute
+      .directionEnds?.length ?? 0
+  ) > 0;
+
+const comparisonMessage = [
+  comparison.exactDuplicate
+    ? "DUPLICADOS EXATOS"
+    : "PERCURSOS DIFERENTES",
+
+  "",
+
+  comparison.firstRoute.name +
+    ": " +
+    comparison.firstRoute.path.length +
+    " tubo(s)",
+
+  comparison.secondRoute.name +
+    ": " +
+    comparison.secondRoute.path.length +
+    " tubo(s)",
+
+  "",
+
+  "Tubos comuns: " +
+    comparison.commonNodeCount,
+
+  "Exclusivos do primeiro: " +
+    comparison.firstOnlyNodes.length,
+
+  "Exclusivos do segundo: " +
+    comparison.secondOnlyNodes.length,
+
+  "Sobreposição: " +
+    comparison.overlapPercentage +
+    "%",
+
+  "",
+
+  "CONFIGURAÇÃO DO PRIMEIRO",
+
+  "Cor personalizada: " +
+    (
+      comparison.firstRoute.customColor ??
+      "não"
+    ),
+
+  "Sentido definido: " +
+    (
+      firstRouteHasDirection
+        ? "sim"
+        : "não"
+    ),
+
+  "Protegido: " +
+    (
+      comparison.firstRoute.locked
+        ? "sim"
+        : "não"
+    ),
+
+  "Grupo: " +
+    getSavedRouteGroupName(
+      comparison.firstRoute,
+    ),
+
+  "Válvula associada: " +
+    (
+      firstRouteHasValveLinks
+        ? "sim"
+        : "não"
+    ),
+
+  "",
+
+  "CONFIGURAÇÃO DO SEGUNDO",
+
+  "Cor personalizada: " +
+    (
+      comparison.secondRoute.customColor ??
+      "não"
+    ),
+
+  "Sentido definido: " +
+    (
+      secondRouteHasDirection
+        ? "sim"
+        : "não"
+    ),
+
+  "Protegido: " +
+    (
+      comparison.secondRoute.locked
+        ? "sim"
+        : "não"
+    ),
+
+  "Grupo: " +
+    getSavedRouteGroupName(
+      comparison.secondRoute,
+    ),
+
+  "Válvula associada: " +
+    (
+      secondRouteHasValveLinks
+        ? "sim"
+        : "não"
+    ),
+].join("\n");
+
+  window.alert(
+    comparisonMessage,
+  );
+
+  flowMessage.value =
+    comparison.exactDuplicate
+      ? "Os dois percursos selecionados são duplicados exatos."
+      : "Os percursos foram comparados e têm diferenças.";
 }
 
 function nodeKey(node: FlowNode) {
@@ -5963,9 +9016,15 @@ async function defineSelectedElementsAs(elementType: MepElementType) {
     for (const localId of ids) {
       const key = elementKey(modelId, localId);
 
-      const defaultState = isValveElementType(elementType)
-        ? getNormalValveState(elementType)
-        : mepElements[key]?.state;
+const currentState =
+  isValveElementType(elementType)
+    ? (
+        mepElements[key]?.state ===
+          "closed"
+          ? "closed"
+          : "open"
+      )
+    : mepElements[key]?.state;
 
       const isManualValve =
         isValveElementType(
@@ -5983,7 +9042,7 @@ async function defineSelectedElementsAs(elementType: MepElementType) {
         circuitType:
           existingElement?.circuitType ??
           "unknown",
-        state: defaultState,
+        state: currentState,
         isShutoffValve:
           isManualValve
             ? true
@@ -6002,25 +9061,17 @@ async function defineSelectedElementsAs(elementType: MepElementType) {
 
   saveMepElementsToStorage();
 
-  if (elementType === "normallyClosedValve") {
-    await setSelectedValvesState("closed");
+if (
+  elementType === "normallyClosedValve" ||
+  elementType === "normallyOpenValve"
+) {
+  flowMessage.value =
+    `${selectedCount.value} elemento(s) definidos como ${getElementTypeLabel(elementType)}. ` +
+    "A indicação NA/NF é apenas informativa. " +
+    "O estado atual foi mantido ou iniciado como aberto.";
 
-    flowMessage.value =
-      `${selectedCount.value} elemento(s) definidos como ${getElementTypeLabel(elementType)}. ` +
-      `Válvula(s) NF reposta(s) ao estado normal fechado.`;
-
-    return;
-  }
-
-  if (elementType === "normallyOpenValve") {
-    await setSelectedValvesState("open");
-
-    flowMessage.value =
-      `${selectedCount.value} elemento(s) definidos como ${getElementTypeLabel(elementType)}. ` +
-      `Válvula(s) NA reposta(s) ao estado normal aberto.`;
-
-    return;
-  }
+  return;
+}
 
   flowMessage.value =
     `${selectedCount.value} elemento(s) definidos como ${getElementTypeLabel(elementType)}.`;
@@ -6246,46 +9297,37 @@ function getValveManagementOptions() {
         element.localId,
       );
 
-      const originalName =
-        valveOriginalDesignations[key] ||
-        element.valveIdentificationText ||
-        `Válvula #${element.localId}`;
+const originalName =
+  valveOriginalDesignations[key] ||
+  element.valveIdentificationText ||
+  `Válvula #${element.localId}`;
 
-      const displayName =
-        element.name ||
-        originalName;
+const displayName =
+  element.name?.trim() ||
+  element.systemName?.trim() ||
+  originalName;
 
-      const normalStateLabel =
-        element.elementType ===
-        "normallyClosedValve"
-          ? "NF"
-          : "NA";
+const normalStateLabel =
+  element.elementType ===
+  "normallyClosedValve"
+    ? "NF"
+    : "NA";
+return {
+  key,
 
-      const familyLabel =
-        element.valveIdentificationText
-          ? " · " +
-            element.valveIdentificationText
-          : "";
+  modelId:
+    element.modelId,
 
-      const systemLabel =
-        element.systemName
-          ? " · " +
-            element.systemName
-          : "";
+  localId:
+    element.localId,
 
-      return {
-        key,
-        modelId:
-          element.modelId,
-        localId:
-          element.localId,
-        label:
-          displayName +
-          familyLabel +
-          systemLabel +
-          " · " +
-          normalStateLabel,
-      };
+  label:
+    displayName +
+    " · #" +
+    element.localId +
+    " · " +
+    normalStateLabel,
+};
     })
     .sort(
       (
@@ -6304,6 +9346,38 @@ function isValveSelectedForManagement(
   return (
     selectedValveKeysForManagement.has(
       valveKey,
+    )
+  );
+}
+
+function selectAllManagedValves() {
+  selectedValveKeysForManagement.clear();
+
+  for (
+    const valveOption of
+      getValveManagementOptions()
+  ) {
+    selectedValveKeysForManagement.add(
+      valveOption.key,
+    );
+  }
+
+  flowMessage.value =
+    selectedValveKeysForManagement.size +
+    " válvula(s) selecionada(s).";
+}
+
+function areAllManagedValvesSelected() {
+  const valveOptions =
+    getValveManagementOptions();
+
+  return (
+    valveOptions.length > 0 &&
+    valveOptions.every(
+      (valveOption) =>
+        selectedValveKeysForManagement.has(
+          valveOption.key,
+        ),
     )
   );
 }
@@ -6470,7 +9544,9 @@ async function highlightSelectedManagedValves() {
     " válvula(s) realçada(s).";
 }
 
-async function toggleSelectedManagedValvesState() {
+async function setSelectedManagedValvesState(
+  targetState: "open" | "closed",
+) {
   if (
     selectedValveKeysForManagement.size === 0
   ) {
@@ -6515,13 +9591,14 @@ async function toggleSelectedManagedValvesState() {
       continue;
     }
 
+    if (
+      element.state === targetState
+    ) {
+      continue;
+    }
+
     selectedValveDesignationKey.value =
       valveKey;
-
-    const targetState =
-      element.state === "closed"
-        ? "open"
-        : "closed";
 
     await setSelectedValvesState(
       targetState,
@@ -6536,78 +9613,18 @@ async function toggleSelectedManagedValvesState() {
   saveMepElementsToStorage();
 
   flowMessage.value =
-    changedCount +
-    " válvula(s) alternada(s) entre aberta e fechada.";
-}
-
-async function resetSelectedManagedValvesToNormal() {
-  if (
-    selectedValveKeysForManagement.size === 0
-  ) {
-    flowMessage.value =
-      "Seleciona primeiro uma ou mais válvulas.";
-
-    return;
-  }
-
-  const previousDesignationKey =
-    selectedValveDesignationKey.value;
-
-  let changedCount = 0;
-
-  for (
-    const valveKey of
-      selectedValveKeysForManagement
-  ) {
-    const valveNode =
-      getValveNodeFromDesignationKey(
-        valveKey,
-      );
-
-    if (!valveNode) {
-      continue;
-    }
-
-    const element =
-      mepElements[
-        elementKey(
-          valveNode.modelId,
-          valveNode.localId,
+    changedCount > 0
+      ? changedCount +
+        (
+          targetState === "open"
+            ? " válvula(s) aberta(s)."
+            : " válvula(s) fechada(s)."
         )
-      ];
-
-    if (
-      !element ||
-      !isConfirmedShutoffValve(
-        element,
-      )
-    ) {
-      continue;
-    }
-
-    selectedValveDesignationKey.value =
-      valveKey;
-
-    const normalState =
-      getNormalValveState(
-        element.elementType,
-      );
-
-    await setSelectedValvesState(
-      normalState,
-    );
-
-    changedCount++;
-  }
-
-  selectedValveDesignationKey.value =
-    previousDesignationKey;
-
-  saveMepElementsToStorage();
-
-  flowMessage.value =
-    changedCount +
-    " válvula(s) reposta(s) ao estado normal.";
+      : (
+          targetState === "open"
+            ? "As válvulas selecionadas já estavam abertas."
+            : "As válvulas selecionadas já estavam fechadas."
+        );
 }
 
 async function excludeSelectedManagedValves() {
@@ -6753,57 +9770,15 @@ function toggleValveManagementPanel() {
 }
 
 function getValveDesignationOptions() {
-  return Object.values(mepElements)
-  .filter(
-    (element) =>
-      isConfirmedShutoffValve(
-        element,
-      ),
-  )
-  .map((element) => {
-      const key = elementKey(element.modelId, element.localId);
-      const valveKey = nodeKey({
-        modelId: element.modelId,
-        localId: element.localId,
-      });
+  return getValveManagementOptions().map(
+    (valveOption) => ({
+      key:
+        valveOption.key,
 
-      const originalName =
-        valveOriginalDesignations[key] || `Válvula #${element.localId}`;
-
-      const displayName = element.name || originalName;
-
-      const hasAssociation =
-        valveControlledPipeLinks.has(valveKey) ||
-        [...valveControlledPipeLinks.keys()].some((storedValveKey) => {
-          const [, storedLocalId] = storedValveKey.split(":");
-          return Number(storedLocalId) === element.localId;
-        });
-
-      const systemLabel =
-  element.systemName
-    ? ` · ${element.systemName}`
-    : " · sistema não identificado";
-
-const normalStateLabel =
-  element.elementType ===
-  "normallyClosedValve"
-    ? "NF"
-    : "NA";
-
-return {
-  key,
-
-  label:
-    displayName +
-    systemLabel +
-    ` · ${normalStateLabel}` +
-    (
-      hasAssociation
-        ? " - associada"
-        : " - sem associação"
-    ),
-};
-    });
+      label:
+        valveOption.label,
+    }),
+  );
 }
 
 function getValveNodeFromDesignationKey(key: string): FlowNode | null {
@@ -6886,6 +9861,18 @@ if (suggestedRoute) {
   selectedValveAssociationRouteId.value =
     "";
 }
+}
+
+async function selectValveDesignationOption(
+  valveKey: string,
+) {
+  selectedValveDesignationKey.value =
+    valveKey;
+
+  isValveDesignationDropdownOpen.value =
+    false;
+
+  await selectValveDesignationFromDropdown();
 }
 
 async function selectValveDesignationFromDropdown() {
@@ -7157,7 +10144,7 @@ function findIfcPropertyValue(
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[\s_\-]/g, ""),
+      .replace(/[\s_-]/g, ""),
   );
 
   function normalizeName(value: any) {
@@ -7165,7 +10152,7 @@ function findIfcPropertyValue(
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[\s_\-]/g, "");
+      .replace(/[\s_-]/g, "");
   }
 
   function getPropertyValue(value: any): string {
@@ -7683,12 +10670,16 @@ async function extractSelectedIfcInformation() {
     },
   );
 
-  const rawIfcData = normalizeIfcValue(itemData[0]);
+  const itemEntity: any = Array.isArray(itemData)
+    ? itemData[0]
+    : undefined;
+
+  const rawIfcData = normalizeIfcValue(itemEntity);
 
   const revitElementId =
   getAttributeValueText(
-    itemData[0]?.Tag ??
-    itemData[0]?.tag,
+    itemEntity?.Tag ??
+    itemEntity?.tag,
   ).trim() ||
   findIfcPropertyValue(
     rawIfcData,
@@ -7759,8 +10750,8 @@ const diameterValue = findIfcPropertyValue(
 );
 
   const typeRelation =
-    itemData[0]?.IsTypedBy?.[0] ??
-    itemData[0]?.isTypedBy?.[0] ??
+    itemEntity?.IsTypedBy?.[0] ??
+    itemEntity?.isTypedBy?.[0] ??
     null;
 
   let revitFamily = revitValues.family;
@@ -7794,7 +10785,9 @@ const diameterValue = findIfcPropertyValue(
   },
 );
 
-      const typeEntity = typeItemData[0];
+      const typeEntity: any = Array.isArray(typeItemData)
+        ? typeItemData[0]
+        : undefined;
 
       console.log(
         "ENTIDADE IFC DE TIPO COMPLETA:",
@@ -8071,34 +11064,6 @@ async function highlightMepElementsByType(elementType: MepElementType) {
   flowMessage.value = highlightedCount
     ? `${highlightedCount} elemento(s) realçado(s) como ${getElementTypeLabel(elementType)}.`
     : `Não existem elementos definidos como ${getElementTypeLabel(elementType)}.`;
-}
-
-async function clearMepElementsHighlightByType(elementType: MepElementType) {
-  const idsByModel = getMepElementIdsByType(elementType);
-
-  let clearedCount = 0;
-
-  for (const [modelId, ids] of idsByModel) {
-    const model = loadedModels.get(modelId);
-
-    if (!model || !ids.length) {
-      continue;
-    }
-
-    await model.resetHighlight(ids);
-
-    clearedCount += ids.length;
-  }
-
-  if (countAssignments() > 0 || flowConnections.length > 0) {
-    await rebuildManualFlowLayer();
-  } else {
-    await fragmentManager.core.update(true);
-  }
-
-  flowMessage.value = clearedCount
-    ? `Realce removido de ${clearedCount} elemento(s) ${getElementTypeLabel(elementType)}.`
-    : `Não havia elementos para limpar em ${getElementTypeLabel(elementType)}.`;
 }
 
 function isValveElementType(
@@ -8714,6 +11679,958 @@ async function highlightValveFromDropdown(node: FlowNode) {
   await fragmentManager.core.update(true);
 }
 
+async function findClosestProtectedRouteMatch(
+  valveNode: FlowNode,
+  protectedRoutes: SavedRoute[],
+): Promise<AutomaticValveRouteMatch | null> {
+  const valveCenter =
+    await getNodeCenter(
+      valveNode,
+    );
+
+  if (!valveCenter) {
+    return null;
+  }
+
+  const loadedModelIds = [
+    ...loadedModels.keys(),
+  ];
+
+  const fallbackModelId =
+    loadedModelIds[0];
+
+  if (!fallbackModelId) {
+    return null;
+  }
+
+  const matches:
+    Array<{
+      route: SavedRoute;
+      closestNode: FlowNode;
+      distance: number;
+    }> = [];
+
+  for (const route of protectedRoutes) {
+    let closestRouteNode:
+      FlowNode | null = null;
+
+    let closestRouteDistance =
+      Number.POSITIVE_INFINITY;
+
+    for (const routeNode of route.path) {
+      const adaptedNode: FlowNode =
+        loadedModels.has(
+          routeNode.modelId,
+        )
+          ? {
+              modelId:
+                routeNode.modelId,
+              localId:
+                routeNode.localId,
+            }
+          : {
+              modelId:
+                fallbackModelId,
+              localId:
+                routeNode.localId,
+            };
+
+      const nodeCenter =
+        await getNodeCenter(
+          adaptedNode,
+        );
+
+      if (!nodeCenter) {
+        continue;
+      }
+
+      const distance =
+        valveCenter.distanceTo(
+          nodeCenter,
+        );
+
+      if (
+        distance <
+        closestRouteDistance
+      ) {
+        closestRouteDistance =
+          distance;
+
+        closestRouteNode =
+          adaptedNode;
+      }
+    }
+
+    if (
+      closestRouteNode &&
+      Number.isFinite(
+        closestRouteDistance,
+      )
+    ) {
+      matches.push({
+        route,
+        closestNode:
+          closestRouteNode,
+        distance:
+          closestRouteDistance,
+      });
+    }
+  }
+
+  matches.sort(
+    (firstMatch, secondMatch) =>
+      firstMatch.distance -
+      secondMatch.distance,
+  );
+
+  const closestMatch =
+    matches[0];
+
+  if (!closestMatch) {
+    return null;
+  }
+
+  const alternativeMatch =
+    matches[1];
+
+  const ambiguityTolerance =
+    Math.max(
+      0.05,
+      closestMatch.distance * 0.15,
+    );
+
+  const ambiguous =
+    !!alternativeMatch &&
+    (
+      alternativeMatch.distance -
+      closestMatch.distance
+    ) <= ambiguityTolerance;
+
+  return {
+    route:
+      closestMatch.route,
+
+    closestNode:
+      closestMatch.closestNode,
+
+    distance:
+      closestMatch.distance,
+
+    ambiguous,
+
+    alternativeRouteName:
+      ambiguous
+        ? alternativeMatch?.route.name
+        : undefined,
+
+    alternativeDistance:
+      ambiguous
+        ? alternativeMatch?.distance
+        : undefined,
+  };
+}
+
+function getProtectedRouteDownstreamPipes(
+  route: SavedRoute,
+  startNode: FlowNode,
+) {
+  const loadedModelIds = [
+    ...loadedModels.keys(),
+  ];
+
+  const fallbackModelId =
+    loadedModelIds[0];
+
+  if (!fallbackModelId) {
+    return [];
+  }
+
+  const adaptedPath =
+    route.path.map(
+      (node): FlowNode => {
+        if (
+          loadedModels.has(
+            node.modelId,
+          )
+        ) {
+          return {
+            modelId:
+              node.modelId,
+            localId:
+              node.localId,
+          };
+        }
+
+        return {
+          modelId:
+            fallbackModelId,
+          localId:
+            node.localId,
+        };
+      },
+    );
+
+  const startIndex =
+    adaptedPath.findIndex(
+      (node) =>
+        isSameNode(
+          node,
+          startNode,
+        ),
+    );
+
+  if (startIndex === -1) {
+    return [];
+  }
+
+  return adaptedPath
+    .slice(startIndex)
+    .map(
+      (
+        node,
+      ): ValveControlledPipeLink => ({
+        modelId:
+          node.modelId,
+
+        localId:
+          node.localId,
+
+        temperature:
+          route.temperature,
+
+        routeId:
+          route.id,
+
+        switchMode: "none",
+      }),
+    );
+}
+
+function getAutomaticValvePreviewStatusLabel(
+  status:
+    AutomaticValveAssociationPreview["status"],
+) {
+  if (status === "safe") {
+    return "Pronta para confirmar";
+  }
+
+  if (status === "noMatch") {
+    return "Sem percurso protegido próximo";
+  }
+
+  if (status === "noDownstream") {
+    return "Sem tubos a jusante";
+  }
+
+  return "Associação ambígua";
+}
+
+function toggleAutomaticValvePreviewAcceptance(
+  preview:
+    AutomaticValveAssociationPreview,
+) {
+  if (preview.status !== "safe") {
+    return;
+  }
+
+  preview.accepted =
+    !preview.accepted;
+}
+
+function selectAllSafeValveAssociationPreviews() {
+  for (
+    const preview of
+      automaticValveAssociationPreviews
+  ) {
+    preview.accepted =
+      preview.status === "safe";
+  }
+}
+
+function clearAutomaticValveAssociationPreviewSelection() {
+  for (
+    const preview of
+      automaticValveAssociationPreviews
+  ) {
+    preview.accepted = false;
+  }
+}
+
+function getAcceptedAutomaticValvePreviewCount() {
+  return automaticValveAssociationPreviews.filter(
+    (preview) =>
+      preview.status === "safe" &&
+      preview.accepted,
+  ).length;
+}
+
+async function clearAutomaticValveAssociationPreviewHighlight() {
+  for (const model of loadedModels.values()) {
+    await model.resetHighlight();
+  }
+
+  await fragmentManager.core.update(
+    true,
+  );
+
+  if (
+    countAssignments() > 0 ||
+    flowConnections.length > 0
+  ) {
+    await rebuildManualFlowLayer(
+  false,
+);
+  }
+}
+
+async function highlightAutomaticValveAssociationPreview(
+  preview: AutomaticValveAssociationPreview,
+) {
+  if (
+    !preview.routeId ||
+    !preview.closestNode
+  ) {
+    flowMessage.value =
+      "Esta proposta não tem um percurso válido para realçar.";
+
+    return;
+  }
+
+  await clearAutomaticValveAssociationPreviewHighlight();
+
+  const route =
+    savedRoutes.find(
+      (savedRoute) =>
+        savedRoute.id ===
+        preview.routeId,
+    );
+
+  if (!route) {
+    flowMessage.value =
+      "Não foi possível encontrar o percurso proposto.";
+
+    return;
+  }
+
+  const downstreamPipes =
+    getProtectedRouteDownstreamPipes(
+      route,
+      preview.closestNode,
+    );
+
+  if (!downstreamPipes.length) {
+    flowMessage.value =
+      "Esta proposta não tem tubos a jusante para realçar.";
+
+    return;
+  }
+
+  await clearManagedValveHighlight();
+
+  const idsByModel =
+    new Map<string, number[]>();
+
+  for (const pipeNode of downstreamPipes) {
+    const modelIds =
+      idsByModel.get(
+        pipeNode.modelId,
+      ) ?? [];
+
+    modelIds.push(
+      pipeNode.localId,
+    );
+
+    idsByModel.set(
+      pipeNode.modelId,
+      modelIds,
+    );
+  }
+
+  for (
+    const [modelId, localIds] of
+      idsByModel
+  ) {
+    const model =
+      loadedModels.get(modelId);
+
+    if (
+      !model ||
+      localIds.length === 0
+    ) {
+      continue;
+    }
+
+    await model.highlight(
+      localIds,
+      createHighlight(
+        0x00e5ff,
+        "automatic-valve-preview-pipes",
+      ),
+    );
+  }
+
+  const valveModel =
+    loadedModels.get(
+      preview.valveNode.modelId,
+    );
+
+  if (valveModel) {
+    await valveModel.highlight(
+      [
+        preview.valveNode.localId,
+      ],
+      createHighlight(
+        0xff00ff,
+        "automatic-valve-preview-valve",
+      ),
+    );
+  }
+
+  await fragmentManager.core.update(
+    true,
+  );
+
+  flowMessage.value =
+    'Proposta da válvula "' +
+    preview.valveLabel +
+    '" realçada: ' +
+    downstreamPipes.length +
+    " tubo(s) no percurso " +
+    '"' +
+    route.name +
+    '".';
+}
+
+async function closeAutomaticValveAssociationPreview() {
+  await clearAutomaticValveAssociationPreviewHighlight();
+
+  isAutomaticValveAssociationPreviewOpen.value =
+    false;
+
+  automaticValveAssociationPreviews.splice(
+    0,
+  );
+
+  flowMessage.value =
+    "Revisão das associações automáticas fechada.";
+}
+
+async function confirmAutomaticValveAssociationPreviews() {
+  const acceptedPreviews =
+    automaticValveAssociationPreviews.filter(
+      (preview) =>
+        preview.status === "safe" &&
+        preview.accepted,
+    );
+
+  if (!acceptedPreviews.length) {
+    flowMessage.value =
+      "Seleciona pelo menos uma proposta segura.";
+
+    return;
+  }
+
+  const shouldConfirm =
+    window.confirm(
+      "Serão guardadas " +
+        acceptedPreviews.length +
+        " associação(ões) automática(s).\n\n" +
+        "Queres continuar?",
+    );
+
+  if (!shouldConfirm) {
+    flowMessage.value =
+      "Confirmação das associações cancelada.";
+
+    return;
+  }
+
+  let associatedCount = 0;
+  let failedCount = 0;
+  let closedValveCount = 0;
+
+  for (
+    const preview of
+      acceptedPreviews
+  ) {
+    if (
+      !preview.routeId ||
+      !preview.closestNode
+    ) {
+      failedCount++;
+
+      continue;
+    }
+
+    const route =
+      savedRoutes.find(
+        (savedRoute) =>
+          savedRoute.id ===
+          preview.routeId,
+      );
+
+    if (!route) {
+      failedCount++;
+
+      continue;
+    }
+
+    const downstreamPipes =
+      getProtectedRouteDownstreamPipes(
+        route,
+        preview.closestNode,
+      );
+
+    if (!downstreamPipes.length) {
+      failedCount++;
+
+      continue;
+    }
+
+    const valveElement =
+      mepElements[
+        elementKey(
+          preview.valveNode.modelId,
+          preview.valveNode.localId,
+        )
+      ];
+
+    if (!valveElement) {
+      failedCount++;
+
+      continue;
+    }
+
+const linkedPipes =
+  downstreamPipes.map(
+    (
+      pipeNode,
+    ): ValveControlledPipeLink => ({
+      ...pipeNode,
+
+      switchMode: "none",
+    }),
+  );
+
+    valveControlledPipeLinks.set(
+      preview.valveKey,
+      linkedPipes,
+    );
+
+    valveBlockedPipeLinks.delete(
+      preview.valveKey,
+    );
+
+    if (
+      valveElement.state ===
+      "closed"
+    ) {
+      for (
+        const linkedPipe of
+          linkedPipes
+      ) {
+        blockPipeForRoute(
+          linkedPipe.routeId,
+          linkedPipe,
+        );
+      }
+
+      valveBlockedPipeLinks.set(
+        preview.valveKey,
+        linkedPipes,
+      );
+
+      closedValveCount++;
+    }
+
+    associatedCount++;
+  }
+
+  saveValvePipeLinksToStorage();
+  saveMepElementsToStorage();
+
+  updateBlockedCount();
+  updateManualStats();
+
+  await clearAutomaticValveAssociationPreviewHighlight();
+
+  isAutomaticValveAssociationPreviewOpen.value =
+    false;
+
+  automaticValveAssociationPreviews.splice(
+    0,
+  );
+
+  if (
+    associatedCount > 0 &&
+    (
+      countAssignments() > 0 ||
+      flowConnections.length > 0
+    )
+  ) {
+    await rebuildManualFlowLayer(
+  false,
+);
+  }
+
+  const resultMessage =
+    "Associações automáticas guardadas.\n\n" +
+    "Válvulas associadas: " +
+    associatedCount +
+    "\n" +
+    "Válvulas fechadas com bloqueio aplicado: " +
+    closedValveCount +
+    "\n" +
+    "Propostas que não foi possível guardar: " +
+    failedCount;
+
+  window.alert(
+    resultMessage,
+  );
+
+  flowMessage.value =
+    associatedCount +
+    " válvula(s) associada(s) automaticamente.";
+}
+
+async function handleAutomaticValveAssociationClick() {
+  await automaticallyLinkAllValvesByDirection();
+}
+
+async function automaticallyLinkAllValvesByDirection() {
+  if (
+    isPreparingAutomaticValveAssociations.value
+  ) {
+    return;
+  }
+
+  const detectedValves =
+    Object.values(
+      mepElements,
+    ).filter(
+      (element) =>
+        isConfirmedShutoffValve(
+          element,
+        ),
+    );
+
+  if (!detectedValves.length) {
+    window.alert(
+      "Não existem válvulas de corte disponíveis.\n\n" +
+        "Confirma se o scan reconheceu válvulas NA ou NF.",
+    );
+
+    flowMessage.value =
+      "Não existem válvulas de corte disponíveis.";
+
+    return;
+  }
+
+  const validatedRoutes =
+    savedRoutes.filter(
+      (route) =>
+        !route.hidden &&
+        route.locked &&
+        route.path.length > 0,
+    );
+
+  if (!validatedRoutes.length) {
+    window.alert(
+      "Nenhum percurso visível está protegido.\n\n" +
+        "Revê os sentidos das setas e protege " +
+        "os percursos que consideras validados.",
+    );
+
+    flowMessage.value =
+      "Nenhum percurso visível está protegido.";
+
+    return;
+  }
+
+  const unlinkedValves =
+    detectedValves.filter(
+      (element) => {
+        const valveNode: FlowNode = {
+          modelId:
+            element.modelId,
+
+          localId:
+            element.localId,
+        };
+
+        return (
+          getLinkedPipesForValveNode(
+            valveNode,
+          ).length === 0
+        );
+      },
+    );
+
+  if (!unlinkedValves.length) {
+    window.alert(
+      "Todas as válvulas de corte já têm uma associação guardada.",
+    );
+
+    flowMessage.value =
+      "Todas as válvulas de corte já estão associadas.";
+
+    return;
+  }
+
+  isPreparingAutomaticValveAssociations.value =
+    true;
+
+  automaticValveAssociationPreviews.splice(
+    0,
+  );
+
+  automaticValveAssociationProgress.value =
+    0;
+
+  automaticValveAssociationTotal.value =
+    unlinkedValves.length;
+
+  flowMessage.value =
+    "A calcular propostas de associação automática...";
+
+  try {
+    for (
+      let valveIndex = 0;
+      valveIndex <
+      unlinkedValves.length;
+      valveIndex++
+    ) {
+      const valve =
+        unlinkedValves[valveIndex];
+
+      automaticValveAssociationProgress.value =
+        valveIndex + 1;
+
+      flowMessage.value =
+        "A calcular associação da válvula " +
+        (valveIndex + 1) +
+        " de " +
+        unlinkedValves.length +
+        "...";
+
+      await new Promise<void>(
+        (resolve) => {
+          requestAnimationFrame(
+            () => resolve(),
+          );
+        },
+      );
+
+      const valveNode: FlowNode = {
+        modelId:
+          valve.modelId,
+
+        localId:
+          valve.localId,
+      };
+
+      const valveKey =
+        nodeKey(
+          valveNode,
+        );
+
+      const valveLabel =
+        valve.name ||
+        valve.valveIdentificationText ||
+        "Válvula #" +
+          valve.localId;
+
+      const normalStateLabel =
+        valve.elementType ===
+        "normallyClosedValve"
+          ? "NF"
+          : "NA";
+
+      const currentStateLabel =
+        valve.state === "closed"
+          ? "Fechada"
+          : "Aberta";
+
+      const closestMatch =
+        await findClosestProtectedRouteMatch(
+          valveNode,
+          validatedRoutes,
+        );
+
+      if (!closestMatch) {
+        automaticValveAssociationPreviews.push({
+          valveKey,
+          valveNode,
+          valveLabel,
+          normalStateLabel,
+          currentStateLabel,
+
+          routeId: null,
+
+          routeName:
+            "Nenhum percurso encontrado",
+
+          closestNode: null,
+
+          distance: null,
+
+          downstreamPipeCount: 0,
+
+          status: "noMatch",
+
+          accepted: false,
+        });
+
+        continue;
+      }
+
+      if (closestMatch.ambiguous) {
+        automaticValveAssociationPreviews.push({
+          valveKey,
+          valveNode,
+          valveLabel,
+          normalStateLabel,
+          currentStateLabel,
+
+          routeId:
+            closestMatch.route.id,
+
+          routeName:
+            closestMatch.route.name +
+            " ou " +
+            (
+              closestMatch
+                .alternativeRouteName ??
+              "outro percurso"
+            ),
+
+          closestNode:
+            closestMatch.closestNode,
+
+          distance:
+            closestMatch.distance,
+
+          downstreamPipeCount: 0,
+
+          status: "ambiguous",
+
+          accepted: false,
+        });
+
+        continue;
+      }
+
+      const downstreamPipes =
+        getProtectedRouteDownstreamPipes(
+          closestMatch.route,
+          closestMatch.closestNode,
+        );
+
+      if (!downstreamPipes.length) {
+        automaticValveAssociationPreviews.push({
+          valveKey,
+          valveNode,
+          valveLabel,
+          normalStateLabel,
+          currentStateLabel,
+
+          routeId:
+            closestMatch.route.id,
+
+          routeName:
+            closestMatch.route.name,
+
+          closestNode:
+            closestMatch.closestNode,
+
+          distance:
+            closestMatch.distance,
+
+          downstreamPipeCount: 0,
+
+          status: "noDownstream",
+
+          accepted: false,
+        });
+
+        continue;
+      }
+
+      automaticValveAssociationPreviews.push({
+        valveKey,
+        valveNode,
+        valveLabel,
+        normalStateLabel,
+        currentStateLabel,
+
+        routeId:
+          closestMatch.route.id,
+
+        routeName:
+          closestMatch.route.name,
+
+        closestNode:
+          closestMatch.closestNode,
+
+        distance:
+          closestMatch.distance,
+
+        downstreamPipeCount:
+          downstreamPipes.length,
+
+        status: "safe",
+
+        accepted: true,
+      });
+    }
+
+    isAutomaticValveAssociationPreviewOpen.value =
+      true;
+
+    const safeCount =
+      automaticValveAssociationPreviews.filter(
+        (preview) =>
+          preview.status === "safe",
+      ).length;
+
+    const reviewCount =
+      automaticValveAssociationPreviews.length -
+      safeCount;
+
+    flowMessage.value =
+      safeCount +
+      " associação(ões) pronta(s) para revisão. " +
+      reviewCount +
+      " caso(s) precisam de verificação.";
+  } catch (error) {
+    console.error(
+      "Erro ao preparar associações automáticas:",
+      error,
+    );
+
+    window.alert(
+      "Não foi possível preparar as associações automáticas.\n\n" +
+        (
+          error instanceof Error
+            ? error.message
+            : String(error)
+        ),
+    );
+
+    flowMessage.value =
+      "Não foi possível preparar as associações automáticas.";
+  } finally {
+    isPreparingAutomaticValveAssociations.value =
+      false;
+
+    automaticValveAssociationProgress.value =
+      0;
+
+    automaticValveAssociationTotal.value =
+      0;
+  }
+}
+
 async function linkSelectedPipesToPreparedValve() {
   const valveNode = getValveNodeForControl();
 
@@ -8799,11 +12716,16 @@ async function linkSelectedPipesToPreparedValve() {
 
   updateBlockedCount();
 
-  if (countAssignments() > 0 || flowConnections.length > 0) {
-    await rebuildManualFlowLayer();
-  }
+if (
+  countAssignments() > 0 ||
+  flowConnections.length > 0
+) {
+  await rebuildManualFlowLayer(
+    false,
+  );
+}
 
-  flowMessage.value =
+flowMessage.value =
   `Válvula associada ao caminho "${highlightedRoute.name}" ` +
   `a partir do tubo #${linkedPipes[0]?.localId}. ` +
   `${linkedPipes.length} tubo(s) serão controlados. ` +
@@ -8855,7 +12777,9 @@ restoreValveLinkedPipesToOriginalCircuit(linkedPipes);
   saveValvePipeLinksToStorage();
   updateBlockedCount();
 
-  await rebuildManualFlowLayer();
+  await rebuildManualFlowLayer(
+  false,
+);
 
   flowMessage.value =
     "Associação da válvula removida.";
@@ -8925,14 +12849,12 @@ async function setSelectedValvesState(state: "open" | "closed") {
 
       valveBlockedPipeLinks.delete(valveKey);
 
-      if (existingElement.elementType === "normallyClosedValve") {
-        applyValveSwitchToLinkedPipes(linkedPipes);
-      } else {
-        restoreValveLinkedPipesToOriginalCircuit(linkedPipes);
-      }
-    }
+      restoreValveLinkedPipesToOriginalCircuit(
+  linkedPipes,
+);
+}
 
-    changedCount++;
+changedCount++;
   }
 
   if (!changedCount) {
@@ -8944,9 +12866,14 @@ async function setSelectedValvesState(state: "open" | "closed") {
   updateManualStats();
   saveMepElementsToStorage();
 
-  if (countAssignments() > 0 || flowConnections.length > 0) {
-    await rebuildManualFlowLayer();
-  }
+  if (
+  countAssignments() > 0 ||
+  flowConnections.length > 0
+) {
+  await rebuildManualFlowLayer(
+    false,
+  );
+}
 
   await showSelectedMepElementInfo();
 
@@ -8981,12 +12908,82 @@ async function applyInverseNormalStateToSelectedValves() {
   await setSelectedValvesState(targetState);
 }
 
-async function closeSelectedValves() {
-  await setSelectedValvesState("closed");
+function getAdaptedSavedRouteNodes(
+  route: SavedRoute,
+) {
+  const loadedModelIds = [
+    ...loadedModels.keys(),
+  ];
+
+  const fallbackModelId =
+    loadedModelIds[0];
+
+  if (!fallbackModelId) {
+    return [];
+  }
+
+  return route.path.map(
+    (node): FlowNode => {
+      if (
+        loadedModels.has(
+          node.modelId,
+        )
+      ) {
+        return {
+          modelId: node.modelId,
+          localId: node.localId,
+        };
+      }
+
+      return {
+        modelId: fallbackModelId,
+        localId: node.localId,
+      };
+    },
+  );
 }
 
-async function openSelectedValves() {
-  await setSelectedValvesState("open");
+function areSelectedFlowArrowsHidden() {
+  if (!selectedCount.value) {
+    return false;
+  }
+
+  for (
+    const [modelId, localIds] of
+      selectedItems
+  ) {
+    for (const localId of localIds) {
+      if (
+        !isFlowArrowHidden(
+          modelId,
+          localId,
+        )
+      ) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+async function toggleSelectedFlowArrows() {
+  if (!selectedCount.value) {
+    flowMessage.value =
+      "Seleciona primeiro um ou mais tubos no modelo.";
+
+    return;
+  }
+
+  if (
+    areSelectedFlowArrowsHidden()
+  ) {
+    await showSelectedFlowArrows();
+
+    return;
+  }
+
+  await hideSelectedFlowArrows();
 }
 
 async function hideSelectedFlowArrows() {
@@ -9323,50 +13320,79 @@ async function clearBlockedPipes() {
   blockedRoutePipes.clear();
   valveBlockedPipeLinks.clear();
 
-  if (!flowConnections.length && savedRoutes.length && loadedModels.size) {
+  if (
+    !flowConnections.length &&
+    savedRoutes.length &&
+    loadedModels.size
+  ) {
     await applyAllSavedRoutes();
   }
 
-  for (const key of Object.keys(mepElements)) {
-    const element = mepElements[key];
+  for (
+    const key of
+      Object.keys(mepElements)
+  ) {
+    const element =
+      mepElements[key];
 
-    if (!isValveElementType(element.elementType)) {
+    if (
+      !isValveElementType(
+        element.elementType,
+      )
+    ) {
       continue;
     }
 
-    const normalState = getNormalValveState(element.elementType);
+    const valveNode: FlowNode = {
+      modelId:
+        element.modelId,
 
-    mepElements[key] = {
-      ...element,
-      state: normalState,
+      localId:
+        element.localId,
     };
 
-    const valveNode: FlowNode = {
-  modelId: element.modelId,
-  localId: element.localId,
-};
+    const valveKey =
+      nodeKey(
+        valveNode,
+      );
 
-const valveKey = nodeKey(valveNode);
-const linkedPipes = valveControlledPipeLinks.get(valveKey) ?? [];
+    const linkedPipes =
+      valveControlledPipeLinks.get(
+        valveKey,
+      ) ?? [];
 
-restoreValveLinkedPipesToOriginalCircuit(linkedPipes);
+    restoreValveLinkedPipesToOriginalCircuit(
+      linkedPipes,
+    );
 
-if (normalState === "closed") {
-  for (const pipeNode of linkedPipes) {
-    blockPipeForRoute(pipeNode.routeId, pipeNode);
-  }
+    if (element.state === "closed") {
+      for (
+        const pipeNode of
+          linkedPipes
+      ) {
+        blockPipeForRoute(
+          pipeNode.routeId,
+          pipeNode,
+        );
+      }
 
-  valveBlockedPipeLinks.set(valveKey, linkedPipes);
-}
+      valveBlockedPipeLinks.set(
+        valveKey,
+        linkedPipes,
+      );
+    }
   }
 
   updateBlockedCount();
 
-  await rebuildManualFlowLayer();
+  await rebuildManualFlowLayer(
+    false,
+  );
 
   saveMepElementsToStorage();
 
-  flowMessage.value = "Válvulas repostas ao estado normal.";
+  flowMessage.value =
+    "Estados guardados das válvulas aplicados.";
 }
 
 async function updateAutomaticDirectionNeighbors(
@@ -10625,6 +14651,62 @@ function toggleCycleNamesPanel() {
   isCycleNamesPanelOpen.value = !isCycleNamesPanelOpen.value;
 }
 
+function normalizeSavedRouteSearchText(
+  value: string,
+) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(
+      /[\u0300-\u036f]/g,
+      "",
+    )
+    .trim();
+}
+
+function getFilteredSavedRoutes() {
+  const searchText =
+    normalizeSavedRouteSearchText(
+      savedRouteSearchText.value,
+    );
+
+  const filteredRoutes =
+    searchText
+      ? savedRoutes.filter(
+          (route) => {
+            const routeSearchText =
+              normalizeSavedRouteSearchText(
+                [
+                  route.name,
+                  getSavedRouteGroupName(
+                    route,
+                  ),
+                  getRouteCircuitDisplayLabel(
+                    route,
+                  ),
+                ].join(" "),
+              );
+
+            return routeSearchText.includes(
+              searchText,
+            );
+          },
+        )
+      : [...savedRoutes];
+
+  return filteredRoutes.sort(
+    (firstRoute, secondRoute) =>
+      firstRoute.name.localeCompare(
+        secondRoute.name,
+        "pt",
+        {
+          sensitivity: "base",
+          numeric: true,
+        },
+      ),
+  );
+}
+
 function toggleSavedRoutesPanel() {
   isSavedRoutesPanelOpen.value = !isSavedRoutesPanelOpen.value;
 }
@@ -10889,6 +14971,40 @@ function shouldIncludeNodeInRouteSimulation(
 async function toggleRouteForSimulation(
   routeId: string,
 ) {
+    if (highlightedSavedRouteId.value) {
+    flowMessage.value =
+      "Limpa primeiro o realce do caminho antes de iniciar outra simulação.";
+
+    return;
+  }
+
+  const route =
+  savedRoutes.find(
+    (savedRoute) =>
+      savedRoute.id ===
+      routeId,
+  );
+
+if (!route) {
+  return;
+}
+
+if (
+  route.needsDirectionRedefinition
+) {
+  window.alert(
+    "Não é possível simular este caminho.\n\n" +
+      "Foram adicionados tubos e o sentido tem de ser definido novamente.",
+  );
+
+  flowMessage.value =
+    'Define novamente o sentido do caminho "' +
+    route.name +
+    '" antes de o simular.';
+
+  return;
+}
+
   isFlowing.value = false;
 
   isManualFlowAnimationRunning.value =
@@ -10899,11 +15015,12 @@ async function toggleRouteForSimulation(
 
   isFlowManuallyPaused.value = false;
 
-  if (
+  const wasSelected =
     selectedRouteIdsForSimulation.has(
       routeId,
-    )
-  ) {
+    );
+
+  if (wasSelected) {
     selectedRouteIdsForSimulation.delete(
       routeId,
     );
@@ -10913,10 +15030,31 @@ async function toggleRouteForSimulation(
     );
   }
 
+  if (
+    wasSelected &&
+    selectedRouteIdsForSimulation.size === 0
+  ) {
+    isFlowing.value = false;
+
+    isManualFlowAnimationRunning.value =
+      false;
+
+    isCentralSimulationRunning.value =
+      false;
+
+    isFlowManuallyPaused.value = true;
+
+    await rebuildManualFlowLayer();
+
+    flowMessage.value =
+      "Nenhum caminho está selecionado para simulação. " +
+      "Clica no botão da simulação geral para simular todos.";
+
+    return;
+  }
+
   flowMessage.value =
-    selectedRouteIdsForSimulation.size > 0
-      ? "A preparar os percursos selecionados."
-      : "A preparar todos os percursos.";
+    "A preparar os caminhos selecionados.";
 
   await rebuildManualFlowLayer();
 
@@ -10926,7 +15064,7 @@ async function toggleRouteForSimulation(
     !isFlowAnimationReady.value
   ) {
     flowMessage.value =
-      "Não foi possível iniciar a simulação dos percursos selecionados.";
+      "Não foi possível iniciar a simulação dos caminhos selecionados.";
 
     return;
   }
@@ -10942,10 +15080,8 @@ async function toggleRouteForSimulation(
   isFlowManuallyPaused.value = false;
 
   flowMessage.value =
-    selectedRouteIdsForSimulation.size > 0
-      ? selectedRouteIdsForSimulation.size +
-        " percurso(s) em simulação."
-      : "Todos os percursos em simulação.";
+    selectedRouteIdsForSimulation.size +
+    " caminho(s) em simulação.";
 }
 
 function isRouteSelectedForSimulation(
@@ -10994,6 +15130,36 @@ async function moveSelectedSavedRoutesToCycle() {
       "Seleciona primeiro pelo menos um caminho guardado.";
     return;
   }
+
+  const lockedRoutes =
+  selectedRoutes.filter(
+    (route) =>
+      route.locked,
+  );
+
+if (lockedRoutes.length > 0) {
+  const lockedRouteNames =
+    lockedRoutes
+      .map(
+        (route) =>
+          route.name,
+      )
+      .join("\n");
+
+  window.alert(
+    "Não é possível mover caminhos protegidos para outro ciclo.\n\n" +
+      "Desprotege primeiro:\n" +
+      lockedRouteNames,
+  );
+
+  flowMessage.value =
+    lockedRoutes.length === 1
+      ? "O caminho selecionado está protegido."
+      : lockedRoutes.length +
+        " caminhos selecionados estão protegidos.";
+
+  return;
+}
 
   const targetCycleNumber = Number(
     targetCycleNumberForSavedRoutes.value,
@@ -11402,59 +15568,427 @@ saveRoutesToStorage();
 }
 
 async function groupSelectedSavedRoutes() {
-  const selectedRoutes = savedRoutes.filter(
-    (route) =>
-      selectedRouteIdsForGrouping.has(
-        route.id,
-      ),
-  );
+  const selectedRoutes =
+    savedRoutes.filter(
+      (route) =>
+        selectedRouteIdsForGrouping.has(
+          route.id,
+        ),
+    );
 
   if (selectedRoutes.length < 2) {
     flowMessage.value =
-      "Seleciona pelo menos dois caminhos para agrupar.";
+      "Seleciona pelo menos dois percursos para unir.";
+
     return;
   }
 
-  const groupName =
+  const lockedRoutes =
+    selectedRoutes.filter(
+      (route) => route.locked,
+    );
+
+  if (lockedRoutes.length > 0) {
+  const lockedRoutesMessage =
+    "Não é possível unir percursos protegidos.\n\n" +
+    "Desprotege primeiro:\n" +
+    lockedRoutes
+      .map((route) => route.name)
+      .join("\n");
+
+  window.alert(
+    lockedRoutesMessage,
+  );
+
+  flowMessage.value =
+    lockedRoutesMessage;
+
+  return;
+}
+
+  const sourceCircuit =
+    selectedRoutes[0].temperature;
+
+  const sourceCircuitKeys =
+    new Set(
+      selectedRoutes.map(
+        (route) =>
+          route.temperature,
+      ),
+    );
+
+  const mergedRouteName =
     pendingRouteGroupName.value.trim();
 
-  const groupColor =
+  const mergedRouteColor =
     pendingRouteGroupColor.value.trim();
 
-  if (!groupName) {
+  if (!mergedRouteName) {
     flowMessage.value =
-      "Indica um nome para o grupo.";
+      "Indica um nome para o novo percurso.";
+
     return;
   }
 
   if (
-    !/^#[0-9a-fA-F]{6}$/.test(groupColor)
+    !/^[#][0-9a-fA-F]{6}$/.test(
+      mergedRouteColor,
+    )
   ) {
     flowMessage.value =
       "Seleciona uma cor válida.";
+
     return;
   }
 
-  const groupId = crypto.randomUUID();
+  const sourceRouteIds =
+    new Set(
+      selectedRoutes.map(
+        (route) => route.id,
+      ),
+    );
 
-  savedRouteGroups.push({
-    id: groupId,
-    name: groupName,
-    color: groupColor,
-  });
+  const mergedPathByKey =
+    new Map<string, FlowNode>();
 
   for (const route of selectedRoutes) {
-  route.groupId = groupId;
+    for (const node of route.path) {
+      mergedPathByKey.set(
+        nodeKey(node),
+        {
+          modelId: node.modelId,
+          localId: node.localId,
+        },
+      );
+    }
+  }
+
+  const mergedPath = [
+    ...mergedPathByKey.values(),
+  ];
+
+  if (mergedPath.length < 2) {
+    flowMessage.value =
+      "Não existem tubos suficientes para criar o percurso unido.";
+
+    return;
+  }
+
+  const mergedStartsByKey =
+    new Map<string, FlowNode>();
+
+  const mergedEndsByKey =
+    new Map<string, FlowNode>();
+
+  for (const route of selectedRoutes) {
+    for (
+      const startNode of
+        route.directionStarts ?? []
+    ) {
+      mergedStartsByKey.set(
+        nodeKey(startNode),
+        {
+          modelId:
+            startNode.modelId,
+          localId:
+            startNode.localId,
+        },
+      );
+    }
+
+    for (
+      const endNode of
+        route.directionEnds ?? []
+    ) {
+      mergedEndsByKey.set(
+        nodeKey(endNode),
+        {
+          modelId:
+            endNode.modelId,
+          localId:
+            endNode.localId,
+        },
+      );
+    }
+  }
+
+  const sourceValveLinks =
+    [
+      ...valveControlledPipeLinks.entries(),
+    ]
+      .filter(([, linkedPipes]) =>
+        linkedPipes.some(
+          (linkedPipe) =>
+            sourceRouteIds.has(
+              linkedPipe.routeId,
+            ),
+        ),
+      )
+      .map(
+        ([
+          valveKey,
+          linkedPipes,
+        ]) => ({
+          valveKey,
+
+          linkedPipes:
+            linkedPipes.map(
+              (linkedPipe) => ({
+                ...linkedPipe,
+              }),
+            ),
+        }),
+      );
+
+  const sourceBlockedValveLinks =
+  [
+    ...valveBlockedPipeLinks.entries(),
+  ]
+    .filter(([, linkedPipes]) =>
+      linkedPipes.some(
+        (linkedPipe) =>
+          sourceRouteIds.has(
+            linkedPipe.routeId,
+          ),
+      ),
+    )
+    .map(
+      ([
+        valveKey,
+        linkedPipes,
+      ]) => ({
+        valveKey,
+
+        linkedPipes:
+          linkedPipes.map(
+            (linkedPipe) => ({
+              ...linkedPipe,
+            }),
+          ),
+      }),
+    );
+
+  const sourceSimulationRouteIds =
+    selectedRoutes
+      .filter((route) =>
+        selectedRouteIdsForSimulation.has(
+          route.id,
+        ),
+      )
+      .map((route) => route.id);
+
+  const sourceRoutes:
+    SavedRouteMergeSource[] =
+    selectedRoutes.map(
+      (route) => ({
+        id: route.id,
+        name: route.name,
+        temperature:
+          route.temperature,
+
+        path: route.path.map(
+          (node) => ({
+            modelId: node.modelId,
+            localId: node.localId,
+          }),
+        ),
+
+        hidden: route.hidden,
+        locked: route.locked,
+        groupId: route.groupId,
+
+        originalCircuitColor:
+          route.originalCircuitColor,
+
+        customColor:
+          route.customColor,
+
+        directionStarts:
+          route.directionStarts?.map(
+            (node) => ({
+              modelId: node.modelId,
+              localId: node.localId,
+            }),
+          ),
+
+        directionEnds:
+          route.directionEnds?.map(
+            (node) => ({
+              modelId: node.modelId,
+              localId: node.localId,
+            }),
+          ),
+
+      mergeBackup:
+  route.mergeBackup
+    ? JSON.parse(
+        JSON.stringify(
+          route.mergeBackup,
+        ),
+      )
+    : undefined,
+      }),
+    );
+
+  const mergedRouteId =
+    crypto.randomUUID();
+
+  const mergedRoute: SavedRoute = {
+    id: mergedRouteId,
+    name: mergedRouteName,
+    temperature: sourceCircuit,
+    path: mergedPath,
+    hidden: false,
+    locked: false,
+    customColor:
+      mergedRouteColor,
+
+    directionStarts:
+      [
+        ...mergedStartsByKey.values(),
+      ],
+
+    directionEnds:
+      [
+        ...mergedEndsByKey.values(),
+      ],
+
+    mergeBackup: {
+  sourceRoutes,
+  sourceValveLinks,
+  sourceBlockedValveLinks,
+  sourceSimulationRouteIds,
+},
+  };
+
+  for (
+    let routeIndex =
+      savedRoutes.length - 1;
+    routeIndex >= 0;
+    routeIndex--
+  ) {
+    if (
+      sourceRouteIds.has(
+        savedRoutes[routeIndex].id,
+      )
+    ) {
+      savedRoutes.splice(
+        routeIndex,
+        1,
+      );
+    }
+  }
+
+  savedRoutes.push(
+    mergedRoute,
+  );
+
+  for (const node of mergedPath) {
+  for (
+    const circuitKey of
+      sourceCircuitKeys
+  ) {
+    getAssignmentSet(
+      circuitKey,
+      node.modelId,
+    ).delete(
+      node.localId,
+    );
+  }
+
+  getAssignmentSet(
+    sourceCircuit,
+    node.modelId,
+  ).add(
+    node.localId,
+  );
 }
+
+  for (
+    const [
+      valveKey,
+      linkedPipes,
+    ] of valveControlledPipeLinks
+  ) {
+    const updatedLinkedPipes =
+      linkedPipes.map(
+        (linkedPipe) =>
+          sourceRouteIds.has(
+            linkedPipe.routeId,
+          )
+            ? {
+                ...linkedPipe,
+                routeId:
+                  mergedRouteId,
+              }
+            : linkedPipe,
+      );
+
+    valveControlledPipeLinks.set(
+      valveKey,
+      updatedLinkedPipes,
+    );
+  }
+
+  for (
+    const [
+      valveKey,
+      linkedPipes,
+    ] of valveBlockedPipeLinks
+  ) {
+    const updatedLinkedPipes =
+      linkedPipes.map(
+        (linkedPipe) =>
+          sourceRouteIds.has(
+            linkedPipe.routeId,
+          )
+            ? {
+                ...linkedPipe,
+                routeId:
+                  mergedRouteId,
+              }
+            : linkedPipe,
+      );
+
+    valveBlockedPipeLinks.set(
+      valveKey,
+      updatedLinkedPipes,
+    );
+  }
+
+  for (
+    const sourceRouteId of
+      sourceRouteIds
+  ) {
+    selectedRouteIdsForSimulation.delete(
+      sourceRouteId,
+    );
+
+    selectedRouteIdsForGrouping.delete(
+      sourceRouteId,
+    );
+  }
+
+  if (
+    sourceSimulationRouteIds.length > 0
+  ) {
+    selectedRouteIdsForSimulation.add(
+      mergedRouteId,
+    );
+  }
 
   circuitMaterialCache.clear();
 
-  saveRouteGroupsToStorage();
-saveRoutesToStorage();
+  saveRoutesToStorage();
+  saveValvePipeLinksToStorage();
 
   clearRouteGroupingSelection();
 
-  isRouteGroupDialogOpen.value = false;
+  isRouteGroupDialogOpen.value =
+    false;
+
+  editingRouteGroupId.value =
+    null;
 
   if (
     countAssignments() > 0 ||
@@ -11465,9 +15999,11 @@ saveRoutesToStorage();
 
   flowMessage.value =
     selectedRoutes.length +
-    " caminho(s) agrupado(s) em \"" +
-    groupName +
-    "\".";
+    ' percursos unidos em "' +
+    mergedRouteName +
+    '". O novo percurso contém ' +
+    mergedPath.length +
+    " tubo(s) sem duplicados.";
 }
 
 async function removeSelectedRoutesFromGroup() {
@@ -11794,76 +16330,112 @@ async function findPathInsideSavedRoute(
   start: FlowNode,
   end: FlowNode,
 ) {
-  if (start.modelId !== end.modelId) {
+  if (
+    start.modelId !==
+    end.modelId
+  ) {
     return [] as FlowNode[];
   }
 
   const model =
-    loadedModels.get(start.modelId);
+    loadedModels.get(
+      start.modelId,
+    );
 
   if (!model) {
     return [] as FlowNode[];
   }
 
-  const routeNodes = route.path.filter(
-    (node) =>
-      node.modelId === start.modelId,
-  );
+  const routeNodes =
+    route.path.filter(
+      (node) =>
+        node.modelId ===
+        start.modelId,
+    );
 
   const localIds = [
     ...new Set(
       routeNodes.map(
-        (node) => node.localId,
+        (node) =>
+          node.localId,
       ),
     ),
   ];
 
   const boxes =
-    await model.getBoxes(localIds);
+    await model.getBoxes(
+      localIds,
+    );
 
   const graphItems =
-    new Map<string, PipeGraphItem>();
+    new Map<
+      string,
+      PipeGraphItem
+    >();
 
   for (
     let index = 0;
     index < localIds.length;
     index++
   ) {
-    const graphItem = graphItemFromBox(
-      start.modelId,
-      localIds[index],
-      boxes[index],
-    );
-
-    if (graphItem) {
-      graphItems.set(
-        nodeKey(graphItem),
-        graphItem,
+    const graphItem =
+      graphItemFromBox(
+        start.modelId,
+        localIds[index],
+        boxes[index],
       );
+
+    if (!graphItem) {
+      continue;
     }
+
+    graphItems.set(
+      nodeKey(
+        graphItem,
+      ),
+      graphItem,
+    );
   }
 
-  const graph = buildPipeGraph(
-    graphItems,
-  );
+  const graph =
+    buildPipeGraph(
+      graphItems,
+    );
 
-  const pathKeys = shortestPath(
-    graph,
-    nodeKey(start),
-    nodeKey(end),
-  );
+  const pathKeys =
+    shortestPath(
+      graph,
+      nodeKey(
+        start,
+      ),
+      nodeKey(
+        end,
+      ),
+    );
 
-  return pathKeys
-    .map((key) => graphItems.get(key))
-    .filter(
-      (
-        item,
-      ): item is PipeGraphItem => !!item,
-    )
-    .map((item) => ({
-      modelId: item.modelId,
-      localId: item.localId,
-    }));
+  const result:
+    FlowNode[] = [];
+
+  for (const key of pathKeys) {
+    const item =
+      graphItems.get(
+        key,
+      );
+
+    if (!item) {
+      continue;
+    }
+
+    result.push({
+      modelId:
+        item.modelId,
+
+      localId:
+        item.localId,
+    });
+  }
+
+  return result;
 }
 
 async function findSavedRouteDirectionPaths(
@@ -12149,6 +16721,11 @@ async function applyAndSaveSavedRouteDirection() {
         localId: node.localId,
       }),
     );
+
+  route.needsDirectionRedefinition =
+  false;
+
+  delete route.protectedDirections;
 
   applySavedRouteDirectionPaths(
     route,
@@ -12441,7 +17018,7 @@ async function getPipeGeometryAxis(
     const meshDataList =
       geometryGroups[0] ?? [];
 
-    const points: THREE.Vector3[] = [];
+    const points: any[] = [];
 
     for (const meshData of meshDataList) {
       const positions =
@@ -12835,8 +17412,8 @@ function addPipeParticles(
   box.getSize(size);
   box.getCenter(fallbackCenter);
 
-  let start: THREE.Vector3;
-  let end: THREE.Vector3;
+  let start: any;
+  let end: any;
 
   if (geometryAxis) {
     const geometryDirection =
@@ -13200,24 +17777,127 @@ async function startAutomaticAnalysis() {
 function getAutomaticCircuitKindFromText(
   value: string,
 ): CycleCircuitKind {
-  const normalizedValue = value
+  const normalizedValue = String(
+    value ?? "",
+  )
+    .trim()
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .replace(
+      /[\u0300-\u036f]/g,
+      "",
+    )
+    .replace(/[_-]/g, " ")
+    .replace(/\s+/g, " ");
 
-  if (
-    normalizedValue.includes("avanco") ||
-    normalizedValue.includes("ida")
-  ) {
+  const normalizedWords =
+    normalizedValue.split(" ");
+
+  const hasReturn =
+    normalizedValue.includes(
+      "retorno",
+    ) ||
+    normalizedValue.includes(
+      "return",
+    ) ||
+    normalizedValue.includes(
+      "recirculacao",
+    ) ||
+    normalizedValue.includes(
+      "recirculation",
+    ) ||
+    normalizedWords.includes(
+      "ret",
+    );
+
+  const hasCold =
+    normalizedValue.includes(
+      "agua fria",
+    ) ||
+    normalizedValue.includes(
+      "cold water",
+    ) ||
+    normalizedValue.includes(
+      "domestic cold water",
+    ) ||
+    normalizedWords.includes(
+      "fria",
+    ) ||
+    normalizedWords.includes(
+      "frio",
+    ) ||
+    normalizedWords.includes(
+      "cold",
+    ) ||
+    normalizedWords.includes(
+      "afs",
+    ) ||
+    normalizedWords.includes(
+      "af",
+    ) ||
+    normalizedWords.includes(
+      "dcw",
+    );
+
+  const hasHot =
+    normalizedValue.includes(
+      "agua quente",
+    ) ||
+    normalizedValue.includes(
+      "hot water",
+    ) ||
+    normalizedValue.includes(
+      "domestic hot water",
+    ) ||
+    normalizedWords.includes(
+      "quente",
+    ) ||
+    normalizedWords.includes(
+      "hot",
+    ) ||
+    normalizedWords.includes(
+      "aqs",
+    ) ||
+    normalizedWords.includes(
+      "acs",
+    ) ||
+    normalizedWords.includes(
+      "dhw",
+    );
+
+  const hasSupply =
+    normalizedWords.includes(
+      "avanco",
+    ) ||
+    normalizedWords.includes(
+      "ida",
+    ) ||
+    normalizedWords.includes(
+      "supply",
+    );
+
+  if (hasCold && hasReturn) {
+    return "coldReturn";
+  }
+
+  if (hasCold) {
+    return "coldSupply";
+  }
+
+  if (hasHot && hasReturn) {
+    return "hotReturn";
+  }
+
+  if (hasHot) {
     return "hotSupply";
   }
 
-  if (
-    normalizedValue.includes("retorno") ||
-    normalizedValue.includes("return") ||
-    normalizedValue.includes("_ret")
-  ) {
+  if (hasReturn) {
     return "hotReturn";
+  }
+
+  if (hasSupply) {
+    return "hotSupply";
   }
 
   return "extra";
@@ -13582,23 +18262,35 @@ async function scanIfcValveStates() {
           startIndex + 100,
         );
 
-      const itemsData =
-        await model.getItemsData(
-          currentIds,
-          {
-            attributesDefault: true,
-            relations: {
-              IsDefinedBy: {
-                attributes: true,
-                relations: true,
-              },
-              HasAssignments: {
-                attributes: true,
-                relations: false,
-              },
-            },
-          },
-        );
+const itemsData =
+  await model.getItemsData(
+    currentIds,
+    {
+      attributesDefault: true,
+
+      relations: {
+        IsTypedBy: {
+          attributes: true,
+          relations: true,
+        },
+
+        IsDefinedBy: {
+          attributes: true,
+          relations: true,
+        },
+
+        DefinesOccurrence: {
+          attributes: true,
+          relations: true,
+        },
+
+        HasAssignments: {
+          attributes: true,
+          relations: false,
+        },
+      },
+    },
+  );
 
       for (
         let itemIndex = 0;
@@ -13731,21 +18423,17 @@ const systemType =
     ? stateValue
     : "",
 
-isShutoffValve: true,
-
-valveIdentificationText:
-  valveIdentification
-    .identificationText,
-
-isShutoffValve: true,
+isShutoffValve:
+  valveIdentification.isShutoffValve,
 
 valveIdentificationText:
   valveIdentification.familyValue,
 
 state:
-  getNormalValveState(
-    valveType,
-  ),
+  existingElement?.state ===
+    "closed"
+    ? "closed"
+    : "open",
 };
 
         detectedValveCount++;
@@ -14085,6 +18773,11 @@ const revitElementId =
 
 function toggleElementPanelMinimized() {
   isElementPanelMinimized.value = !isElementPanelMinimized.value;
+}
+
+function toggleIfcInformationPanelMinimized() {
+  isIfcInformationPanelMinimized.value =
+    !isIfcInformationPanelMinimized.value;
 }
 
 function toggleFlowControlsPanelMinimized() {
@@ -14475,6 +19168,7 @@ function hasDefinedPumpOrHeatPump() {
 
 async function startCentralSimulation() {
   if (!countAssignments()) {
+
     flowMessage.value =
   "Não é possível simular: marca primeiro tubos num circuito.";
     return;
@@ -14555,7 +19249,55 @@ async function blockSelectedPipes() {
   await rebuildManualFlowLayer();
 }
 
+async function updateFlowAnimationWithoutStarting() {
+  isFlowing.value = false;
+
+  isManualFlowAnimationRunning.value =
+    false;
+
+  isCentralSimulationRunning.value =
+    false;
+
+  isFlowManuallyPaused.value = true;
+
+  flowMessage.value =
+    "A atualizar a animação.";
+
+  await rebuildManualFlowLayer();
+
+  if (
+    hasFlowPreparationError.value ||
+    !pipeParticles.length ||
+    !isFlowAnimationReady.value
+  ) {
+    flowMessage.value =
+      "Não foi possível preparar a animação.";
+
+    return;
+  }
+
+  isFlowing.value = false;
+
+  isManualFlowAnimationRunning.value =
+    false;
+
+  isCentralSimulationRunning.value =
+    false;
+
+  isFlowManuallyPaused.value = true;
+
+  flowMessage.value =
+    "Animação pronta. Clica em Iniciar simulação.";
+}
+
 async function toggleFlow() {
+    if (highlightedSavedRouteId.value) {
+    flowMessage.value =
+      "Limpa primeiro o realce do caminho antes de iniciar a simulação.";
+
+    return;
+  }
+
   if (isPreparingFlowAnimation.value) {
     flowMessage.value =
       "Aguarda até a preparação da animação terminar.";
@@ -14578,6 +19320,28 @@ async function toggleFlow() {
       "Simulação pausada.";
 
     return;
+  }
+
+    if (
+    selectedRouteIdsForSimulation.size > 0
+  ) {
+    selectedRouteIdsForSimulation.clear();
+
+    flowMessage.value =
+      "A preparar a simulação geral.";
+
+    await rebuildManualFlowLayer();
+
+    if (
+      hasFlowPreparationError.value ||
+      !pipeParticles.length ||
+      !isFlowAnimationReady.value
+    ) {
+      flowMessage.value =
+        "Não foi possível preparar a simulação geral.";
+
+      return;
+    }
   }
 
   if (
@@ -14937,7 +19701,7 @@ function chunk<T>(items: T[], size: number) {
 }
 
 .flow-panel--minimized {
-  width: min(300px, calc(100vw - 48px));
+  width: 100%;
   max-height: none;
   overflow: hidden;
 }
@@ -15126,16 +19890,16 @@ function chunk<T>(items: T[], size: number) {
 }
 
 .saved-route-item {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr);
+  align-items: stretch;
+  gap: 8px;
   margin-top: 6px;
   padding: 8px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
-
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-
+  background:
+    rgba(255, 255, 255, 0.08);
   font-size: 0.8rem;
 }
 
@@ -15173,13 +19937,6 @@ function chunk<T>(items: T[], size: number) {
   color: #b8c9d3;
   font-size: 0.68rem;
   font-weight: 700;
-}
-
-.saved-route-item > div:last-child {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
 }
 
 .manual-route-mode-button {
@@ -15300,12 +20057,31 @@ function chunk<T>(items: T[], size: number) {
 }
 
 .saved-route-item--locked {
-  border: 1px solid rgba(143, 211, 255, 0.45);
-  background: rgba(143, 211, 255, 0.12);
+  border: 1px solid
+    rgba(255, 193, 7, 0.72);
+  background:
+    rgba(255, 193, 7, 0.14);
+  box-shadow:
+    inset 0.22rem 0 0
+    rgba(255, 193, 7, 0.9);
 }
 
-.saved-route-item--locked .saved-route-text strong {
-  color: #8fd3ff;
+.saved-route-item--locked strong {
+  color: #ffd166;
+}
+
+.saved-route-item--locked.saved-route-item--highlighted {
+  border: 1px solid
+    rgba(0, 229, 255, 0.85);
+  background:
+    rgba(0, 229, 255, 0.14);
+  box-shadow:
+    inset 0.22rem 0 0
+    rgba(0, 229, 255, 0.95);
+}
+
+.saved-route-item--locked.saved-route-item--highlighted strong {
+  color: #00e5ff;
 }
 
 .route-lock-icon {
@@ -15408,8 +20184,7 @@ function chunk<T>(items: T[], size: number) {
 }
 
 .saved-route-item--blocked {
-  border: 1px solid rgba(229, 57, 53, 0.85);
-  background: rgba(229, 57, 53, 0.14);
+  position: relative;
 }
 
 .saved-route-item--blocked .saved-route-text strong {
@@ -16519,5 +21294,425 @@ function chunk<T>(items: T[], size: number) {
   font-size: 0.95rem;
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+
+.automatic-valve-preview-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(0.35rem);
+}
+
+.automatic-valve-preview-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: min(58rem, 100%);
+  max-height: calc(100vh - 3rem);
+  padding: 1.2rem;
+  overflow: hidden;
+  border: 1px solid rgba(143, 211, 255, 0.45);
+  border-radius: 0.8rem;
+  background: rgba(13, 22, 28, 0.98);
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.5);
+  color: #ffffff;
+}
+
+.automatic-valve-preview-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.automatic-valve-preview-header h2 {
+  margin: 0.2rem 0 0;
+}
+
+.automatic-valve-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-height: 0;
+  padding-right: 0.3rem;
+  overflow-y: auto;
+}
+
+.automatic-valve-preview-item {
+  padding: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.6rem;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.automatic-valve-preview-item--safe {
+  border-color: rgba(98, 214, 138, 0.42);
+}
+
+.automatic-valve-preview-item--warning {
+  border-color: rgba(255, 183, 77, 0.5);
+}
+
+.automatic-valve-preview-item--accepted {
+  border-color: #8fd3ff;
+  background: rgba(143, 211, 255, 0.12);
+}
+
+.automatic-valve-preview-selection {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  cursor: pointer;
+}
+
+.automatic-valve-preview-selection input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: #8fd3ff;
+}
+
+.automatic-valve-preview-details {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin: 0.8rem 0 0;
+}
+
+.automatic-valve-preview-details div {
+  min-width: 0;
+  padding: 0.55rem;
+  border-radius: 0.4rem;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.automatic-valve-preview-details dt {
+  margin-bottom: 0.2rem;
+  color: #8fd3ff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.automatic-valve-preview-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #f7fbff;
+  font-size: 0.84rem;
+}
+
+@media (max-width: 700px) {
+  .automatic-valve-preview-details {
+    grid-template-columns:
+      minmax(0, 1fr);
+  }
+}
+
+.route-partial-block-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 1rem;
+  height: 1rem;
+  margin-right: 0.3rem;
+  border: 1px solid
+    rgba(255, 112, 67, 0.9);
+  border-radius: 50%;
+  background:
+    rgba(255, 87, 34, 0.18);
+  color: #ff7043;
+  font-size: 0.68rem;
+  line-height: 1;
+  vertical-align: middle;
+  cursor: help;
+  box-shadow:
+    0 0 0.4rem
+    rgba(255, 87, 34, 0.28);
+}
+
+.saved-route-actions {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  grid-template-areas:
+  "highlight visibility reverse"
+  "direction sync rename"
+  "color reset-color protect"
+  "simulation undo-merge undo-merge"
+  "delete delete delete";
+  gap: 0.35rem;
+  width: 100%;
+  margin-top: 0.65rem;
+}
+
+.saved-route-actions button {
+  width: 100%;
+  min-width: 0;
+  min-height: 2rem;
+  padding: 0.35rem 0.45rem;
+  overflow: hidden;
+  font-size: 0.7rem;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: normal;
+}
+
+.saved-route-action--highlight {
+  grid-area: highlight;
+}
+
+.saved-route-action--visibility {
+  grid-area: visibility;
+}
+
+.saved-route-action--reverse {
+  grid-area: reverse;
+}
+
+.saved-route-action--direction {
+  grid-area: direction;
+}
+
+.saved-route-action--sync {
+  grid-area: sync;
+}
+
+.saved-route-action--rename {
+  grid-area: rename;
+}
+
+.saved-route-action--color {
+  grid-area: color;
+}
+
+.saved-route-action--reset-color {
+  grid-area: reset-color;
+}
+
+.saved-route-action--protect {
+  grid-area: protect;
+}
+
+.saved-route-action--simulation {
+  grid-area: simulation;
+}
+
+.saved-route-action--undo-merge {
+  grid-area: undo-merge;
+}
+
+.saved-route-action--delete {
+  grid-area: delete;
+}
+
+.saved-route-action--arrows {
+  grid-area: arrows;
+}
+
+@media (max-width: 700px) {
+  .saved-route-actions {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+
+    grid-template-areas:
+      "highlight visibility"
+      "arrows reverse"
+      "direction sync"
+      "rename color"
+      "reset-color protect"
+      "simulation undo-merge"
+      "delete delete";
+  }
+}
+
+.saved-route-top-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 1.15rem;
+}
+
+.saved-route-simulation-status {
+  display: block;
+  width: 0.72rem;
+  height: 0.72rem;
+  flex: 0 0 0.72rem;
+  border: 2px solid
+    rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  background: #39d353;
+  box-shadow:
+    0 0 0.25rem
+      rgba(57, 211, 83, 0.95),
+    0 0 0.65rem
+      rgba(57, 211, 83, 0.7);
+}
+
+.saved-route-actions--locked {
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
+  grid-template-areas:
+    "highlight visibility"
+    "protect simulation";
+}
+
+.saved-route-actions--locked button {
+  min-height: 2.2rem;
+}
+
+.automatic-valve-calculation-status {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.65rem;
+  padding: 0.75rem;
+  border: 1px solid
+    rgba(143, 211, 255, 0.38);
+  border-radius: 0.55rem;
+  background:
+    rgba(143, 211, 255, 0.09);
+}
+
+.automatic-valve-calculation-status__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: #dbe9f1;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.automatic-valve-calculation-status__header strong {
+  color: #8fd3ff;
+}
+
+.automatic-valve-calculation-progress {
+  height: 0.55rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background:
+    rgba(255, 255, 255, 0.12);
+}
+
+.automatic-valve-calculation-progress__fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: #8fd3ff;
+  transition: width 0.2s ease;
+}
+
+.valve-designation-dropdown {
+  position: relative;
+  display: grid;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.valve-designation-dropdown__label {
+  color: #b8c9d3;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.valve-designation-dropdown__button {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 2.25rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid
+    rgba(255, 255, 255, 0.18);
+  border-radius: 0.45rem;
+  background: #f7fbff;
+  color: #17242c;
+  text-align: left;
+}
+
+.valve-designation-dropdown__button span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.valve-designation-dropdown__arrow {
+  color: #426579;
+  font-size: 0.7rem;
+}
+
+.valve-designation-dropdown__menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  left: 0;
+  z-index: 1200;
+  display: grid;
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: 0.3rem;
+  border: 1px solid
+    rgba(143, 211, 255, 0.45);
+  border-radius: 0.5rem;
+  background: #17242c;
+  box-shadow:
+    0 0.75rem 1.8rem
+    rgba(0, 0, 0, 0.45);
+}
+
+.valve-designation-dropdown__option {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 0;
+  border-radius: 0.35rem;
+  background: transparent;
+  color: #dbe9f1;
+  text-align: left;
+  font-size: 0.74rem;
+  line-height: 1.3;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.valve-designation-dropdown__option:hover {
+  background:
+    rgba(143, 211, 255, 0.13);
+}
+
+.valve-designation-dropdown__option--selected {
+  background:
+    rgba(143, 211, 255, 0.22);
+  color: #8fd3ff;
+}
+
+.selected-valve-summary {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+  padding: 0.65rem;
+  border: 1px solid
+    rgba(255, 255, 255, 0.12);
+  border-radius: 0.45rem;
+  background:
+    rgba(255, 255, 255, 0.05);
+}
+
+.selected-valve-summary p {
+  margin: 0;
+  color: #dbe9f1;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.selected-valve-summary strong {
+  color: #8fd3ff;
 }
 </style>
