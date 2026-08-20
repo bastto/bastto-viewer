@@ -2731,20 +2731,20 @@
     "
   >
     <span>
-      {{
-        selectedValveDesignationKey
-          ? (
-              getValveDesignationOptions()
-                .find(
-                  (option) =>
-                    option.key ===
-                    selectedValveDesignationKey
-                )?.label ??
-              'Selecionar válvula...'
-            )
-          : 'Selecionar válvula...'
-      }}
-    </span>
+  {{
+    selectedValveDesignationKey
+      ? (
+          getValveDesignationOptions()
+            .find(
+              (option) =>
+                option.key ===
+                selectedValveDesignationKey
+            )?.label ??
+          'Nenhuma válvula'
+        )
+      : 'Nenhuma válvula'
+  }}
+</span>
 
     <span
       class="valve-designation-dropdown__arrow"
@@ -2763,6 +2763,21 @@
     "
     class="valve-designation-dropdown__menu"
   >
+  <button
+  type="button"
+  :class="[
+    'valve-designation-dropdown__option',
+    {
+      'valve-designation-dropdown__option--selected':
+        !selectedValveDesignationKey
+    }
+  ]"
+  @click="
+    selectValveDesignationOption('')
+  "
+>
+  Nenhuma válvula
+</button>
     <button
       v-for="
         option in
@@ -2802,12 +2817,22 @@
   </p>
 
   <p>
-    <strong>
-      Associação:
-    </strong>
+  <strong>
+    Tipo original:
+  </strong>
 
-    {{ getSelectedValveAssociationStatusLabel() }}
-  </p>
+  {{ getSelectedValveNormalTypeLabel() }}
+</p>
+
+<p>
+  <strong>
+    Tubos controlados:
+  </strong>
+
+  {{
+    getManualValveControlledPipeCount()
+  }}
+</p>
 
   <p>
     <strong>
@@ -2821,7 +2846,281 @@
   </p>
 </div>
 
+<div
+  v-if="selectedValveDesignationKey"
+  class="selected-valve-control-actions"
+>
+  <button
+    type="button"
+    :disabled="
+      getSelectedValveStateLabel() ===
+      'aberta'
+    "
+    @click="
+      setSelectedValvesState(
+        'open'
+      )
+    "
+  >
+    Abrir válvula
+  </button>
+
+  <button
+    type="button"
+    :disabled="
+      getSelectedValveStateLabel() ===
+      'fechada'
+    "
+    @click="
+      setSelectedValvesState(
+        'closed'
+      )
+    "
+  >
+    Fechar válvula
+  </button>
+</div>
+
+<div class="flow-section-title">
+  Tubos controlados
+</div>
+
+<p
+  v-if="!selectedValveDesignationKey"
+  class="connection-note"
+>
+  Escolhe uma válvula no campo acima para
+  consultar ou definir os tubos controlados.
+</p>
+
+<div
+  v-if="selectedValveDesignationKey"
+  class="
+    manual-valve-pipe-definition
+  "
+>
+  <p
+    class="
+      connection-note
+      workflow-help-note
+    "
+  >
+    Define manualmente os tubos cujas
+    setas devem desaparecer quando a
+    válvula estiver fechada.
+  </p>
+
   <div
+    class="
+      manual-valve-pipe-definition__summary
+    "
+  >
+
+    <p>
+      <strong>
+        Tubos controlados:
+      </strong>
+
+      {{
+        getManualValveControlledPipeCount()
+      }}
+    </p>
+
+    <p
+      v-if="
+        isManualValvePipeDefinitionMode
+      "
+    >
+      <strong>
+        Tubos no rascunho:
+      </strong>
+
+      {{
+        manualValvePipeDraft.length
+      }}
+    </p>
+  </div>
+
+  <div
+  v-if="
+    !isManualValvePipeDefinitionMode
+  "
+  class="
+    manual-valve-pipe-definition__saved-actions
+  "
+>
+  <button
+    type="button"
+    :disabled="
+      !selectedValveDesignationKey
+    "
+    @click="
+      startManualValvePipeDefinition
+    "
+  >
+    Definir tubos controlados
+  </button>
+
+  <button
+    type="button"
+    :disabled="
+      !selectedValveDesignationKey ||
+      getManualValveControlledPipeCount() ===
+        0
+    "
+    @click="
+      highlightSavedManualValvePipes
+    "
+  >
+    Realçar tubos controlados
+  </button>
+
+  <button
+    type="button"
+    class="flow-button--danger"
+    :disabled="
+      !selectedValveDesignationKey ||
+      getManualValveControlledPipeCount() ===
+        0
+    "
+    @click="
+      removeManualValvePipeDefinition
+    "
+  >
+    Remover definição
+  </button>
+</div>
+
+  <div
+    v-else
+    class="
+      manual-valve-pipe-definition__active
+    "
+  >
+    <p class="manual-route-status">
+      Modo ativo: seleciona no modelo os
+      tubos controlados por esta válvula.
+    </p>
+
+    <p class="connection-note">
+  Selecionados no modelo:
+  <strong>
+    {{ selectedCount }}
+  </strong>
+</p>
+
+<div
+  class="
+    flow-actions
+    flow-actions--secondary
+  "
+>
+  <button
+    type="button"
+    :disabled="
+      selectedCount === 0
+    "
+    @click="
+      addSelectedPipesToManualValveDraft
+    "
+  >
+    Adicionar selecionados
+  </button>
+
+  <button
+    type="button"
+    :disabled="
+      selectedCount === 0 ||
+      manualValvePipeDraft.length === 0
+    "
+    @click="
+      removeSelectedPipesFromManualValveDraft
+    "
+  >
+    Retirar selecionados
+  </button>
+
+  <button
+    type="button"
+    :disabled="
+      manualValvePipeDraft.length === 0
+    "
+    @click="
+      clearManualValvePipeDraft
+    "
+  >
+    Limpar rascunho
+  </button>
+</div>
+
+<p
+  v-if="
+    hasManualValvePipeDraftChanges
+  "
+  class="connection-note workflow-help-note"
+>
+  Existem alterações no rascunho que
+  ainda não foram guardadas.
+</p>
+
+<div
+  class="
+    flow-actions
+    flow-actions--secondary
+  "
+>
+  <button
+    type="button"
+    class="flow-button--primary"
+    :disabled="
+      manualValvePipeDraft.length ===
+      0
+    "
+    @click="
+      saveManualValvePipeDefinition
+    "
+  >
+    Guardar definição
+  </button>
+
+  <button
+    type="button"
+    :disabled="
+      manualValvePipeDraft.length ===
+      0
+    "
+    @click="
+      highlightManualValvePipeDraft
+    "
+  >
+    Realçar rascunho
+  </button>
+</div>
+
+<div
+  class="
+    flow-actions
+    flow-actions--single
+  "
+>
+  <button
+    type="button"
+    class="flow-button--danger"
+    @click="
+      cancelManualValvePipeDefinition
+    "
+  >
+    Cancelar definição
+  </button>
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+<div
   class="
     flow-section-title
     flow-section-title--button
@@ -2951,8 +3250,8 @@
     class="flow-section-title flow-section-title--button"
   >
     <span>
-      Gerir válvulas detetadas
-    </span>
+  Gerir várias válvulas
+</span>
 
     <button
       type="button"
@@ -3208,20 +3507,12 @@
 </div>
 </div>
 
-<div class="flow-section-title flow-section-title--button valve-details-title">
-  <span>
-  Associação da válvula ao caminho
-</span>
-  <button
-    type="button"
-    class="section-collapse-button"
-    @click="toggleValveAssociationDetails"
-  >
-    {{ isValveAssociationDetailsOpen ? '−' : '+' }}
-  </button>
-</div>
-
-<div v-if="isValveAssociationDetailsOpen">
+<div
+  v-if="
+    false &&
+    isValveAssociationDetailsOpen
+  "
+>
   <div class="valve-association-summary">
   <p>
     <strong>Caminho:</strong>
@@ -3368,7 +3659,6 @@
   </button>
 </div>
 </div>
-        </div>
       </section>
     
 <section
@@ -3997,6 +4287,11 @@ type FlowNode = {
   localId: number;
 };
 
+type ManualValveControlledPipe = {
+  modelId: string;
+  localId: number;
+};
+
 type ProtectedRouteDirection = {
   node: FlowNode;
   previous: FlowNode | null;
@@ -4281,11 +4576,13 @@ const selectedValveDesignationKey = ref("");
 const isValveDesignationDropdownOpen =
   ref(false);
 const highlightedValveFromDropdown = ref<FlowNode | null>(null);
+const isValveFocusModeActive =
+  ref(false);
 const isValveDesignationPanelOpen = ref(false);
 const isValveClassificationPanelOpen =
   ref(false);
 const isValveRenamePanelOpen = ref(false);
-const isValveAssociationDetailsOpen = ref(false);
+const isValveAssociationDetailsOpen = ref(true);
 const valveOriginalDesignations =
   reactive<Record<string, string>>({});
 const excludedValveKeys =
@@ -4352,6 +4649,8 @@ const SYNCED_PIPE_DIRECTIONS_STORAGE_KEY =
   "bastto-viewer-synced-pipe-directions";
 const VALVE_PIPE_LINKS_STORAGE_KEY =
   "bastto-viewer-valve-pipe-links";
+const MANUAL_VALVE_CONTROLLED_PIPES_STORAGE_KEY =
+  "bastto-viewer-manual-valve-controlled-pipes";
 const EXCLUDED_VALVES_STORAGE_KEY =
   "bastto-viewer-excluded-valves";
 
@@ -4613,6 +4912,7 @@ function loadActiveIfcConfiguration() {
   loadPipeTypeFlowNodesFromStorage();
 
   loadValvePipeLinksFromStorage();
+  loadManualValveControlledPipesFromStorage();
   loadExcludedValvesFromStorage();
   ensureConfiguredAssignments();
   ensureCycleNames();
@@ -4698,6 +4998,23 @@ let ignoredManualRouteNodeAfterRemove: FlowNode | null = null;
 const blockedPipes: SelectionMap = new Map();
 const valveBlockedPipeLinks = new Map<string, ValveControlledPipeLink[]>();
 const valveControlledPipeLinks = new Map<string, ValveControlledPipeLink[]>();
+const manualValveControlledPipes =
+  new Map<
+    string,
+    ManualValveControlledPipe[]
+  >();
+const highlightedManualValveDraftPipes =
+  ref<ManualValveControlledPipe[]>(
+    [],
+  );
+const manualValvePipeDraft =
+  ref<ManualValveControlledPipe[]>(
+    [],
+  );
+const isManualValvePipeDefinitionMode =
+  ref(false);
+const hasManualValvePipeDraftChanges =
+  ref(false);
 const blockedRoutePipes = new Set<string>();
 const selectedValveForPipeLink = ref<FlowNode | null>(null);
 const selectedValveAssociationRouteId = ref("");
@@ -4841,6 +5158,12 @@ function shouldColorNode(
   circuit: PipeCircuit,
   node: FlowNode,
 ) {
+    if (
+    isValveFocusModeActive.value
+  ) {
+    return false;
+  }
+
   if (
     selectedSavedRouteIdForEditing.value
   ) {
@@ -4876,6 +5199,57 @@ function shouldColorNode(
   return true;
 }
 
+function isManualValveControlledPipeBlocked(
+  node: FlowNode,
+) {
+  const targetPipeKey =
+    nodeKey(node);
+
+  for (
+    const [
+      valveKey,
+      controlledPipes,
+    ] of manualValveControlledPipes
+  ) {
+    const controlsTargetPipe =
+      controlledPipes.some(
+        (pipe) =>
+          nodeKey(pipe) ===
+          targetPipeKey,
+      );
+
+    if (!controlsTargetPipe) {
+      continue;
+    }
+
+    const valveNode =
+      getValveNodeFromDesignationKey(
+        valveKey,
+      );
+
+    if (!valveNode) {
+      continue;
+    }
+
+    const valveElement =
+      mepElements[
+        elementKey(
+          valveNode.modelId,
+          valveNode.localId,
+        )
+      ];
+
+    if (
+      valveElement?.state ===
+      "closed"
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function shouldCreateArrowForNode(
   circuit: PipeCircuit,
   node: FlowNode,
@@ -4886,9 +5260,19 @@ function shouldCreateArrowForNode(
     return false;
   }
 
+  if (
+    isManualValveControlledPipeBlocked(
+      node,
+    )
+  ) {
+    return false;
+  }
 
   return (
-    shouldColorNode(circuit, node) &&
+    shouldColorNode(
+      circuit,
+      node,
+    ) &&
     shouldIncludeNodeInRouteSimulation(
       circuit,
       node,
@@ -5107,6 +5491,14 @@ function toggleIfcPanelCollapsed() {
 async function restoreSelectedCircuitColors(
   _previousSelection: SelectionMap,
 ) {
+    if (
+    isValveFocusModeActive.value ||
+    isApplyingSavedRouteHighlight.value ||
+    highlightedSavedRouteId.value
+  ) {
+    return;
+  }
+
   if (
     isApplyingSavedRouteHighlight.value ||
     highlightedSavedRouteId.value
@@ -5383,6 +5775,7 @@ function resetManualChangesOnly() {
   }
 
   const manualChangeStorageKeys = [
+    MANUAL_VALVE_CONTROLLED_PIPES_STORAGE_KEY,
     ROUTE_GROUPS_STORAGE_KEY,
     REVERSED_DIRECTIONS_STORAGE_KEY,
     SYNCED_PIPE_DIRECTIONS_STORAGE_KEY,
@@ -5447,6 +5840,7 @@ function resetAllManualConfiguration() {
     SYNCED_PIPE_DIRECTIONS_STORAGE_KEY,
     VALVE_PIPE_LINKS_STORAGE_KEY,
     EXCLUDED_VALVES_STORAGE_KEY,
+    MANUAL_VALVE_CONTROLLED_PIPES_STORAGE_KEY,
   ];
 
   for (
@@ -5575,12 +5969,13 @@ highlighter.events.select.onClear.add(
     }
 
     if (
-      !isApplyingSavedRouteHighlight.value
-    ) {
-      await restoreSelectedCircuitColors(
-        previousSelection,
-      );
-    }
+  !isApplyingSavedRouteHighlight.value &&
+  !isValveFocusModeActive.value
+) {
+  await restoreSelectedCircuitColors(
+    previousSelection,
+  );
+}
   },
 );
 
@@ -8080,17 +8475,55 @@ function stopFlowForSavedRouteHighlight() {
 }
 
 async function clearFlowVisualsForRouteHighlight() {
-  stopFlowForSavedRouteHighlight();
+  isApplyingSavedRouteHighlight.value =
+    true;
 
-  await clearPersistentCircuitHighlights();
+  try {
+    stopFlowForSavedRouteHighlight();
 
-  for (const model of loadedModels.values()) {
-    await model.resetHighlight();
+    selectedItems.clear();
+
+    selectedCount.value =
+      0;
+
+    selectedIfcDetailsText.value =
+      "";
+
+    isIfcDetailsPanelOpen.value =
+      false;
+
+    selectedMepElementInfo.value =
+      "Nenhum elemento classificado selecionado.";
+
+    selectedTubeRouteInfo.value =
+      "";
+
+    if (modelHighlighter) {
+      await modelHighlighter.clear(
+        "select",
+      );
+
+      await modelHighlighter.clear(
+        "saved-route-highlight",
+      );
+    }
+
+    await clearPersistentCircuitHighlights();
+
+    for (
+      const model of
+        loadedModels.values()
+    ) {
+      await model.resetHighlight();
+    }
+
+    await fragmentManager.core.update(
+      true,
+    );
+  } finally {
+    isApplyingSavedRouteHighlight.value =
+      false;
   }
-
-  await fragmentManager.core.update(
-    true,
-  );
 }
 
 function getSavedRouteHighlightModelIdMap(
@@ -9490,6 +9923,104 @@ function loadExcludedValvesFromStorage() {
   }
 }
 
+function saveManualValveControlledPipesToStorage() {
+  const serializedAssociations = [
+    ...manualValveControlledPipes.entries(),
+  ].map(
+    (
+      [
+        valveKey,
+        controlledPipes,
+      ],
+    ) => ({
+      valveKey,
+
+      controlledPipes:
+        controlledPipes.map(
+          (pipe) => ({
+            modelId:
+              pipe.modelId,
+
+            localId:
+              pipe.localId,
+          }),
+        ),
+    }),
+  );
+
+  setActiveIfcStorageItem(
+    MANUAL_VALVE_CONTROLLED_PIPES_STORAGE_KEY,
+    JSON.stringify(
+      serializedAssociations,
+    ),
+  );
+}
+
+function loadManualValveControlledPipesFromStorage() {
+  manualValveControlledPipes.clear();
+
+  const storedText =
+    getActiveIfcStorageItem(
+      MANUAL_VALVE_CONTROLLED_PIPES_STORAGE_KEY,
+    );
+
+  if (!storedText) {
+    return;
+  }
+
+  try {
+    const storedAssociations =
+      JSON.parse(
+        storedText,
+      ) as Array<{
+        valveKey: string;
+
+        controlledPipes:
+          ManualValveControlledPipe[];
+      }>;
+
+    for (
+      const association of
+        storedAssociations
+    ) {
+      if (
+        !association.valveKey ||
+        !Array.isArray(
+          association.controlledPipes,
+        )
+      ) {
+        continue;
+      }
+
+      manualValveControlledPipes.set(
+        association.valveKey,
+        association.controlledPipes.map(
+          (pipe) => ({
+            modelId:
+              String(pipe.modelId),
+
+            localId:
+              Number(pipe.localId),
+          }),
+        ).filter(
+          (pipe) =>
+            pipe.modelId &&
+            Number.isFinite(
+              pipe.localId,
+            ),
+        ),
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Erro ao carregar os tubos controlados manualmente pelas válvulas:",
+      error,
+    );
+
+    manualValveControlledPipes.clear();
+  }
+}
+
 function saveValvePipeLinksToStorage() {
   const data = [...valveControlledPipeLinks.entries()].map(
     ([valveKey, linkedPipes]) => ({
@@ -10463,9 +10994,127 @@ if (suggestedRoute) {
 }
 }
 
+async function clearSelectedValveFromDropdown(
+  shouldRebuildFlow = true,
+) {
+
+  if (
+    hasManualValvePipeDraftChanges.value
+  ) {
+    const shouldClear =
+      window.confirm(
+        "Existem alterações no rascunho da válvula que ainda não foram guardadas.\n\n" +
+          "Queres sair e perder essas alterações?",
+      );
+
+    if (!shouldClear) {
+      return false;
+    }
+  }
+
+  isValveFocusModeActive.value =
+  false;
+
+  isManualValvePipeDefinitionMode.value =
+    false;
+
+  hasManualValvePipeDraftChanges.value =
+    false;
+
+  manualValvePipeDraft.value =
+    [];
+
+  await clearManualValvePipeDraftHighlight();
+
+  if (
+    highlightedValveFromDropdown.value
+  ) {
+    const previousModel =
+      loadedModels.get(
+        highlightedValveFromDropdown.value
+          .modelId,
+      );
+
+    if (previousModel) {
+      await previousModel.resetHighlight([
+        highlightedValveFromDropdown.value
+          .localId,
+      ]);
+    }
+  }
+
+  highlightedValveFromDropdown.value =
+    null;
+
+  selectedValveDesignationKey.value =
+    "";
+
+  selectedValveDesignation.value =
+    "nenhuma válvula selecionada";
+
+  selectedValveOriginalDesignation.value =
+    "";
+
+  pendingValveDesignation.value =
+    "";
+
+  selectedValveForPipeLink.value =
+    null;
+
+  selectedValveAssociationRouteId.value =
+    "";
+
+  selectedValveSwitchMode.value =
+    "none";
+
+  selectedItems.clear();
+
+  selectedCount.value =
+    0;
+
+  isValveDesignationDropdownOpen.value =
+    false;
+
+  if (shouldRebuildFlow) {
+  if (
+    countAssignments() > 0 ||
+    flowConnections.length > 0
+  ) {
+    await rebuildManualFlowLayer();
+  } else {
+    await fragmentManager.core.update(
+      true,
+    );
+  }
+}
+
+  isFlowing.value =
+    false;
+
+  isCentralSimulationRunning.value =
+    false;
+
+  isManualFlowAnimationRunning.value =
+    false;
+
+  isFlowManuallyPaused.value =
+    true;
+
+  flowMessage.value =
+    "Nenhuma válvula selecionada. Clica em Atualizar para preparar a simulação.";
+
+  return true;
+}
+
 async function selectValveDesignationOption(
   valveKey: string,
 ) {
+  if (!valveKey) {
+    await clearSelectedValveFromDropdown();
+
+    return;
+  }
+
   selectedValveDesignationKey.value =
     valveKey;
 
@@ -10511,24 +11160,11 @@ async function selectValveDesignationFromDropdown() {
 
   await highlightValveFromDropdown(valveNode);
 
-  const linkedPipes = getLinkedPipesForValveNode(valveNode);
-const associatedRouteId = linkedPipes[0]?.routeId;
-selectedValveSwitchMode.value = linkedPipes[0]?.switchMode ?? "none";
+  selectedValveAssociationRouteId.value =
+  "";
 
-  if (associatedRouteId) {
-    selectedValveAssociationRouteId.value = associatedRouteId;
-
-    const associatedRoute = savedRoutes.find(
-      (route) => route.id === associatedRouteId,
-    );
-
-    if (
-      associatedRoute &&
-      highlightedSavedRouteId.value !== associatedRoute.id
-    ) {
-      await toggleSavedRouteHighlight(associatedRoute);
-    }
-  }
+selectedValveSwitchMode.value =
+  "none";
 
   flowMessage.value =
     "Válvula selecionada no dropdown e destacada no modelo.";
@@ -12250,33 +12886,95 @@ function getValveNodeForControl() {
   );
 }
 
-async function highlightValveFromDropdown(node: FlowNode) {
-  if (highlightedValveFromDropdown.value) {
-    const previousModel = loadedModels.get(
-      highlightedValveFromDropdown.value.modelId,
+async function highlightValveFromDropdown(
+  node: FlowNode,
+) {
+  isValveFocusModeActive.value =
+    true;
+
+  flowPreparationRunId++;
+
+  isPreparingFlowAnimation.value =
+    false;
+
+  isFlowAnimationReady.value =
+    false;
+
+  flowPreparationProgress.value =
+    0;
+
+  hasFlowPreparationError.value =
+    false;
+
+  isFlowing.value =
+    false;
+
+  isCentralSimulationRunning.value =
+    false;
+
+  isManualFlowAnimationRunning.value =
+    false;
+
+  isFlowManuallyPaused.value =
+    true;
+
+  highlightedSavedRouteId.value =
+    null;
+
+  await clearFlowVisualsForRouteHighlight();
+
+  await new Promise<void>(
+  (resolve) => {
+    requestAnimationFrame(
+      () => resolve(),
+    );
+  },
+);
+
+await clearPersistentCircuitHighlights();
+
+for (
+  const loadedModel of
+    loadedModels.values()
+) {
+  await loadedModel.resetHighlight();
+}
+
+await fragmentManager.core.update(
+  true,
+);
+
+  const model =
+    loadedModels.get(
+      node.modelId,
     );
 
-    if (previousModel) {
-      await previousModel.resetHighlight([
-        highlightedValveFromDropdown.value.localId,
-      ]);
-    }
-  }
-
-  const model = loadedModels.get(node.modelId);
-
   if (!model) {
+    flowMessage.value =
+      "Não foi possível encontrar o modelo da válvula.";
+
     return;
   }
 
   await model.highlight(
     [node.localId],
-    createHighlight(0xff00ff, "valve-dropdown-selected"),
+    createHighlight(
+      0xff00ff,
+      "valve-dropdown-selected",
+    ),
   );
 
-  highlightedValveFromDropdown.value = node;
+  highlightedValveFromDropdown.value = {
+    modelId:
+      node.modelId,
 
-  await fragmentManager.core.update(true);
+    localId:
+      node.localId,
+  };
+
+  await fragmentManager.core.update(
+    true,
+  );
 }
 
 async function findClosestProtectedRouteMatch(
@@ -13385,102 +14083,162 @@ restoreValveLinkedPipesToOriginalCircuit(linkedPipes);
     "Associação da válvula removida.";
 }
 
-async function setSelectedValvesState(state: "open" | "closed") {
-  const valveNodes = getValveNodesForControl();
+async function setSelectedValvesState(
+  state: "open" | "closed",
+) {
+  const valveNodes =
+    getValveNodesForControl();
 
   if (!valveNodes.length) {
-    flowMessage.value = "Seleciona primeiro uma válvula.";
+    flowMessage.value =
+      "Seleciona primeiro uma válvula.";
+
     return;
   }
 
-  let changedCount = 0;
+  let changedCount =
+    0;
 
-  for (const valveNode of valveNodes) {
-    const { modelId, localId } = valveNode;
+  const affectedPipeKeys =
+    new Set<string>();
 
-    if (!isIsolationValve(modelId, localId)) {
+  for (
+    const valveNode of valveNodes
+  ) {
+    const {
+      modelId,
+      localId,
+    } = valveNode;
+
+    if (
+      !isIsolationValve(
+        modelId,
+        localId,
+      )
+    ) {
       continue;
     }
 
-    const key = elementKey(modelId, localId);
-    const existingElement = mepElements[key];
+    const valveKey =
+      elementKey(
+        modelId,
+        localId,
+      );
 
-    if (!existingElement || !isValveElementType(existingElement.elementType)) {
+    const existingElement =
+      mepElements[valveKey];
+
+    if (
+      !existingElement ||
+      !isValveElementType(
+        existingElement.elementType,
+      )
+    ) {
       continue;
     }
 
-    mepElements[key] = {
+    if (
+      existingElement.state ===
+      state
+    ) {
+      continue;
+    }
+
+    mepElements[valveKey] = {
       ...existingElement,
       modelId,
       localId,
       state,
     };
 
-    const valveKey = nodeKey(valveNode);
-    const linkedPipes = getLinkedPipesForValveNode(valveNode);
+    const controlledPipes =
+      manualValveControlledPipes.get(
+        valveKey,
+      ) ?? [];
 
-    let blockedSet = blockedPipes.get(modelId);
+    for (
+      const controlledPipe of
+        controlledPipes
+    ) {
+      affectedPipeKeys.add(
+        nodeKey(controlledPipe),
+      );
+    }
 
-    if (state === "closed") {
-      restoreValveLinkedPipesToOriginalCircuit(linkedPipes);
-
-      if (!blockedSet) {
-        blockedSet = new Set<number>();
-        blockedPipes.set(modelId, blockedSet);
-      }
-
-      blockedSet.add(localId);
-
-      for (const pipeNode of linkedPipes) {
-        blockPipeForRoute(pipeNode.routeId, pipeNode);
-      }
-
-      valveBlockedPipeLinks.set(valveKey, linkedPipes);
-    } else {
-      blockedSet?.delete(localId);
-
-      if (blockedSet && blockedSet.size === 0) {
-        blockedPipes.delete(modelId);
-      }
-
-      for (const pipeNode of linkedPipes) {
-        unblockPipeForRoute(pipeNode.routeId, pipeNode);
-      }
-
-      valveBlockedPipeLinks.delete(valveKey);
-
-      restoreValveLinkedPipesToOriginalCircuit(
-  linkedPipes,
-);
-}
-
-changedCount++;
+    changedCount++;
   }
 
   if (!changedCount) {
-    flowMessage.value = "Nenhuma válvula válida encontrada para alterar.";
+    flowMessage.value =
+      state === "closed"
+        ? "A válvula selecionada já está fechada."
+        : "A válvula selecionada já está aberta.";
+
     return;
   }
 
-  updateBlockedCount();
-  updateManualStats();
   saveMepElementsToStorage();
 
+  isValveFocusModeActive.value =
+    false;
+
   if (
-  countAssignments() > 0 ||
-  flowConnections.length > 0
-) {
-  await rebuildManualFlowLayer(
-    false,
-  );
-}
+    highlightedValveFromDropdown.value
+  ) {
+    const highlightedValveModel =
+      loadedModels.get(
+        highlightedValveFromDropdown.value
+          .modelId,
+      );
+
+    if (highlightedValveModel) {
+      await highlightedValveModel
+        .resetHighlight([
+          highlightedValveFromDropdown.value
+            .localId,
+        ]);
+    }
+
+    highlightedValveFromDropdown.value =
+      null;
+  }
+
+  isFlowing.value =
+    false;
+
+  isManualFlowAnimationRunning.value =
+    false;
+
+  isCentralSimulationRunning.value =
+    false;
+
+  isFlowManuallyPaused.value =
+    true;
+
+  if (
+    countAssignments() > 0 ||
+    flowConnections.length > 0
+  ) {
+    await rebuildManualFlowLayer(
+      false,
+    );
+  } else {
+    await fragmentManager.core.update(
+      true,
+    );
+  }
 
   await showSelectedMepElementInfo();
 
   flowMessage.value =
     state === "closed"
-      ? `${changedCount} válvula(s) fechada(s). Fluxo bloqueado a jusante.`
-      : `${changedCount} válvula(s) aberta(s). Fluxo reposto a jusante.`;
+      ? changedCount +
+        " válvula(s) fechada(s). " +
+        affectedPipeKeys.size +
+        " tubo(s) controlado(s) ficaram sem setas."
+      : changedCount +
+        " válvula(s) aberta(s). " +
+        "As setas que já não estão bloqueadas foram repostas.";
 }
 
 async function applyInverseNormalStateToSelectedValves() {
@@ -15637,6 +16395,569 @@ function toggleValveDesignationPanel() {
 
 function toggleValveRenamePanel() {
   isValveRenamePanelOpen.value = !isValveRenamePanelOpen.value;
+}
+
+function getSelectedManualValveKey() {
+  const valveKey =
+    selectedValveDesignationKey.value;
+
+  if (!valveKey) {
+    return "";
+  }
+
+  const valveNode =
+    getValveNodeFromDesignationKey(
+      valveKey,
+    );
+
+  if (!valveNode) {
+    return "";
+  }
+
+  return valveKey;
+}
+
+function getManualValveControlledPipeCount() {
+  const valveKey =
+    getSelectedManualValveKey();
+
+  if (!valveKey) {
+    return 0;
+  }
+
+  return (
+    manualValveControlledPipes.get(
+      valveKey,
+    )?.length ??
+    0
+  );
+}
+
+function getSelectedPipeNodesForManualValve() {
+  const selectedPipes:
+    ManualValveControlledPipe[] = [];
+
+  for (
+    const [modelId, localIds] of
+      selectedItems
+  ) {
+    for (const localId of localIds) {
+      const node = {
+        modelId,
+        localId,
+      };
+
+      if (
+        !pipeTypeFlowNodes.has(
+          nodeKey(node),
+        )
+      ) {
+        continue;
+      }
+
+      selectedPipes.push({
+        modelId,
+        localId,
+      });
+    }
+  }
+
+  return selectedPipes;
+}
+
+async function clearManualValvePipeDraftHighlight() {
+  const pipesByModel =
+    new Map<
+      string,
+      number[]
+    >();
+
+  for (
+    const pipe of
+      highlightedManualValveDraftPipes.value
+  ) {
+    const localIds =
+      pipesByModel.get(
+        pipe.modelId,
+      ) ?? [];
+
+    localIds.push(
+      pipe.localId,
+    );
+
+    pipesByModel.set(
+      pipe.modelId,
+      localIds,
+    );
+  }
+
+  for (
+    const [
+      modelId,
+      localIds,
+    ] of pipesByModel
+  ) {
+    const model =
+      loadedModels.get(
+        modelId,
+      );
+
+    if (
+      model &&
+      localIds.length
+    ) {
+      await model.resetHighlight(
+        localIds,
+      );
+    }
+  }
+
+  highlightedManualValveDraftPipes.value =
+    [];
+
+  await fragmentManager.core.update(
+    true,
+  );
+}
+
+async function highlightManualValvePipeDraft() {
+  await clearManualValvePipeDraftHighlight();
+
+  if (
+    !manualValvePipeDraft.value.length
+  ) {
+    return;
+  }
+
+  const pipesByModel =
+    new Map<
+      string,
+      number[]
+    >();
+
+  for (
+    const pipe of
+      manualValvePipeDraft.value
+  ) {
+    const localIds =
+      pipesByModel.get(
+        pipe.modelId,
+      ) ?? [];
+
+    localIds.push(
+      pipe.localId,
+    );
+
+    pipesByModel.set(
+      pipe.modelId,
+      localIds,
+    );
+  }
+
+  for (
+    const [
+      modelId,
+      localIds,
+    ] of pipesByModel
+  ) {
+    const model =
+      loadedModels.get(
+        modelId,
+      );
+
+    if (
+      !model ||
+      !localIds.length
+    ) {
+      continue;
+    }
+
+    await model.highlight(
+      localIds,
+      createHighlight(
+        0xffb300,
+        "manual-valve-controlled-pipes",
+      ),
+    );
+  }
+
+  highlightedManualValveDraftPipes.value =
+    manualValvePipeDraft.value.map(
+      (pipe) => ({
+        modelId:
+          pipe.modelId,
+
+        localId:
+          pipe.localId,
+      }),
+    );
+
+  await fragmentManager.core.update(
+    true,
+  );
+}
+
+function startManualValvePipeDefinition() {
+  const valveKey =
+    getSelectedManualValveKey();
+
+  if (!valveKey) {
+    flowMessage.value =
+      "Seleciona primeiro uma válvula.";
+
+    window.alert(
+      "Seleciona primeiro uma válvula no dropdown ou diretamente no modelo.",
+    );
+
+    return;
+  }
+
+  const savedPipes =
+    manualValveControlledPipes.get(
+      valveKey,
+    ) ?? [];
+
+  manualValvePipeDraft.value =
+    savedPipes.map(
+      (pipe) => ({
+        modelId:
+          pipe.modelId,
+
+        localId:
+          pipe.localId,
+      }),
+    );
+
+  isManualValvePipeDefinitionMode.value =
+    true;
+
+  hasManualValvePipeDraftChanges.value =
+    false;
+
+  flowMessage.value =
+    "Modo de definição dos tubos controlados ativo. Seleciona os tubos no modelo.";
+}
+
+async function cancelManualValvePipeDefinition() {
+  const hasUnsavedChanges =
+    hasManualValvePipeDraftChanges.value;
+
+  if (hasUnsavedChanges) {
+    const shouldCancel =
+      window.confirm(
+        "Existem alterações no rascunho que ainda não foram guardadas.\n\n" +
+          "Queres cancelar e perder essas alterações?",
+      );
+
+    if (!shouldCancel) {
+      return;
+    }
+  }
+
+  manualValvePipeDraft.value =
+    [];
+
+  isManualValvePipeDefinitionMode.value =
+    false;
+
+  hasManualValvePipeDraftChanges.value =
+    false;
+
+  await clearManualValvePipeDraftHighlight();
+
+  flowMessage.value =
+    "Definição dos tubos controlados cancelada.";
+}
+
+function addSelectedPipesToManualValveDraft() {
+  if (
+    !isManualValvePipeDefinitionMode.value
+  ) {
+    return;
+  }
+
+  const selectedPipes =
+    getSelectedPipeNodesForManualValve();
+
+  if (!selectedPipes.length) {
+    flowMessage.value =
+      "Seleciona primeiro um ou mais tubos no modelo.";
+
+    return;
+  }
+
+  const draftByNode =
+    new Map<
+      string,
+      ManualValveControlledPipe
+    >(
+      manualValvePipeDraft.value.map(
+        (pipe) => [
+          nodeKey(pipe),
+          pipe,
+        ],
+      ),
+    );
+
+  for (const pipe of selectedPipes) {
+    draftByNode.set(
+      nodeKey(pipe),
+      {
+        modelId:
+          pipe.modelId,
+
+        localId:
+          pipe.localId,
+      },
+    );
+  }
+
+  manualValvePipeDraft.value = [
+    ...draftByNode.values(),
+  ];
+
+  hasManualValvePipeDraftChanges.value =
+    true;
+
+  void highlightManualValvePipeDraft();
+
+  flowMessage.value =
+    selectedPipes.length +
+    " tubo(s) adicionado(s) ao rascunho da válvula.";
+}
+
+function removeSelectedPipesFromManualValveDraft() {
+  if (
+    !isManualValvePipeDefinitionMode.value
+  ) {
+    return;
+  }
+
+  const selectedPipes =
+    getSelectedPipeNodesForManualValve();
+
+  if (!selectedPipes.length) {
+    flowMessage.value =
+      "Seleciona primeiro os tubos que queres retirar.";
+
+    return;
+  }
+
+  const selectedPipeKeys =
+    new Set(
+      selectedPipes.map(
+        (pipe) =>
+          nodeKey(pipe),
+      ),
+    );
+
+  const previousCount =
+    manualValvePipeDraft.value.length;
+
+  manualValvePipeDraft.value =
+    manualValvePipeDraft.value.filter(
+      (pipe) =>
+        !selectedPipeKeys.has(
+          nodeKey(pipe),
+        ),
+    );
+
+  const removedCount =
+    previousCount -
+    manualValvePipeDraft.value.length;
+
+  if (!removedCount) {
+    flowMessage.value =
+      "Os tubos selecionados não pertencem ao rascunho.";
+
+    return;
+  }
+
+  hasManualValvePipeDraftChanges.value =
+    true;
+
+  void highlightManualValvePipeDraft();
+
+  flowMessage.value =
+    removedCount +
+    " tubo(s) retirado(s) do rascunho.";
+}
+
+function clearManualValvePipeDraft() {
+  if (
+    !manualValvePipeDraft.value.length
+  ) {
+    flowMessage.value =
+      "O rascunho já está vazio.";
+
+    return;
+  }
+
+  const confirmed =
+    window.confirm(
+      "Queres remover todos os tubos do rascunho desta válvula?",
+    );
+
+  if (!confirmed) {
+    return;
+  }
+
+  manualValvePipeDraft.value =
+    [];
+
+  void clearManualValvePipeDraftHighlight();
+
+hasManualValvePipeDraftChanges.value =
+  true;
+
+  flowMessage.value =
+    "Todos os tubos foram retirados do rascunho.";
+}
+
+async function saveManualValvePipeDefinition() {
+  const valveKey =
+    getSelectedManualValveKey();
+
+  if (!valveKey) {
+    window.alert(
+      "Seleciona primeiro uma válvula.",
+    );
+
+    return;
+  }
+
+  if (
+    !manualValvePipeDraft.value.length
+  ) {
+    window.alert(
+      "Adiciona pelo menos um tubo antes de guardar a definição.",
+    );
+
+    return;
+  }
+
+  manualValveControlledPipes.set(
+    valveKey,
+    manualValvePipeDraft.value.map(
+      (pipe) => ({
+        modelId:
+          pipe.modelId,
+
+        localId:
+          pipe.localId,
+      }),
+    ),
+  );
+
+  saveManualValveControlledPipesToStorage();
+
+  hasManualValvePipeDraftChanges.value =
+    false;
+
+  isManualValvePipeDefinitionMode.value =
+    false;
+
+  await highlightManualValvePipeDraft();
+
+  flowMessage.value =
+    manualValvePipeDraft.value.length +
+    " tubo(s) guardado(s) para a válvula selecionada.";
+}
+
+async function removeManualValvePipeDefinition() {
+  const valveKey =
+    getSelectedManualValveKey();
+
+  if (!valveKey) {
+    window.alert(
+      "Seleciona primeiro uma válvula.",
+    );
+
+    return;
+  }
+
+  const savedPipes =
+    manualValveControlledPipes.get(
+      valveKey,
+    );
+
+  if (!savedPipes?.length) {
+    flowMessage.value =
+      "Esta válvula não tem uma definição manual guardada.";
+
+    return;
+  }
+
+  const confirmed =
+    window.confirm(
+      "Queres remover todos os tubos controlados pela válvula selecionada?",
+    );
+
+  if (!confirmed) {
+    return;
+  }
+
+  manualValveControlledPipes.delete(
+    valveKey,
+  );
+
+  manualValvePipeDraft.value =
+    [];
+
+  saveManualValveControlledPipesToStorage();
+
+  await clearManualValvePipeDraftHighlight();
+
+  hasManualValvePipeDraftChanges.value =
+    false;
+
+  isManualValvePipeDefinitionMode.value =
+    false;
+
+  flowMessage.value =
+    "A definição manual da válvula foi removida.";
+}
+
+async function highlightSavedManualValvePipes() {
+  const valveKey =
+    getSelectedManualValveKey();
+
+  if (!valveKey) {
+    window.alert(
+      "Seleciona primeiro uma válvula.",
+    );
+
+    return;
+  }
+
+  const savedPipes =
+    manualValveControlledPipes.get(
+      valveKey,
+    ) ?? [];
+
+  if (!savedPipes.length) {
+    flowMessage.value =
+      "Esta válvula ainda não tem tubos controlados guardados.";
+
+    return;
+  }
+
+  manualValvePipeDraft.value =
+    savedPipes.map(
+      (pipe) => ({
+        modelId:
+          pipe.modelId,
+
+        localId:
+          pipe.localId,
+      }),
+    );
+
+  await highlightManualValvePipeDraft();
+
+  flowMessage.value =
+    savedPipes.length +
+    " tubo(s) controlado(s) realçado(s).";
 }
 
 function toggleValveAssociationDetails() {
@@ -20171,7 +21492,26 @@ async function blockSelectedPipes() {
 }
 
 async function updateFlowAnimationWithoutStarting() {
-  isFlowing.value = false;
+  if (
+    selectedValveDesignationKey.value ||
+    isValveFocusModeActive.value ||
+    highlightedValveFromDropdown.value
+  ) {
+    const valveWasCleared =
+      await clearSelectedValveFromDropdown(
+        false,
+      );
+
+    if (!valveWasCleared) {
+      flowMessage.value =
+        "Atualização cancelada porque existem alterações não guardadas na válvula.";
+
+      return;
+    }
+  }
+
+  isFlowing.value =
+    false;
 
   isManualFlowAnimationRunning.value =
     false;
@@ -22931,5 +24271,110 @@ function chunk<T>(items: T[], size: number) {
 .configuration-reset-button--danger:hover {
   background:
     rgba(211, 47, 47, 0.95);
+}
+
+.manual-valve-pipe-definition {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.manual-valve-pipe-definition__summary {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.7rem;
+  border: 1px solid
+    rgba(143, 211, 255, 0.28);
+  border-radius: 0.5rem;
+  background:
+    rgba(143, 211, 255, 0.07);
+}
+
+.manual-valve-pipe-definition__summary p {
+  margin: 0;
+  color: #dbe9f1;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.manual-valve-pipe-definition__summary strong {
+  color: #8fd3ff;
+}
+
+.manual-valve-pipe-definition__active {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.manual-valve-pipe-definition__saved-actions {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.manual-valve-pipe-definition__saved-actions button {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.65rem;
+  padding: 0.45rem;
+  border: 0;
+  border-radius: 6px;
+  background: #f7fbff;
+  color: #111820;
+  font: inherit;
+  font-weight: 700;
+  line-height: normal;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.manual-valve-pipe-definition__saved-actions button:disabled {
+  background: #6f7376;
+  color: #4c4f51;
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.manual-valve-pipe-definition__saved-actions
+.flow-button--danger:not(:disabled) {
+  background: #ffe3e3;
+  color: #7a1010;
+}
+
+.selected-valve-control-actions {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  width: 100%;
+  margin-top: 0.55rem;
+}
+
+.selected-valve-control-actions button {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.65rem;
+  padding: 0.5rem 0.55rem;
+  border: 0;
+  border-radius: 6px;
+  background: #f7fbff;
+  color: #111820;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  line-height: normal;
+}
+
+.selected-valve-control-actions
+button:hover:not(:disabled) {
+  background: #d9f0ff;
+}
+
+.selected-valve-control-actions
+button:disabled {
+  background: #6f7376;
+  color: #4c4f51;
+  cursor: not-allowed;
+  opacity: 0.75;
 }
 </style>
