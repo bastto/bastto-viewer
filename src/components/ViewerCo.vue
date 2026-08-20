@@ -1547,9 +1547,16 @@
   "
 >
   <p class="connection-note">
-    Estas ações atuam apenas nos tubos
-    atualmente selecionados no modelo.
-  </p>
+  Tubos/elementos selecionados:
+  <strong>
+    {{ selectedCount }}
+  </strong>
+</p>
+
+<p class="connection-note">
+  Estas ações atuam apenas nos tubos
+  atualmente selecionados no modelo.
+</p>
 
     <div class="flow-actions flow-actions--secondary">
       <button
@@ -1558,10 +1565,10 @@
     selectedCount === 0
   "
   @click="
-    clearSelectedManualAssignments
+    clearCurrentModelSelection
   "
 >
-  Limpar marca selecionada
+  Limpar seleção atual
 </button>
 
       <button type="button" @click="clearManualAssignments">
@@ -1581,30 +1588,31 @@
 </button>
     </div>
 
-    <div class="flow-actions flow-actions--secondary">
-      <button
-  type="button"
-  :disabled="
-    selectedCount === 0
-  "
-  @click="
-    hideSelectedFlowArrows
-  "
->
-  Ocultar setas
-</button>
-      <button
-  type="button"
-  :disabled="
-    selectedCount === 0
-  "
-  @click="
-    showSelectedFlowArrows
-  "
->
-  Mostrar setas
-</button>
-    </div>
+<div class="selected-pipe-arrow-actions">
+  <button
+    type="button"
+    :disabled="
+      selectedCount === 0
+    "
+    @click="
+      hideSelectedFlowArrows
+    "
+  >
+    Ocultar setas
+  </button>
+
+  <button
+    type="button"
+    :disabled="
+      selectedCount === 0
+    "
+    @click="
+      showSelectedFlowArrows
+    "
+  >
+    Mostrar setas
+  </button>
+</div>
     </div>
 
     <div
@@ -1653,7 +1661,10 @@
     </option>
 
     <option
-      v-for="route in getFilteredSavedRoutes()"
+  v-for="
+    route in
+    getAllSavedRoutesOrdered()
+  "
       :key="
         'edit-saved-route-' +
         route.id
@@ -1673,21 +1684,27 @@
   </select>
 </label>
 
-<p class="connection-note">
-  Para adicionar: define primeiro o tubo novo
-  e depois um tubo do caminho como referência.
-</p>
+<div class="route-edit-help">
+  <p class="route-edit-help__title">
+    Como editar o caminho
+  </p>
 
-<p class="connection-note">
-  Seleciona tubos para os adicionar ou retirar
-  do caminho escolhido.
-</p>
+  <ol class="route-edit-help__steps">
+    <li>
+      Seleciona no modelo os tubos que queres
+      adicionar ou retirar.
+    </li>
 
-<p class="connection-note">
-  Ao adicionar tubos, o sentido atual será
-  apagado e terá de ser definido novamente.
-</p>
+    <li>
+      Clica na operação correspondente.
+    </li>
+  </ol>
 
+  <p class="route-edit-help__warning">
+    Ao adicionar tubos, será necessário definir
+    novamente o sentido do caminho.
+  </p>
+</div>
 <div
   class="flow-actions flow-actions--single"
 >
@@ -1746,111 +1763,408 @@
 </div>
 
 <div v-if="isCreateRouteSectionOpen">
+  <div class="flow-section-title">
+    1. Ciclo do caminho
+  </div>
 
-<p class="connection-note">
-  Início: {{ routeStartLabel }}
-</p>
+  <label class="flow-cycle-config">
+    <span>
+      Ciclo
+    </span>
 
-<p class="connection-note">
-  Fim: {{ routeEndLabel }}
-</p>
+    <select
+      v-model="
+        newRouteCycleSelection
+      "
+    >
+      <option value="">
+        Sem ciclo / Por atribuir
+      </option>
 
-    <div class="flow-actions flow-actions--single">
-  <button
-    type="button"
-    :class="[
-      'manual-route-mode-button',
-      isManualRouteRecording ? 'manual-route-mode-button--active' : ''
-    ]"
-    @click="toggleManualRouteRecording"
+      <option
+        v-for="
+          cycleNumber in
+          waterCycleCount
+        "
+        :key="
+          'new-route-cycle-' +
+          cycleNumber
+        "
+        :value="
+          String(cycleNumber)
+        "
+      >
+        {{
+          getCycleDisplayName(
+            cycleNumber
+          )
+        }}
+      </option>
+    </select>
+  </label>
+
+  <label class="flow-cycle-config">
+  <span>
+    Tipo do novo circuito
+  </span>
+
+  <select
+    v-model="
+      newRouteCircuitKind
+    "
+    @change="
+      handleNewRouteCircuitKindChange
+    "
   >
-    {{ isManualRouteRecording ? 'Desativar modo manual' : 'Ativar modo manual' }}
-  </button>
-</div>
+    <option value="hotSupply">
+      Ida quente
+    </option>
 
-<p v-if="isManualRouteRecording" class="manual-route-status">
-  Modo manual ativo: seleciona os tubos pela ordem do percurso.
-</p>
+    <option value="coldSupply">
+      Ida fria
+    </option>
 
-<p class="connection-note">
-  Caminho manual: {{ manualRouteNodes.length }} tubo(s)
-</p>
+    <option value="hotReturn">
+      Retorno quente
+    </option>
 
-<div
-  v-if="isManualRouteRecording && manualRouteNodes.length > 0"
-  class="flow-actions flow-actions--single"
->
-  <button type="button" @click.stop.prevent="removeLastManualRouteNode">
-  Remover último tubo
-</button>
-</div>
+    <option value="coldReturn">
+      Retorno frio
+    </option>
 
-<p v-if="!isManualRouteRecording" class="connection-note workflow-help-note">
-  Para criar automaticamente: seleciona o tubo inicial, define início, seleciona o tubo final, define fim e cria o percurso.
-</p>
+    <option value="extra">
+      Extra
+    </option>
+  </select>
+</label>
 
-<div v-if="!isManualRouteRecording" class="flow-actions flow-actions--secondary">
-  <button type="button" @click="setRouteStart">
-    1. Definir início
-  </button>
-  <button type="button" @click="setRouteEnd">
-    2. Definir fim
-  </button>
-</div>
+<label class="flow-cycle-config">
+  <span>
+    Nome do novo circuito
+  </span>
 
-<div v-if="!isManualRouteRecording" class="flow-actions flow-actions--single">
-  <button type="button" @click="createAutoRouteForSelectedCycleCircuit">
-    3. Criar caminho automático
-  </button>
-</div>
+  <input
+    v-model="
+      newRouteCircuitName
+    "
+    type="text"
+    :placeholder="
+      getDefaultNewRouteCircuitName(
+        newRouteCircuitKind
+      )
+    "
+  />
+</label>
 
-<div
-  v-if="isManualRouteRecording && manualRouteNodes.length >= 2"
-  class="flow-section-title"
->
-  Criar percurso manual
-</div>
+<label class="flow-cycle-config">
+  <span>
+    Cor do novo circuito
+  </span>
+
+  <input
+    v-model="
+      newRouteCircuitColor
+    "
+    type="color"
+  />
+</label>
+
+  <p
+    v-if="
+      !newRouteCycleSelection
+    "
+    class="connection-note"
+  >
+    O caminho será criado fora dos ciclos.
+    Podes atribuí-lo posteriormente.
+  </p>
+
+    class="
+      connection-note
+      workflow-help-note
+    "
+  >
+
+  <div class="flow-section-title">
+    2. Método de criação
+  </div>
+
+  <div class="route-creation-method-switch">
+    <button
+      type="button"
+      :class="{
+        'route-creation-method-switch__option--active':
+          routeCreationMethod ===
+          'automatic'
+      }"
+      @click="
+        selectRouteCreationMethod(
+          'automatic'
+        )
+      "
+    >
+      Por início e fim
+    </button>
+
+    <button
+      type="button"
+      :class="{
+        'route-creation-method-switch__option--active':
+          routeCreationMethod ===
+          'manual'
+      }"
+      @click="
+        selectRouteCreationMethod(
+          'manual'
+        )
+      "
+    >
+      Tubo a tubo
+    </button>
+  </div>
+
+  <p class="connection-note">
+    {{
+      routeCreationMethod ===
+        'automatic'
+        ? 'Define o início e o fim. O programa encontra automaticamente os tubos entre ambos.'
+        : 'Seleciona manualmente cada tubo pela ordem do caminho.'
+    }}
+  </p>
 
   <div
-  v-if="isManualRouteRecording && manualRouteNodes.length >= 2"
-  class="flow-actions flow-actions--single"
->
-  <button type="button" @click="createManualRouteForSelectedCycleCircuit">
-    Criar caminho manual
+    v-if="
+      routeCreationMethod ===
+      'automatic'
+    "
+  >
+    <div
+      class="route-creation-status"
+    >
+      <p>
+        <strong>
+          Início:
+        </strong>
+
+        {{ routeStartLabel }}
+      </p>
+
+      <p>
+        <strong>
+          Fim:
+        </strong>
+
+        {{ routeEndLabel }}
+      </p>
+    </div>
+
+<div class="route-creation-three-actions">
+  <button
+    type="button"
+    @click="
+      setRouteStart
+    "
+  >
+    Definir início
+  </button>
+
+  <button
+    type="button"
+    @click="
+      setRouteEnd
+    "
+  >
+    Definir fim
+  </button>
+
+  <button
+    type="button"
+    :disabled="
+  !routeStart ||
+  !routeEnd
+"
+    @click="
+      createAutoRouteForSelectedCycleCircuit
+    "
+  >
+    Criar caminho
   </button>
 </div>
+  </div>
+
+  <div
+    v-if="
+      routeCreationMethod ===
+      'manual'
+    "
+  >
+    <div
+      class="
+        flow-actions
+        flow-actions--single
+      "
+    >
+      <button
+        type="button"
+        :class="[
+          'manual-route-mode-button',
+          isManualRouteRecording
+            ? 'manual-route-mode-button--active'
+            : ''
+        ]"
+        @click="
+          toggleManualRouteRecording
+        "
+      >
+        {{
+          isManualRouteRecording
+            ? 'Terminar seleção de tubos'
+            : 'Iniciar seleção de tubos'
+        }}
+      </button>
+    </div>
+
+    <p
+      v-if="
+        isManualRouteRecording
+      "
+      class="manual-route-status"
+    >
+      Seleção ativa: clica nos tubos
+      pela ordem do caminho.
+    </p>
 
     <div
-  v-if="currentRouteConnections.length || manualRouteNodes.length"
-  class="flow-section-title"
->
-  3. Guardar ou descartar
-</div>
+      class="route-creation-status"
+    >
+      <p>
+        <strong>
+          Tubos adicionados:
+        </strong>
 
-<div
-  v-if="currentRouteConnections.length || manualRouteNodes.length"
-  class="flow-actions flow-actions--single"
->
+        {{ manualRouteNodes.length }}
+      </p>
+
+      <p>
+        <strong>
+          Início proposto:
+        </strong>
+
+        {{
+          manualRouteNodes.length
+            ? formatNodeLabel(
+                manualRouteNodes[0]
+              )
+            : 'nenhum'
+        }}
+      </p>
+
+      <p>
+        <strong>
+          Fim proposto:
+        </strong>
+
+        {{
+          manualRouteNodes.length
+            ? formatNodeLabel(
+                manualRouteNodes[
+                  manualRouteNodes.length -
+                  1
+                ]
+              )
+            : 'nenhum'
+        }}
+      </p>
+    </div>
+
+  <div class="route-creation-three-actions">
   <button
     type="button"
-    class="flow-button--primary"
-    @click="saveCurrentRoute"
+    :disabled="
+      manualRouteNodes.length ===
+      0
+    "
+    @click.stop.prevent="
+      removeLastManualRouteNode
+    "
   >
-    Guardar caminho
+    Remover último tubo
   </button>
 
   <button
     type="button"
-    class="flow-button--danger"
-    @click="discardCurrentRoute"
+    :disabled="
+      manualRouteNodes.length ===
+      0
+    "
+    @click="
+      cancelManualRouteRecording
+    "
   >
-    Descartar caminho atual
+    Limpar seleção
+  </button>
+
+  <button
+    type="button"
+    :disabled="
+  manualRouteNodes.length < 2
+"
+    @click="
+      createManualRouteForSelectedCycleCircuit
+    "
+  >
+    Criar caminho
   </button>
 </div>
+  </div>
 
-<p v-if="discardRouteMessage" class="discard-route-message">
-  {{ discardRouteMessage }}
-</p>
+  <div
+    v-if="
+      currentRouteConnections.length >
+      0
+    "
+    class="flow-section-title"
+  >
+    3. Guardar ou descartar
+  </div>
+
+  <div
+    v-if="
+      currentRouteConnections.length >
+      0
+    "
+    class="
+      flow-actions
+      flow-actions--single
+    "
+  >
+    <button
+      type="button"
+      class="flow-button--primary"
+      @click="
+        saveCurrentRoute
+      "
+    >
+      Guardar caminho
+    </button>
+
+    <button
+      type="button"
+      class="flow-button--danger"
+      @click="
+        discardCurrentRoute
+      "
+    >
+      Descartar caminho atual
+    </button>
+  </div>
+
+  <p
+    v-if="discardRouteMessage"
+    class="discard-route-message"
+  >
+    {{ discardRouteMessage }}
+  </p>
 </div>
 
  <div v-if="hasLoadedModel && savedRoutes.length" class="saved-routes">
@@ -2199,11 +2513,18 @@
 <button
   v-if="
     !route.groupId &&
-    !route.locked &&
-    route.customColor
+    !route.locked
   "
   type="button"
   class="saved-route-action--reset-color"
+  :disabled="
+    !route.customColor
+  "
+  :title="
+    route.customColor
+      ? 'Repor a cor original do caminho'
+      : 'A cor deste caminho não foi alterada'
+  "
   @click="
     resetIndividualRouteColor(
       route
@@ -2253,12 +2574,17 @@
 </button>
 
 <button
-  v-if="
-    route.mergeBackup &&
-    !route.locked
-  "
+  v-if="!route.locked"
   type="button"
   class="saved-route-action--undo-merge"
+  :disabled="
+    !route.mergeBackup
+  "
+  :title="
+    route.mergeBackup
+      ? 'Recuperar os caminhos anteriores à união'
+      : 'Este caminho não foi criado através de uma união'
+  "
   @click="
     undoSavedRouteMerge(
       route.id
@@ -3046,28 +3372,117 @@
       </section>
     
 <section
-  v-if="activeApplicationTab === 'manual'"
-  class="flow-panel manual-reset-section"
-  aria-label="Reposição total da configuração manual"
+  v-if="
+    activeApplicationTab === 'manual'
+  "
+  :class="[
+    'flow-panel',
+    'manual-reset-section',
+    {
+      'flow-panel--minimized':
+        isResetPanelMinimized
+    }
+  ]"
+  aria-label="
+    Limpeza e reposição da configuração
+  "
 >
-  <div class="flow-section-title">
-    Reposição total
+  <div class="flow-panel__header">
+    <div>
+      <p class="flow-panel__eyebrow">
+        Configuração
+      </p>
+
+      <h2>
+        Limpeza e reposição
+      </h2>
+    </div>
+
+    <button
+      type="button"
+      class="flow-panel__toggle"
+      @click="
+        toggleResetPanelMinimized
+      "
+    >
+      {{
+        isResetPanelMinimized
+          ? '+'
+          : '−'
+      }}
+    </button>
   </div>
 
-  <p class="manual-reset-section__description">
-    Apaga todos os caminhos guardados, grupos, sentidos
-    definidos ou invertidos, setas ocultadas, circuitos
-    personalizados, associações de válvulas e restantes
-    configurações manuais.
-  </p>
-
-  <button
-    type="button"
-    class="manual-reset-button"
-    @click="resetAllManualConfiguration"
+  <div
+    v-if="
+      !isResetPanelMinimized
+    "
+    class="flow-panel__content"
   >
-    Apagar toda a configuração manual
-  </button>
+
+  <div class="configuration-reset-option">
+    <strong>
+      Repor alterações manuais
+    </strong>
+
+    <p>
+      Mantém os caminhos, ciclos e circuitos.
+      Remove sentidos corrigidos, cores
+      personalizadas, uniões, proteções,
+      associações e restantes alterações
+      manuais.
+    </p>
+
+    <p class="connection-note">
+      As válvulas regressam ao estado original.
+    </p>
+
+    <button
+      type="button"
+      class="
+        configuration-reset-button
+        configuration-reset-button--secondary
+      "
+      @click="
+        resetManualChangesOnly
+      "
+    >
+      Repor alterações manuais
+    </button>
+  </div>
+
+  <div
+    class="
+      configuration-reset-option
+      configuration-reset-option--danger
+    "
+  >
+    <strong>
+      Começar completamente de novo
+    </strong>
+
+    <p>
+      Apaga todos os dados guardados para o
+      IFC atual, incluindo caminhos, ciclos,
+      circuitos, válvulas e configurações.
+      O ficheiro IFC original não será apagado.
+    </p>
+
+    <button
+      type="button"
+      class="
+        configuration-reset-button
+        configuration-reset-button--danger
+      "
+      @click="
+        resetAllManualConfiguration
+      "
+    >
+      Apagar tudo e começar de novo
+    </button>
+  </div>
+
+  </div>
 </section>
 
     <section
@@ -3509,6 +3924,11 @@ type ApplicationTab =
   | "manual"
   | "simulation";
 type PipeCircuit = string;
+type RouteCreationMethod =
+  | "automatic"
+  | "manual";
+const UNASSIGNED_ROUTE_CIRCUIT =
+  "unassigned-route";
 type CycleCircuitKind =
   | "hotSupply"
   | "coldSupply"
@@ -3794,7 +4214,7 @@ const savedRouteDirectionStarts =
 const savedRouteDirectionEnds =
   ref<FlowNode[]>([]);
 const isSimulationCyclesSectionOpen =
-  ref(true);
+  ref(false);
 const isSimulationAnimationSectionOpen =
   ref(true);
 const isCentralSummaryOpen = ref(false);
@@ -3901,6 +4321,8 @@ const isIfcInformationPanelMinimized =
   ref(true);
 const isFlowControlsPanelMinimized = ref(true);
 const isSimulationControlPanelMinimized = ref(true);
+const isResetPanelMinimized =
+  ref(true);
 const routeStartLabel = ref("nenhum");
 const routeEndLabel = ref("nenhum");
 const blockedCount = ref(0);
@@ -4225,6 +4647,22 @@ const selectedSavedRouteIdForEditing =
   ref("");
 const isCreateRouteSectionOpen =
   ref(false);
+const newRouteCycleSelection =
+  ref("");
+const newRouteCircuitKind =
+  ref<CycleCircuitKind>(
+    "hotSupply",
+  );
+const newRouteCircuitName =
+  ref("Ida quente");
+const newRouteCircuitColor =
+  ref("#ff0000");
+const newRouteDraftCircuitKey =
+  ref("");
+const routeCreationMethod =
+  ref<RouteCreationMethod>(
+    "automatic",
+  );
 const isEditRouteSectionOpen =
   ref(false);
 const mepElements = reactive<Record<string, MepElement>>({});
@@ -4813,54 +5251,216 @@ async function restoreSelectedCircuitColors(
   );
 }
 
-function resetAllManualConfiguration() {
-  const confirmed = window.confirm(
-    "Tens a certeza de que queres apagar toda a configuração manual?\n\n" +
-      "Serão apagados:\n" +
-      "• caminhos guardados;\n" +
-      "• grupos de caminhos;\n" +
-      "• sentidos definidos e invertidos;\n" +
-      "• setas ocultadas;\n" +
-      "• circuitos, nomes e cores personalizados;\n" +
-      "• associações entre válvulas e tubos;\n" +
-      "• definições manuais de elementos MEP.\n\n" +
-      "Esta ação não pode ser anulada.",
-  );
+function resetManualChangesOnly() {
+  const confirmed =
+    window.confirm(
+      "Queres repor apenas as alterações manuais?\n\n" +
+        "Serão repostos:\n" +
+        "• sentidos definidos, sincronizados ou invertidos;\n" +
+        "• proteção, união e agrupamento de caminhos;\n" +
+        "• cores personalizadas;\n" +
+        "• caminhos ocultados e setas ocultadas;\n" +
+        "• nomes e estados manuais das válvulas;\n" +
+        "• associações entre válvulas e caminhos.\n\n" +
+        "Os caminhos guardados, ciclos e circuitos serão mantidos.\n\n" +
+        "Esta ação não pode ser anulada.",
+    );
 
   if (!confirmed) {
     flowMessage.value =
-      "Reposição total cancelada.";
+      "Reposição das alterações manuais cancelada.";
 
     return;
   }
 
-  const manualStorageKeys = [
-    "bastto-viewer-mep-elements",
-    "bastto-viewer-routes",
-    "bastto-viewer-route-groups",
-    "bastto-viewer-water-cycle-count",
-    "bastto-viewer-water-cycle-names",
-    "bastto-viewer-cycle-circuits",
-    "bastto-viewer-reversed-directions",
-    "bastto-viewer-hidden-flow-arrows",
-    "bastto-viewer-pipe-type-flow-nodes",
-    "bastto-viewer-synced-pipe-directions",
-    "bastto-viewer-valve-pipe-links",
-    "bastto-viewer-excluded-valves",
+  const savedRoutesText =
+    getActiveIfcStorageItem(
+      ROUTES_STORAGE_KEY,
+    );
+
+  if (savedRoutesText) {
+    try {
+      const storedRoutes =
+        JSON.parse(
+          savedRoutesText,
+        ) as SavedRoute[];
+
+      const resetRoutes =
+        storedRoutes.map(
+          (route) => {
+            const resetRoute = {
+              ...route,
+
+              hidden:
+                false,
+
+              locked:
+                false,
+            };
+
+            delete resetRoute.groupId;
+
+            delete resetRoute.originalCircuitColor;
+
+            delete resetRoute.customColor;
+
+            delete resetRoute.directionStarts;
+
+            delete resetRoute.directionEnds;
+
+            delete resetRoute.needsDirectionRedefinition;
+
+            delete resetRoute.protectedDirections;
+
+            delete resetRoute.mergeBackup;
+
+            return resetRoute;
+          },
+        );
+
+      setActiveIfcStorageItem(
+        ROUTES_STORAGE_KEY,
+        JSON.stringify(
+          resetRoutes,
+        ),
+      );
+    } catch (error) {
+      console.error(
+        "Erro ao repor os caminhos guardados:",
+        error,
+      );
+    }
+  }
+
+  const savedMepElementsText =
+    getActiveIfcStorageItem(
+      MEP_ELEMENTS_STORAGE_KEY,
+    );
+
+  if (savedMepElementsText) {
+    try {
+      const storedElements =
+        JSON.parse(
+          savedMepElementsText,
+        ) as Record<
+          string,
+          MepElement
+        >;
+
+      for (
+        const element of
+          Object.values(
+            storedElements,
+          )
+      ) {
+        delete element.name;
+
+        if (
+  isValveElementType(
+    element.elementType,
+  )
+) {
+  element.state =
+    getNormalValveState(
+      element.elementType,
+    );
+}
+
+      }
+
+      setActiveIfcStorageItem(
+        MEP_ELEMENTS_STORAGE_KEY,
+        JSON.stringify(
+          storedElements,
+        ),
+      );
+    } catch (error) {
+      console.error(
+        "Erro ao repor as alterações dos elementos:",
+        error,
+      );
+    }
+  }
+
+  const manualChangeStorageKeys = [
+    ROUTE_GROUPS_STORAGE_KEY,
+    REVERSED_DIRECTIONS_STORAGE_KEY,
+    SYNCED_PIPE_DIRECTIONS_STORAGE_KEY,
+    HIDDEN_FLOW_ARROWS_STORAGE_KEY,
+    VALVE_PIPE_LINKS_STORAGE_KEY,
+    EXCLUDED_VALVES_STORAGE_KEY,
   ];
 
   for (
-  const storageKey of
-    manualStorageKeys
-) {
-  removeActiveIfcStorageItem(
-    storageKey,
-  );
-}
+    const storageKey of
+      manualChangeStorageKeys
+  ) {
+    removeActiveIfcStorageItem(
+      storageKey,
+    );
+  }
 
   window.alert(
-    "Toda a configuração manual foi apagada.\n\n" +
+    "As alterações manuais foram repostas.\n\n" +
+      "Os caminhos, ciclos e circuitos foram mantidos.\n\n" +
       "A aplicação será reiniciada.",
+  );
+
+  window.location.reload();
+}
+
+function resetAllManualConfiguration() {
+  const confirmed =
+    window.confirm(
+      "ATENÇÃO: esta ação vai apagar tudo o que está guardado para o IFC atual.\n\n" +
+        "Serão apagados:\n" +
+        "• caminhos guardados;\n" +
+        "• ciclos e circuitos;\n" +
+        "• nomes e cores;\n" +
+        "• sentidos e correções;\n" +
+        "• grupos, uniões e proteções;\n" +
+        "• classificações dos elementos;\n" +
+        "• válvulas, estados e associações;\n" +
+        "• exclusões e configurações de visualização.\n\n" +
+        "O ficheiro IFC original não será apagado.\n\n" +
+        "Esta ação não pode ser anulada.\n\n" +
+        "Queres apagar tudo e começar de novo?",
+    );
+
+  if (!confirmed) {
+    flowMessage.value =
+      "Apagar tudo foi cancelado.";
+
+    return;
+  }
+
+  const allConfigurationStorageKeys = [
+    MEP_ELEMENTS_STORAGE_KEY,
+    ROUTES_STORAGE_KEY,
+    ROUTE_GROUPS_STORAGE_KEY,
+    WATER_CYCLE_COUNT_STORAGE_KEY,
+    WATER_CYCLE_NAMES_STORAGE_KEY,
+    CYCLE_CIRCUITS_STORAGE_KEY,
+    REVERSED_DIRECTIONS_STORAGE_KEY,
+    HIDDEN_FLOW_ARROWS_STORAGE_KEY,
+    PIPE_TYPE_FLOW_NODES_STORAGE_KEY,
+    SYNCED_PIPE_DIRECTIONS_STORAGE_KEY,
+    VALVE_PIPE_LINKS_STORAGE_KEY,
+    EXCLUDED_VALVES_STORAGE_KEY,
+  ];
+
+  for (
+    const storageKey of
+      allConfigurationStorageKeys
+  ) {
+    removeActiveIfcStorageItem(
+      storageKey,
+    );
+  }
+
+  window.alert(
+    "Todos os dados guardados para este IFC foram apagados.\n\n" +
+      "A aplicação será reiniciada para começares de novo.",
   );
 
   window.location.reload();
@@ -13822,6 +14422,13 @@ function getAllKnownCircuitKeys() {
 }
 
 function getCircuitCycleNumber(circuit: PipeCircuit) {
+  if (
+  circuit ===
+  UNASSIGNED_ROUTE_CIRCUIT
+) {
+  return 0;
+}
+
   const definition = getCycleCircuitDefinition(circuit);
 
   if (definition) {
@@ -13859,11 +14466,33 @@ function isReturnCircuit(circuit: PipeCircuit) {
 }
 
 function getCircuitLabel(circuit: PipeCircuit) {
+  if (
+  circuit ===
+  UNASSIGNED_ROUTE_CIRCUIT
+) {
+  return "sem ciclo";
+}
+
   const definition = getCycleCircuitDefinition(circuit);
 
   if (definition) {
-    return `${definition.name} ${getCycleDisplayName(definition.cycleNumber)}`;
+  if (
+    definition.cycleNumber === 0
+  ) {
+    return (
+      definition.name +
+      " · sem ciclo"
+    );
   }
+
+  return (
+    definition.name +
+    " " +
+    getCycleDisplayName(
+      definition.cycleNumber,
+    )
+  );
+}
 
   const cycleNumber = getCircuitCycleNumber(circuit);
   const cycleName = getCycleDisplayName(cycleNumber);
@@ -14301,7 +14930,17 @@ function getCycleCircuitLegendGroups() {
     cycleNumber <= waterCycleCount.value;
     cycleNumber++
   ) {
-    const circuits = getCycleCircuitDefinitionsForCycle(cycleNumber);
+    const circuits =
+  getCycleCircuitDefinitionsForCycle(
+    cycleNumber,
+  ).filter(
+    (circuit) =>
+      savedRoutes.some(
+        (route) =>
+          route.temperature ===
+          circuit.key,
+      ),
+  );
 
     if (!circuits.length) {
       continue;
@@ -14356,26 +14995,226 @@ function getSelectedCycleCircuitDefinition() {
   );
 }
 
-async function createAutoRouteForSelectedCycleCircuit() {
-  const circuit = getSelectedCycleCircuitDefinition();
+function getNewRouteCycleNumber() {
+  const selectedCycleNumber =
+    Number(
+      newRouteCycleSelection.value,
+    );
 
-  if (!circuit) {
-    flowMessage.value = "Seleciona primeiro um tipo de caminho do ciclo.";
+  if (
+    !Number.isFinite(
+      selectedCycleNumber,
+    ) ||
+    selectedCycleNumber < 1
+  ) {
+    return 0;
+  }
+
+  return selectedCycleNumber;
+}
+
+function getNewRouteCircuitDisplayName() {
+  const typedName =
+    newRouteCircuitName.value.trim();
+
+  if (typedName) {
+    return typedName;
+  }
+
+  return getDefaultNewRouteCircuitName(
+    newRouteCircuitKind.value,
+  );
+}
+
+function createNewRouteCircuitDefinition() {
+  const circuitKey =
+    "new-route-circuit-" +
+    crypto.randomUUID();
+
+  const circuitName =
+    getNewRouteCircuitDisplayName();
+
+  const circuitColor =
+    newRouteCircuitColor.value ||
+    getDefaultNewRouteCircuitColor(
+      newRouteCircuitKind.value,
+    );
+
+  const circuit:
+    CycleCircuitDefinition = {
+      key:
+        circuitKey,
+
+      cycleNumber:
+        getNewRouteCycleNumber(),
+
+      kind:
+        newRouteCircuitKind.value,
+
+      name:
+        circuitName,
+
+      color:
+        circuitColor,
+
+      defaultColor:
+        circuitColor,
+
+      locked:
+        false,
+    };
+
+  cycleCircuitDefinitions.push(
+    circuit,
+  );
+
+  manualAssignments[circuitKey] =
+    new Map();
+
+  newRouteDraftCircuitKey.value =
+    circuitKey;
+
+  return circuitKey;
+}
+
+function removeUnusedNewRouteCircuit(
+  circuitKey: string,
+) {
+  const circuitIndex =
+    cycleCircuitDefinitions.findIndex(
+      (circuit) =>
+        circuit.key === circuitKey,
+    );
+
+  if (circuitIndex !== -1) {
+    cycleCircuitDefinitions.splice(
+      circuitIndex,
+      1,
+    );
+  }
+
+  delete manualAssignments[
+    circuitKey
+  ];
+
+  if (
+    newRouteDraftCircuitKey.value ===
+    circuitKey
+  ) {
+    newRouteDraftCircuitKey.value =
+      "";
+  }
+}
+
+async function selectRouteCreationMethod(
+  method: RouteCreationMethod,
+) {
+  if (
+    routeCreationMethod.value ===
+    method
+  ) {
     return;
   }
 
-  await createAutoRoute(circuit.key);
+  const hasCurrentWork =
+    currentRouteConnections.length >
+      0 ||
+    manualRouteNodes.length > 0 ||
+    routeStart !== null ||
+    routeEnd !== null;
+
+  if (hasCurrentWork) {
+    const shouldChange =
+      window.confirm(
+        "Já começaste a preparar um caminho.\n\n" +
+          "Ao mudar o método de criação, o trabalho atual será descartado.\n\n" +
+          "Queres continuar?",
+      );
+
+    if (!shouldChange) {
+      return;
+    }
+
+    await discardCurrentRoute();
+
+    routeStart = null;
+    routeEnd = null;
+
+    routeStartLabel.value =
+      "nenhum";
+
+    routeEndLabel.value =
+      "nenhum";
+
+    routeWaypoints.splice(0);
+
+    manualRouteNodes.splice(0);
+
+    isManualRouteRecording.value =
+      false;
+  }
+
+  routeCreationMethod.value =
+    method;
+
+  flowMessage.value =
+    method === "automatic"
+      ? "Método por início e fim selecionado."
+      : "Método tubo a tubo selecionado.";
+}
+
+async function createAutoRouteForSelectedCycleCircuit() {
+  const circuitKey =
+    createNewRouteCircuitDefinition();
+
+  await createAutoRoute(
+    circuitKey,
+  );
+
+  if (
+    currentRouteConnections.length ===
+    0
+  ) {
+    removeUnusedNewRouteCircuit(
+      circuitKey,
+    );
+
+    return;
+  }
+
+  saveCycleCircuitDefinitionsToStorage();
+
+  flowMessage.value =
+    'Novo circuito "' +
+    getNewRouteCircuitDisplayName() +
+    '" preparado. Confirma e guarda o caminho.';
 }
 
 async function createManualRouteForSelectedCycleCircuit() {
-  const circuit = getSelectedCycleCircuitDefinition();
+  const circuitKey =
+    createNewRouteCircuitDefinition();
 
-  if (!circuit) {
-    flowMessage.value = "Seleciona primeiro um tipo de caminho do ciclo.";
+  await createManualRouteFromSelection(
+    circuitKey,
+  );
+
+  if (
+    currentRouteConnections.length ===
+    0
+  ) {
+    removeUnusedNewRouteCircuit(
+      circuitKey,
+    );
+
     return;
   }
 
-  await createManualRouteFromSelection(circuit.key);
+  saveCycleCircuitDefinitionsToStorage();
+
+  flowMessage.value =
+    'Novo circuito "' +
+    getNewRouteCircuitDisplayName() +
+    '" preparado. Confirma e guarda o caminho.';
 }
 
 function getCycleCircuitDefinitionsByKind(
@@ -14387,6 +15226,65 @@ function getCycleCircuitDefinitionsByKind(
       circuit.cycleNumber === cycleNumber &&
       circuit.kind === kind,
   );
+}
+
+function getDefaultNewRouteCircuitName(
+  kind: CycleCircuitKind,
+) {
+  if (kind === "hotSupply") {
+    return "Ida quente";
+  }
+
+  if (kind === "coldSupply") {
+    return "Ida fria";
+  }
+
+  if (kind === "hotReturn") {
+    return "Retorno quente";
+  }
+
+  if (kind === "coldReturn") {
+    return "Retorno frio";
+  }
+
+  return "Extra";
+}
+
+function getDefaultNewRouteCircuitColor(
+  kind: CycleCircuitKind,
+) {
+  if (kind === "hotSupply") {
+    return "#ff0000";
+  }
+
+  if (kind === "coldSupply") {
+    return "#0077ff";
+  }
+
+  if (kind === "hotReturn") {
+    return "#ff8c00";
+  }
+
+  if (kind === "coldReturn") {
+    return "#7b1fa2";
+  }
+
+  return "#2e7d32";
+}
+
+function handleNewRouteCircuitKindChange() {
+  newRouteCircuitName.value =
+    getDefaultNewRouteCircuitName(
+      newRouteCircuitKind.value,
+    );
+
+  newRouteCircuitColor.value =
+    getDefaultNewRouteCircuitColor(
+      newRouteCircuitKind.value,
+    );
+
+  newRouteDraftCircuitKey.value =
+    "";
 }
 
 function getCycleCircuitKindLabel(kind: CycleCircuitKind) {
@@ -14663,6 +15561,24 @@ function normalizeSavedRouteSearchText(
     )
     .trim();
 }
+
+function getAllSavedRoutesOrdered() {
+  return [...savedRoutes].sort(
+    (
+      firstRoute,
+      secondRoute,
+    ) =>
+      firstRoute.name.localeCompare(
+        secondRoute.name,
+        "pt-PT",
+        {
+          sensitivity: "base",
+          numeric: true,
+        },
+      ),
+  );
+}
+
 
 function getFilteredSavedRoutes() {
   const searchText =
@@ -18849,6 +19765,11 @@ async function showAllSimulationCycles() {
     "Todos os ciclos estão visíveis.";
 }
 
+function toggleResetPanelMinimized() {
+  isResetPanelMinimized.value =
+    !isResetPanelMinimized.value;
+}
+
 function toggleSimulationControlPanelMinimized() {
   isSimulationControlPanelMinimized.value =
     !isSimulationControlPanelMinimized.value;
@@ -19411,6 +20332,38 @@ pipeStats.return = 0;
 pipeStats.total = 0;
 }
 
+async function clearCurrentModelSelection() {
+  selectedItems.clear();
+
+  selectedCount.value =
+    0;
+
+  selectedIfcDetailsText.value =
+    "";
+
+  isIfcDetailsPanelOpen.value =
+    false;
+
+  selectedMepElementInfo.value =
+    "Nenhum elemento classificado selecionado.";
+
+  selectedTubeRouteInfo.value =
+    "";
+
+  if (modelHighlighter) {
+    await modelHighlighter.clear(
+      "select",
+    );
+  }
+
+  await fragmentManager.core.update(
+    true,
+  );
+
+  flowMessage.value =
+    "Seleção atual limpa.";
+}
+
 function replaceSelection(modelIdMap: unknown) {
   selectedItems.clear();
 
@@ -19779,6 +20732,24 @@ function chunk<T>(items: T[], size: number) {
 
 .flow-actions button:hover {
   background: #d9f0ff;
+}
+
+.flow-actions button:disabled {
+  background: #6f7376;
+  color: #4c4f51;
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.flow-actions button:disabled:hover {
+  background: #6f7376;
+}
+
+.selected-pipe-arrow-actions button:disabled {
+  background: #6f7376;
+  color: #4c4f51;
+  cursor: not-allowed;
+  opacity: 0.75;
 }
 
 .flow-button--danger {
@@ -21045,7 +22016,7 @@ function chunk<T>(items: T[], size: number) {
   display: grid;
   gap: 9px;
 
-  margin-top: 16px;
+  margin-top: 0;
   padding: 12px;
 
   border: 1px solid rgba(255, 82, 82, 0.38);
@@ -21437,15 +22408,17 @@ function chunk<T>(items: T[], size: number) {
   display: grid;
   grid-template-columns:
     repeat(3, minmax(0, 1fr));
+
   grid-template-areas:
-  "highlight visibility reverse"
-  "direction sync rename"
-  "color reset-color protect"
-  "simulation undo-merge undo-merge"
-  "delete delete delete";
-  gap: 0.35rem;
+    "highlight visibility simulation"
+    "direction sync reverse"
+    "rename color protect"
+    "arrows reset-color undo-merge"
+    "delete delete delete";
+
+  gap: 0.45rem;
   width: 100%;
-  margin-top: 0.65rem;
+  margin-top: 0.7rem;
 }
 
 .saved-route-actions button {
@@ -21714,5 +22687,249 @@ function chunk<T>(items: T[], size: number) {
 
 .selected-valve-summary strong {
   color: #8fd3ff;
+}
+
+.route-creation-method-switch {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 0.25rem;
+  margin-top: 0.65rem;
+  padding: 0.25rem;
+  border: 1px solid
+    rgba(143, 211, 255, 0.28);
+  border-radius: 0.55rem;
+  background:
+    rgba(255, 255, 255, 0.06);
+}
+
+.route-creation-method-switch button {
+  min-width: 0;
+  min-height: 2.4rem;
+  padding: 0.5rem 0.6rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: #b8c9d3;
+  font-size: 0.74rem;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.route-creation-method-switch
+.route-creation-method-switch__option--active {
+  background: #8fd3ff;
+  color: #07131a;
+  box-shadow:
+    0 0 0 1px
+      rgba(143, 211, 255, 0.4),
+    0 0.3rem 0.8rem
+      rgba(0, 0, 0, 0.24);
+}
+
+.route-creation-status {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 0.65rem;
+  padding: 0.65rem;
+  border: 1px solid
+    rgba(255, 255, 255, 0.12);
+  border-radius: 0.45rem;
+  background:
+    rgba(255, 255, 255, 0.05);
+}
+
+.route-creation-status p {
+  margin: 0;
+  color: #dbe9f1;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.route-creation-status strong {
+  color: #8fd3ff;
+}
+
+.route-creation-three-actions {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+  width: 100%;
+  margin-top: 0.65rem;
+}
+
+.route-creation-three-actions button {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.65rem;
+  padding: 0.45rem 0.35rem;
+  overflow-wrap: anywhere;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+@media (max-width: 500px) {
+  .route-creation-three-actions {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+  }
+
+  .route-creation-three-actions button {
+    padding-right: 0.25rem;
+    padding-left: 0.25rem;
+    font-size: 0.66rem;
+  }
+}
+
+.route-edit-help {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.65rem;
+  padding: 0.75rem;
+  border: 1px solid
+    rgba(143, 211, 255, 0.3);
+  border-radius: 0.55rem;
+  background:
+    rgba(143, 211, 255, 0.07);
+}
+
+.route-edit-help__title {
+  margin: 0;
+  color: #8fd3ff;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.route-edit-help__steps {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding-left: 1.25rem;
+  color: #dbe9f1;
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.route-edit-help__warning {
+  margin: 0;
+  padding: 0.55rem 0.65rem;
+  border-left: 3px solid #ffb300;
+  border-radius: 0.3rem;
+  background:
+    rgba(255, 179, 0, 0.11);
+  color: #ffe0a3;
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.selected-pipe-arrow-actions {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  width: 100%;
+  margin-top: 0.55rem;
+}
+
+.selected-pipe-arrow-actions button {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0.45rem 0.55rem;
+  border: 0;
+  border-radius: 6px;
+  background: #f7fbff;
+  color: #111820;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  line-height: normal;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.selected-pipe-arrow-actions button:hover:not(:disabled) {
+  background: #d9f0ff;
+}
+
+.selected-pipe-arrow-actions button:disabled {
+  background: #6f7376;
+  color: #4c4f51;
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.configuration-reset-option {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.75rem;
+  border: 1px solid
+    rgba(143, 211, 255, 0.25);
+  border-radius: 0.55rem;
+  background:
+    rgba(143, 211, 255, 0.06);
+}
+
+.configuration-reset-option strong {
+  color: #8fd3ff;
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.configuration-reset-option p {
+  margin: 0;
+  color: #d6e0e6;
+  font-size: 0.73rem;
+  line-height: 1.45;
+}
+
+.configuration-reset-option--danger {
+  border-color:
+    rgba(255, 82, 82, 0.42);
+  background:
+    rgba(255, 82, 82, 0.08);
+}
+
+.configuration-reset-option--danger strong {
+  color: #ff9b8f;
+}
+
+.configuration-reset-button {
+  width: 100%;
+  min-height: 2.65rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.4rem;
+  font-size: 0.76rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.configuration-reset-button--secondary {
+  border: 1px solid
+    rgba(143, 211, 255, 0.55);
+  background:
+    rgba(143, 211, 255, 0.16);
+  color: #dff4ff;
+}
+
+.configuration-reset-button--secondary:hover {
+  background:
+    rgba(143, 211, 255, 0.25);
+}
+
+.configuration-reset-button--danger {
+  border: 1px solid
+    rgba(255, 82, 82, 0.75);
+  background:
+    rgba(176, 38, 38, 0.86);
+  color: #ffffff;
+}
+
+.configuration-reset-button--danger:hover {
+  background:
+    rgba(211, 47, 47, 0.95);
 }
 </style>
