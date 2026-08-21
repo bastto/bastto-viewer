@@ -459,6 +459,17 @@
       como fim.
     </p>
 
+    <p
+  v-if="
+    savedRouteDirectionWarning
+  "
+  class="
+    route-direction-dialog__warning
+  "
+>
+  {{ savedRouteDirectionWarning }}
+</p>
+
     <div class="route-direction-dialog__definition-grid">
       <div class="route-direction-dialog__definition">
   <span class="route-direction-dialog__step">
@@ -2092,17 +2103,17 @@
   </button>
 
   <button
-    type="button"
-    :disabled="
-      manualRouteNodes.length ===
-      0
-    "
-    @click="
-      cancelManualRouteRecording
-    "
-  >
-    Limpar seleção
-  </button>
+  type="button"
+  :disabled="
+    manualRouteNodes.length ===
+    0
+  "
+  @click.stop.prevent="
+    startManualRouteRecording
+  "
+>
+  Limpar seleção
+</button>
 
   <button
     type="button"
@@ -2198,16 +2209,6 @@
       type="search"
       placeholder="Escreve o nome do percurso..."
     />
-
-    <button
-      v-if="savedRouteSearchText"
-      type="button"
-      class="saved-route-search__clear"
-      title="Limpar pesquisa"
-      @click="savedRouteSearchText = ''"
-    >
-      ×
-    </button>
   </div>
 </label>
 
@@ -2277,14 +2278,29 @@
 </button>
 
   <button
-    type="button"
-    :disabled="
-      selectedRouteIdsForGrouping.size < 1
-    "
-    @click="clearRouteGroupingSelection"
-  >
-    Limpar seleção
-  </button>
+  type="button"
+  :disabled="
+    selectedRouteIdsForGrouping.size < 1
+  "
+  @click="
+    clearRouteGroupingSelection
+  "
+>
+  Limpar seleção
+</button>
+
+<button
+  type="button"
+  class="flow-button--danger"
+  :disabled="
+    selectedRouteIdsForGrouping.size < 1
+  "
+  @click="
+    deleteSelectedSavedRoutes
+  "
+>
+  Apagar percursos selecionados
+</button>
 </div>
 
   <div v-if="isSavedRoutesPanelOpen" class="saved-routes-list">
@@ -2319,6 +2335,7 @@
           route.id
         )
       "
+      :disabled="route.locked"
       @change="
         toggleRouteSelectionForGrouping(
           route.id
@@ -2326,7 +2343,13 @@
       "
     />
 
-    <span>Selecionar</span>
+    <span>
+  {{
+    route.locked
+      ? 'Seleção bloqueada'
+      : 'Selecionar'
+  }}
+</span>
   </label>
 
   <span
@@ -2403,7 +2426,7 @@
   }"
 >
 
-        <button
+        <button 
   type="button"
   class="saved-route-action--highlight"
   @click="toggleSavedRouteHighlight(route)"
@@ -2421,7 +2444,7 @@
         </button>
 
         <button
-          v-else
+  v-else
           type="button"
           class="saved-route-action--visibility"
           @click="setSavedRouteVisibility(route.id, true)"
@@ -2486,7 +2509,10 @@
         </button>
 
         <button
-  v-if="route.groupId"
+  v-if="
+  route.groupId &&
+  !route.locked
+"
   type="button"
   class="saved-route-action--color"
   @click="openRouteGroupColorDialog(route)"
@@ -3427,34 +3453,39 @@
   informativa.
 </p>
 
-    <div
-      class="flow-actions flow-actions--secondary"
-    >
-      <button
-        type="button"
-        :disabled="
-          selectedValveKeysForManagement.size === 0
-        "
-        @click="
-          clearValveManagementSelection
-        "
-      >
-        Limpar seleção
-      </button>
+<div
+  class="
+    flow-actions
+    flow-actions--secondary
+  "
+>
+  <button
+    type="button"
+    :disabled="
+      selectedValveKeysForManagement.size ===
+      0
+    "
+    @click="
+      clearValveManagementSelection
+    "
+  >
+    Limpar seleção
+  </button>
 
-      <button
-        type="button"
-        class="flow-button--danger"
-        :disabled="
-          selectedValveKeysForManagement.size === 0
-        "
-        @click="
-          excludeSelectedManagedValves
-        "
-      >
-        Eliminar selecionadas
-      </button>
-    </div>
+  <button
+    type="button"
+    class="flow-button--danger"
+    :disabled="
+      selectedValveKeysForManagement.size ===
+      0
+    "
+    @click="
+      excludeSelectedManagedValves
+    "
+  >
+    Eliminar selecionadas
+  </button>
+</div>
 
     <p class="connection-note workflow-help-note">
       As válvulas automáticas eliminadas voltarão
@@ -4299,6 +4330,36 @@ type ProtectedRouteDirection = {
   reversed: boolean;
 };
 
+type ProtectedRouteSnapshot = {
+  name: string;
+  temperature:
+    PipeCircuit;
+  path:
+    FlowNode[];
+  hidden:
+    boolean;
+  groupId:
+    string | null;
+  groupName:
+    string;
+  effectiveColor:
+    string;
+  circuitLabel:
+    string;
+  originalCircuitColor:
+    string | null;
+  customColor:
+    string | null;
+  directionStarts:
+    FlowNode[];
+  directionEnds:
+    FlowNode[];
+  needsDirectionRedefinition:
+    boolean;
+  protectedDirections:
+    ProtectedRouteDirection[];
+};
+
 type SavedRouteMergeSource = {
   id: string;
   name: string;
@@ -4314,6 +4375,8 @@ type SavedRouteMergeSource = {
   needsDirectionRedefinition?: boolean;
   protectedDirections?: ProtectedRouteDirection[];
   mergeBackup?: SavedRouteMergeBackup;
+  protectedSnapshot?:
+  ProtectedRouteSnapshot;
 };
 
 type SavedRouteMergeBackup = {
@@ -4347,6 +4410,8 @@ type SavedRoute = {
   needsDirectionRedefinition?: boolean;
   protectedDirections?: ProtectedRouteDirection[];
   mergeBackup?: SavedRouteMergeBackup;
+  protectedSnapshot?:
+  ProtectedRouteSnapshot;
 };
 
 type SavedRouteGroup = {
@@ -4501,13 +4566,16 @@ const highlightedSavedRouteId = ref<string | null>(null);
 const isApplyingSavedRouteHighlight = ref(false);
 const isSavedRouteDirectionPanelOpen =
   ref(false);
+const isRouteDirectionFocusModeActive =
+  ref(false);
 const selectedSavedRouteDirectionId =
   ref("");
 const savedRouteDirectionStarts =
   ref<FlowNode[]>([]);
-
 const savedRouteDirectionEnds =
   ref<FlowNode[]>([]);
+const savedRouteDirectionWarning =
+  ref("");
 const isSimulationCyclesSectionOpen =
   ref(false);
 const isSimulationAnimationSectionOpen =
@@ -5154,6 +5222,27 @@ function getVisualRouteForNode(
   return routes[0] ?? null;
 }
 
+function getVisibleColorForNode(
+  circuit: PipeCircuit,
+  node: FlowNode,
+) {
+  const visibleRoute =
+    getVisualRouteForNode(
+      node,
+      circuit,
+    );
+
+  if (visibleRoute) {
+    return getSavedRouteGroupColor(
+      visibleRoute,
+    );
+  }
+
+  return getCircuitColorStyle(
+    circuit,
+  );
+}
+
 function shouldColorNode(
   circuit: PipeCircuit,
   node: FlowNode,
@@ -5163,6 +5252,12 @@ function shouldColorNode(
   ) {
     return false;
   }
+
+  if (
+  isRouteDirectionFocusModeActive.value
+) {
+  return false;
+}
 
   if (
     selectedSavedRouteIdForEditing.value
@@ -5202,6 +5297,14 @@ function shouldColorNode(
 function isManualValveControlledPipeBlocked(
   node: FlowNode,
 ) {
+  if (
+  isNodeInProtectedRoute(
+    node,
+  )
+) {
+  return false;
+}
+
   const targetPipeKey =
     nodeKey(node);
 
@@ -5491,20 +5594,16 @@ function toggleIfcPanelCollapsed() {
 async function restoreSelectedCircuitColors(
   _previousSelection: SelectionMap,
 ) {
-    if (
+  if (
     isValveFocusModeActive.value ||
+    isRouteDirectionFocusModeActive.value ||
     isApplyingSavedRouteHighlight.value ||
     highlightedSavedRouteId.value
   ) {
     return;
   }
 
-  if (
-    isApplyingSavedRouteHighlight.value ||
-    highlightedSavedRouteId.value
-  ) {
-    return;
-  }
+  await clearPersistentCircuitHighlights();
 
   await clearPersistentCircuitHighlights();
 
@@ -5593,20 +5692,11 @@ async function restoreSelectedCircuitColors(
         continue;
       }
 
-      const visibleRoute =
-        getVisualRouteForNode(
-          node,
-          circuit,
-        );
-
       const color =
-        visibleRoute
-          ? getSavedRouteGroupColor(
-              visibleRoute,
-            )
-          : getCircuitColorStyle(
-              circuit,
-            );
+  getVisibleColorForNode(
+    circuit,
+    node,
+  );
 
       const colorIds =
         idsByColor.get(color) ?? [];
@@ -5624,10 +5714,15 @@ async function restoreSelectedCircuitColors(
         idsByColor
     ) {
       const persistentStyleName =
-        "persistent-circuit-" +
-        circuit +
-        "-" +
-        color.replace("#", "");
+  "persistent-circuit-" +
+  circuit +
+  "-" +
+  modelId +
+  "-" +
+  color.replace(
+    "#",
+    "",
+  );
 
       await applyPersistentCircuitHighlight(
         persistentStyleName,
@@ -5814,15 +5909,46 @@ function resetAllManualConfiguration() {
         "• grupos, uniões e proteções;\n" +
         "• classificações dos elementos;\n" +
         "• válvulas, estados e associações;\n" +
+        "• tubos controlados pelas válvulas;\n" +
         "• exclusões e configurações de visualização.\n\n" +
         "O ficheiro IFC original não será apagado.\n\n" +
         "Esta ação não pode ser anulada.\n\n" +
-        "Queres apagar tudo e começar de novo?",
+        "Queres continuar?",
     );
 
   if (!confirmed) {
     flowMessage.value =
       "Apagar tudo foi cancelado.";
+
+    return;
+  }
+
+  const securityText =
+    window.prompt(
+      "Confirmação de segurança\n\n" +
+        "Para apagar todos os dados deste IFC, escreve exatamente:\n\n" +
+        "APAGAR TUDO",
+      "",
+    );
+
+  if (securityText === null) {
+    flowMessage.value =
+      "Apagar tudo foi cancelado.";
+
+    return;
+  }
+
+  if (
+    securityText.trim() !==
+    "APAGAR TUDO"
+  ) {
+    window.alert(
+      "O texto de segurança está incorreto.\n\n" +
+        "Nenhum dado foi apagado.",
+    );
+
+    flowMessage.value =
+      "O texto de segurança estava incorreto. Nenhum dado foi apagado.";
 
     return;
   }
@@ -6346,6 +6472,221 @@ async function resetAllCircuitHighlights() {
   });
 }
 
+function cloneProtectedRouteNode(
+  node: FlowNode,
+): FlowNode {
+  return {
+    modelId:
+      node.modelId,
+
+    localId:
+      node.localId,
+  };
+}
+
+function cloneProtectedRouteDirection(
+  direction:
+    ProtectedRouteDirection,
+): ProtectedRouteDirection {
+  return {
+    node:
+      cloneProtectedRouteNode(
+        direction.node,
+      ),
+
+    previous:
+      direction.previous
+        ? cloneProtectedRouteNode(
+            direction.previous,
+          )
+        : null,
+
+    next:
+      direction.next
+        ? cloneProtectedRouteNode(
+            direction.next,
+          )
+        : null,
+
+    reversed:
+      direction.reversed,
+  };
+}
+
+function createProtectedRouteSnapshot(
+  route: SavedRoute,
+): ProtectedRouteSnapshot {
+  return {
+    name:
+      route.name,
+
+    temperature:
+      route.temperature,
+
+    path:
+      route.path.map(
+        cloneProtectedRouteNode,
+      ),
+
+    hidden:
+      !!route.hidden,
+
+    groupId:
+      route.groupId ??
+      null,
+
+    groupName:
+      getSavedRouteGroupName(
+        route,
+      ),
+
+    effectiveColor:
+      getSavedRouteGroupColor(
+        route,
+      ),
+
+    circuitLabel:
+      getRouteCircuitDisplayLabel(
+        route,
+      ),
+
+    originalCircuitColor:
+      route.originalCircuitColor ??
+      null,
+
+    customColor:
+      route.customColor ??
+      null,
+
+    directionStarts:
+      (
+        route.directionStarts ??
+        []
+      ).map(
+        cloneProtectedRouteNode,
+      ),
+
+    directionEnds:
+      (
+        route.directionEnds ??
+        []
+      ).map(
+        cloneProtectedRouteNode,
+      ),
+
+    needsDirectionRedefinition:
+      !!route
+        .needsDirectionRedefinition,
+
+    protectedDirections:
+      (
+        route.protectedDirections ??
+        []
+      ).map(
+        cloneProtectedRouteDirection,
+      ),
+  };
+}
+
+function restoreProtectedRouteSnapshot(
+  route: SavedRoute,
+) {
+  if (
+    !route.locked ||
+    !route.protectedSnapshot
+  ) {
+    return;
+  }
+
+  const snapshot =
+    route.protectedSnapshot;
+
+  route.name =
+    snapshot.name;
+
+  route.temperature =
+    snapshot.temperature;
+
+  route.path =
+    snapshot.path.map(
+      cloneProtectedRouteNode,
+    );
+
+  route.hidden =
+    snapshot.hidden;
+
+  if (snapshot.groupId) {
+    route.groupId =
+      snapshot.groupId;
+  } else {
+    delete route.groupId;
+  }
+
+  if (
+    snapshot.originalCircuitColor
+  ) {
+    route.originalCircuitColor =
+      snapshot.originalCircuitColor;
+  } else {
+    delete route
+      .originalCircuitColor;
+  }
+
+  if (snapshot.customColor) {
+    route.customColor =
+      snapshot.customColor;
+  } else {
+    delete route.customColor;
+  }
+
+  route.directionStarts =
+    snapshot.directionStarts.map(
+      cloneProtectedRouteNode,
+    );
+
+  route.directionEnds =
+    snapshot.directionEnds.map(
+      cloneProtectedRouteNode,
+    );
+
+  route.needsDirectionRedefinition =
+    snapshot
+      .needsDirectionRedefinition;
+
+  route.protectedDirections =
+    snapshot
+      .protectedDirections
+      .map(
+        cloneProtectedRouteDirection,
+      );
+}
+
+function restoreAllProtectedRouteSnapshots() {
+  for (
+    const route of savedRoutes
+  ) {
+    restoreProtectedRouteSnapshot(
+      route,
+    );
+  }
+}
+
+function isNodeInProtectedRoute(
+  node: FlowNode,
+) {
+  return savedRoutes.some(
+    (route) =>
+      route.locked &&
+      route.path.some(
+        (routeNode) =>
+          isSameNode(
+            routeNode,
+            node,
+          ),
+      ),
+  );
+}
+
 function applyProtectedRouteDirections(
   route: SavedRoute,
 ) {
@@ -6437,6 +6778,8 @@ function applyProtectedRouteDirections(
 }
 
 async function reapplyAllSavedRouteDirections() {
+  restoreAllProtectedRouteSnapshots();
+
   const editableRoutes =
     savedRoutes.filter(
       (route) =>
@@ -6449,16 +6792,21 @@ async function reapplyAllSavedRouteDirections() {
         route.locked,
     );
 
-  for (const route of editableRoutes) {
+  for (
+    const route of
+      editableRoutes
+  ) {
     const starts =
-      route.directionStarts ?? [];
+      route.directionStarts ??
+      [];
 
     const ends =
-      route.directionEnds ?? [];
+      route.directionEnds ??
+      [];
 
     if (
-      starts.length === 0 ||
-      ends.length === 0
+      !starts.length ||
+      !ends.length
     ) {
       continue;
     }
@@ -6470,57 +6818,52 @@ async function reapplyAllSavedRouteDirections() {
         ends,
       );
 
-    if (!directionPaths.length) {
+    if (
+      !directionPaths.length
+    ) {
+      continue;
+    }
+
+    const {
+      compatiblePaths,
+    } =
+      selectCompatibleDirectionPaths(
+        directionPaths,
+      );
+
+    if (
+      !compatiblePaths.length
+    ) {
       continue;
     }
 
     applySavedRouteDirectionPaths(
       route,
-      directionPaths,
+      compatiblePaths,
     );
   }
-
-  let createdSnapshots = false;
 
   for (
     const route of
       protectedRoutes
   ) {
-    if (
-      !route
-        .protectedDirections
-        ?.length
-    ) {
-      const protectedDirections =
-        await createProtectedRouteDirections(
-          route,
-        );
-
-      if (
-        protectedDirections.length
-      ) {
-        route.protectedDirections =
-          protectedDirections;
-
-        createdSnapshots = true;
-      }
-    }
+    restoreProtectedRouteSnapshot(
+      route,
+    );
 
     applyProtectedRouteDirections(
       route,
     );
   }
 
-  if (createdSnapshots) {
-  saveRoutesToStorage();
-}
-
-saveReversedDirectionsToStorage();
+  saveReversedDirectionsToStorage();
 }
 
 async function rebuildManualFlowLayer(
   shouldReapplySavedDirections = true,
 ) {
+  restoreAllProtectedRouteSnapshots();
+
   const currentRunId =
     ++flowPreparationRunId;
 
@@ -6765,20 +7108,11 @@ for (const localId of ids) {
     localId,
   };
 
-  const visibleRoute =
-    getVisualRouteForNode(
-      node,
-      temperature,
-    );
-
   const color =
-    visibleRoute
-      ? getSavedRouteGroupColor(
-          visibleRoute,
-        )
-      : getCircuitColorStyle(
-          temperature,
-        );
+  getVisibleColorForNode(
+    temperature,
+    node,
+  );
 
   const colorIds =
     idsByColor.get(color) ?? [];
@@ -6796,10 +7130,15 @@ for (
     idsByColor
 ) {
   const persistentStyleName =
-    "persistent-circuit-" +
-    temperature +
-    "-" +
-    color.replace("#", "");
+  "persistent-circuit-" +
+  temperature +
+  "-" +
+  modelId +
+  "-" +
+  color.replace(
+    "#",
+    "",
+  );
 
   await applyPersistentCircuitHighlight(
     persistentStyleName,
@@ -7667,6 +8006,54 @@ async function undoSavedRouteMerge(
     " percursos anteriores.";
 }
 
+async function finishEditedRouteChange() {
+  selectedSavedRouteIdForEditing.value =
+    "";
+
+  highlightedSavedRouteId.value =
+    null;
+
+  selectedItems.clear();
+
+  selectedCount.value =
+    0;
+
+  selectedTubeRouteInfo.value =
+    "";
+
+  selectedIfcDetailsText.value =
+    "";
+
+  isIfcDetailsPanelOpen.value =
+    false;
+
+  if (modelHighlighter) {
+    await modelHighlighter.clear(
+      "saved-route-highlight",
+    );
+
+    await modelHighlighter.clear(
+      "select",
+    );
+  }
+
+  isFlowing.value =
+    false;
+
+  isManualFlowAnimationRunning.value =
+    false;
+
+  isCentralSimulationRunning.value =
+    false;
+
+  isFlowManuallyPaused.value =
+    true;
+
+  await fragmentManager.core.update(
+    true,
+  );
+}
+
 async function addSelectedPipesToEditedRoute() {
   const route =
     savedRoutes.find(
@@ -7880,9 +8267,9 @@ async function addSelectedPipesToEditedRoute() {
 
   await applyAllSavedRoutes();
 
-  await enforceActiveSavedRouteHighlight();
+await finishEditedRouteChange();
 
-  flowMessage.value =
+flowMessage.value =
     nodesToAdd.length +
     ' tubo(s) adicionado(s) ao caminho "' +
     route.name +
@@ -8212,9 +8599,9 @@ async function removeSelectedPipesFromEditedRoute() {
 
   isFlowManuallyPaused.value = true;
 
-  await enforceActiveSavedRouteHighlight();
+  await finishEditedRouteChange();
 
-  flowMessage.value =
+flowMessage.value =
     indexesToRemove.size +
     ' tubo(s) retirado(s) do caminho "' +
     route.name +
@@ -8223,6 +8610,8 @@ async function removeSelectedPipesFromEditedRoute() {
 
 async function deleteSavedRoute(
   routeId: string,
+  skipConfirmation = false,
+  skipFinalRebuild = false,
 ) {
   const index = savedRoutes.findIndex(
     (route) =>
@@ -8261,18 +8650,20 @@ if (route.mergeBackup) {
     "Queres mesmo apagar este caminho?";
 }
 
-const shouldDeleteRoute =
-  window.confirm(
-    deleteConfirmationMessage,
-  );
+if (!skipConfirmation) {
+  const shouldDeleteRoute =
+    window.confirm(
+      deleteConfirmationMessage,
+    );
 
-if (!shouldDeleteRoute) {
-  flowMessage.value =
-    'A eliminação do caminho "' +
-    route.name +
-    '" foi cancelada.';
+  if (!shouldDeleteRoute) {
+    flowMessage.value =
+      'A eliminação do caminho "' +
+      route.name +
+      '" foi cancelada.';
 
-  return;
+    return;
+  }
 }
 
 
@@ -8399,13 +8790,16 @@ if (!shouldDeleteRoute) {
   saveReversedDirectionsToStorage();
   saveSyncedPipeDirectionsToStorage();
 
-  updateManualStats();
+ updateManualStats();
 
+if (!skipFinalRebuild) {
   if (
     countAssignments() > 0 ||
     flowConnections.length > 0
   ) {
-    await rebuildManualFlowLayer();
+    await rebuildManualFlowLayer(
+      false,
+    );
   } else {
     clearFlowVisuals();
 
@@ -8413,6 +8807,7 @@ if (!shouldDeleteRoute) {
       true,
     );
   }
+}
 
   flowMessage.value =
     'O caminho "' +
@@ -9042,7 +9437,8 @@ async function toggleSavedRouteProtection(
   const route =
     savedRoutes.find(
       (savedRoute) =>
-        savedRoute.id === routeId,
+        savedRoute.id ===
+        routeId,
     );
 
   if (!route) {
@@ -9050,32 +9446,33 @@ async function toggleSavedRouteProtection(
   }
 
   if (route.locked) {
-    route.locked = false;
+    route.locked =
+      false;
 
-    delete route.protectedDirections;
+    delete route
+      .protectedSnapshot;
+
+    delete route
+      .protectedDirections;
 
     saveRoutesToStorage();
 
     flowMessage.value =
       'Caminho "' +
       route.name +
-      '" desprotegido.';
+      '" desprotegido. Já pode ser alterado.';
 
     return;
   }
 
   if (
-    route.needsDirectionRedefinition
+    route
+      .needsDirectionRedefinition
   ) {
     window.alert(
       "Não é possível proteger este caminho.\n\n" +
-        "Foram adicionados tubos e o sentido tem de ser definido novamente.",
+        "O sentido tem de ser definido novamente antes da proteção.",
     );
-
-    flowMessage.value =
-      'Define novamente o sentido do caminho "' +
-      route.name +
-      '" antes de o proteger.';
 
     return;
   }
@@ -9085,19 +9482,16 @@ async function toggleSavedRouteProtection(
       route,
     );
 
-  if (!protectedDirections.length) {
-  window.alert(
-    "Não foi possível proteger este caminho.\n\n" +
-      "O caminho não contém tubos para congelar.",
-  );
+  if (
+    !protectedDirections.length
+  ) {
+    window.alert(
+      "Não foi possível proteger este caminho.\n\n" +
+        "Não existem sentidos válidos para congelar.",
+    );
 
-  flowMessage.value =
-    'O caminho "' +
-    route.name +
-    '" não contém tubos para proteger.';
-
-  return;
-}
+    return;
+  }
 
   const conflict =
     getProtectedDirectionConflict(
@@ -9106,37 +9500,56 @@ async function toggleSavedRouteProtection(
     );
 
   if (conflict) {
-  const conflictMessage =
-    "Não foi possível proteger este caminho.\n\n" +
-    "O tubo #" +
-    conflict.node.localId +
-    ' tem um sentido oposto no caminho protegido "' +
-    conflict.otherRoute.name +
-    '".';
+    window.alert(
+      "Não foi possível proteger este caminho.\n\n" +
+        "O tubo #" +
+        conflict.node.localId +
+        " tem um sentido oposto no caminho protegido \"" +
+        conflict.otherRoute.name +
+        "\".",
+    );
 
-  window.alert(
-    conflictMessage,
-  );
-
-  flowMessage.value =
-    "Existe um conflito de sentido entre caminhos protegidos.";
-
-  return;
-}
+    return;
+  }
 
   route.protectedDirections =
-    protectedDirections;
+    protectedDirections.map(
+      cloneProtectedRouteDirection,
+    );
 
-  route.locked = true;
+  route.protectedSnapshot =
+    createProtectedRouteSnapshot(
+      route,
+    );
+
+  route.locked =
+    true;
+
+  selectedRouteIdsForGrouping.delete(
+    route.id,
+  );
+
+  selectedSavedRouteIdForEditing.value =
+    selectedSavedRouteIdForEditing.value ===
+    route.id
+      ? ""
+      : selectedSavedRouteIdForEditing.value;
+
+  if (
+    selectedSavedRouteDirectionId.value ===
+    route.id
+  ) {
+    await closeSavedRouteDirectionPanel(
+      false,
+    );
+  }
 
   saveRoutesToStorage();
 
   flowMessage.value =
     'Caminho "' +
     route.name +
-    '" protegido com ' +
-    protectedDirections.length +
-    " sentido(s) de tubo congelado(s).";
+    '" completamente protegido. O percurso ficará congelado até ser desprotegido.';
 }
 
 function renameSavedRoute(routeId: string) {
@@ -15705,12 +16118,55 @@ function getCycleCircuitLegendGroups() {
     }
 
     groups.push({
+  cycleNumber,
+
+  cycleName:
+    getCycleLegendDisplayName(
       cycleNumber,
-      cycleName: getCycleLegendDisplayName(cycleNumber),
-      circuits: [...circuits].sort((firstCircuit, secondCircuit) =>
-        firstCircuit.name.localeCompare(secondCircuit.name),
+    ),
+
+  circuits:
+    [...circuits]
+      .map((circuit) => {
+        const representativeRoute =
+          savedRoutes.find(
+            (route) =>
+              route.temperature ===
+              circuit.key &&
+              !route.hidden,
+          ) ??
+          savedRoutes.find(
+            (route) =>
+              route.temperature ===
+              circuit.key,
+          );
+
+        return {
+          ...circuit,
+
+          color:
+            representativeRoute
+              ? getSavedRouteGroupColor(
+                  representativeRoute,
+                )
+              : circuit.color,
+        };
+      })
+      .sort(
+        (
+          firstCircuit,
+          secondCircuit,
+        ) =>
+          firstCircuit.name.localeCompare(
+            secondCircuit.name,
+            "pt-PT",
+            {
+              sensitivity: "base",
+              numeric: true,
+            },
+          ),
       ),
-    });
+});
   }
 
   return groups;
@@ -16448,6 +16904,14 @@ function getSelectedPipeNodesForManualValve() {
       };
 
       if (
+  isNodeInProtectedRoute(
+    node,
+  )
+) {
+  continue;
+}
+
+      if (
         !pipeTypeFlowNodes.has(
           nodeKey(node),
         )
@@ -17145,6 +17609,24 @@ function getSavedRouteGroup(
 function getSavedRouteGroupName(
   route: SavedRoute,
 ) {
+  if (
+  route.locked &&
+  route.protectedSnapshot
+) {
+  return route
+    .protectedSnapshot
+    .circuitLabel;
+}
+
+  if (
+  route.locked &&
+  route.protectedSnapshot
+) {
+  return route
+    .protectedSnapshot
+    .groupName;
+}
+
   return (
     getSavedRouteGroup(route.groupId)?.name ??
     "Sem grupo"
@@ -17154,6 +17636,15 @@ function getSavedRouteGroupName(
 function getSavedRouteGroupColor(
   route: SavedRoute,
 ) {
+  if (
+  route.locked &&
+  route.protectedSnapshot
+) {
+  return route
+    .protectedSnapshot
+    .effectiveColor;
+}
+
   const group =
     getSavedRouteGroup(route.groupId);
 
@@ -17334,14 +17825,42 @@ function isRouteSelectedForSimulation(
 function toggleRouteSelectionForGrouping(
   routeId: string,
 ) {
+  const selectedRoute =
+    savedRoutes.find(
+      (savedRoute) =>
+        savedRoute.id ===
+        routeId,
+    );
+
   if (
-    selectedRouteIdsForGrouping.has(routeId)
+    !selectedRoute ||
+    selectedRoute.locked
   ) {
-    selectedRouteIdsForGrouping.delete(routeId);
+    selectedRouteIdsForGrouping.delete(
+      routeId,
+    );
+
+    flowMessage.value =
+      "Os caminhos protegidos não podem participar em operações em lote.";
+
     return;
   }
 
-  selectedRouteIdsForGrouping.add(routeId);
+  if (
+    selectedRouteIdsForGrouping.has(
+      routeId,
+    )
+  ) {
+    selectedRouteIdsForGrouping.delete(
+      routeId,
+    );
+
+    return;
+  }
+
+  selectedRouteIdsForGrouping.add(
+    routeId,
+  );
 }
 
 function isRouteSelectedForGrouping(
@@ -17354,6 +17873,162 @@ function isRouteSelectedForGrouping(
 
 function clearRouteGroupingSelection() {
   selectedRouteIdsForGrouping.clear();
+}
+
+async function deleteSelectedSavedRoutes() {
+  const selectedRoutes =
+    savedRoutes.filter(
+      (route) =>
+        selectedRouteIdsForGrouping.has(
+          route.id,
+        ),
+    );
+
+  if (!selectedRoutes.length) {
+    flowMessage.value =
+      "Seleciona primeiro pelo menos um percurso.";
+
+    return;
+  }
+
+  const lockedRoutes =
+    selectedRoutes.filter(
+      (route) =>
+        route.locked,
+    );
+
+  if (lockedRoutes.length) {
+    const lockedRouteNames =
+      lockedRoutes
+        .map(
+          (route) =>
+            "• " + route.name,
+        )
+        .join("\n");
+
+    window.alert(
+      "Não é possível apagar a seleção porque contém percursos protegidos.\n\n" +
+        lockedRouteNames +
+        "\n\nDesprotege estes percursos antes de tentar novamente.",
+    );
+
+    flowMessage.value =
+      "A eliminação foi bloqueada porque existem percursos protegidos.";
+
+    return;
+  }
+
+  const routeNames =
+    selectedRoutes
+      .map(
+        (route) =>
+          "• " + route.name,
+      )
+      .join("\n");
+
+  const mergedRouteCount =
+    selectedRoutes.filter(
+      (route) =>
+        !!route.mergeBackup,
+    ).length;
+
+  const confirmationMessage =
+    "Queres apagar os " +
+    selectedRoutes.length +
+    " percursos selecionados?\n\n" +
+    routeNames +
+    "\n\n" +
+    (
+      mergedRouteCount > 0
+        ? mergedRouteCount +
+          " percurso(s) resultam de uma união. " +
+          "O histórico necessário para Desfazer união também será apagado.\n\n"
+        : ""
+    ) +
+    "Esta ação não pode ser anulada.";
+
+  const confirmed =
+    window.confirm(
+      confirmationMessage,
+    );
+
+  if (!confirmed) {
+    flowMessage.value =
+      "A eliminação dos percursos selecionados foi cancelada.";
+
+    return;
+  }
+
+  const routeIdsToDelete =
+    selectedRoutes.map(
+      (route) =>
+        route.id,
+    );
+
+  for (
+    const routeId of
+      routeIdsToDelete
+  ) {
+    await deleteSavedRoute(
+      routeId,
+      true,
+      true,
+    );
+  }
+
+  selectedRouteIdsForGrouping.clear();
+
+  selectedSavedRouteIdForEditing.value =
+    "";
+
+  highlightedSavedRouteId.value =
+    null;
+
+  selectedItems.clear();
+
+  selectedCount.value =
+    0;
+
+  if (modelHighlighter) {
+    await modelHighlighter.clear(
+      "saved-route-highlight",
+    );
+
+    await modelHighlighter.clear(
+      "select",
+    );
+  }
+
+  if (
+    countAssignments() > 0 ||
+    flowConnections.length > 0
+  ) {
+    await rebuildManualFlowLayer(
+      false,
+    );
+  } else {
+    clearFlowVisuals();
+
+    await fragmentManager.core.update(
+      true,
+    );
+  }
+
+  isFlowing.value =
+    false;
+
+  isManualFlowAnimationRunning.value =
+    false;
+
+  isCentralSimulationRunning.value =
+    false;
+
+  isFlowManuallyPaused.value =
+    true;
+
+  flowMessage.value =
+    routeIdsToDelete.length +
+    " percurso(s) selecionado(s) foram apagados.";
 }
 
 async function moveSelectedSavedRoutesToCycle() {
@@ -18333,6 +19008,23 @@ async function openSavedRouteDirectionPanel(
     return;
   }
 
+  isRouteDirectionFocusModeActive.value =
+  true;
+
+flowPreparationRunId++;
+
+isPreparingFlowAnimation.value =
+  false;
+
+isFlowAnimationReady.value =
+  false;
+
+flowPreparationProgress.value =
+  0;
+
+hasFlowPreparationError.value =
+  false;
+
   isApplyingSavedRouteHighlight.value =
     true;
 
@@ -18341,6 +19033,9 @@ async function openSavedRouteDirectionPanel(
 
     selectedSavedRouteDirectionId.value =
       route.id;
+
+      savedRouteDirectionWarning.value =
+  "";
 
     savedRouteDirectionStarts.value =
       route.directionStarts
@@ -18378,18 +19073,100 @@ async function openSavedRouteDirectionPanel(
   }
 }
 
-function closeSavedRouteDirectionPanel() {
-  isSavedRouteDirectionPanelOpen.value =
-    false;
+async function closeSavedRouteDirectionPanel(
+  shouldRestoreFlow = true,
+) {
+  isApplyingSavedRouteHighlight.value =
+    true;
 
-  selectedSavedRouteDirectionId.value =
-    "";
+  try {
+    isSavedRouteDirectionPanelOpen.value =
+      false;
 
-  savedRouteDirectionStarts.value = [];
-savedRouteDirectionEnds.value = [];
+    selectedSavedRouteDirectionId.value =
+      "";
 
-  flowMessage.value =
-    "Definição do sentido cancelada.";
+    savedRouteDirectionStarts.value =
+      [];
+
+    savedRouteDirectionEnds.value =
+      [];
+
+    savedRouteDirectionWarning.value =
+  "";
+
+    isRouteDirectionFocusModeActive.value =
+      false;
+
+    highlightedSavedRouteId.value =
+      null;
+
+    selectedItems.clear();
+
+    selectedCount.value =
+      0;
+
+    selectedTubeRouteInfo.value =
+      "";
+
+    selectedIfcDetailsText.value =
+      "";
+
+    isIfcDetailsPanelOpen.value =
+      false;
+
+    if (modelHighlighter) {
+      await modelHighlighter.clear(
+        "saved-route-highlight",
+      );
+
+      await modelHighlighter.clear(
+        "select",
+      );
+    }
+
+    await clearPersistentCircuitHighlights();
+
+    for (
+      const model of
+        loadedModels.values()
+    ) {
+      await model.resetHighlight();
+    }
+
+    if (shouldRestoreFlow) {
+      if (
+        countAssignments() > 0 ||
+        flowConnections.length > 0
+      ) {
+        await rebuildManualFlowLayer(
+          false,
+        );
+      } else {
+        await fragmentManager.core.update(
+          true,
+        );
+      }
+
+      isFlowing.value =
+        false;
+
+      isManualFlowAnimationRunning.value =
+        false;
+
+      isCentralSimulationRunning.value =
+        false;
+
+      isFlowManuallyPaused.value =
+        true;
+
+      flowMessage.value =
+        "Definição do sentido cancelada.";
+    }
+  } finally {
+    isApplyingSavedRouteHighlight.value =
+      false;
+  }
 }
 
 function getSelectedDirectionNodeFromRoute() {
@@ -18702,6 +19479,154 @@ async function findSavedRouteDirectionPaths(
   return directionPaths;
 }
 
+function selectCompatibleDirectionPaths(
+  directionPaths: FlowNode[][],
+) {
+  const compatiblePaths:
+    FlowNode[][] = [];
+
+  const rejectedPaths:
+    FlowNode[][] = [];
+
+  const directedEdges =
+    new Set<string>();
+
+  const knownPathSignatures =
+    new Set<string>();
+
+  const orderedPaths = [
+    ...directionPaths,
+  ].sort(
+    (
+      firstPath,
+      secondPath,
+    ) =>
+      firstPath.length -
+      secondPath.length,
+  );
+
+  for (const path of orderedPaths) {
+    const pathSignature =
+      path
+        .map(
+          (node) =>
+            nodeKey(node),
+        )
+        .join(">");
+
+    if (
+      knownPathSignatures.has(
+        pathSignature,
+      )
+    ) {
+      continue;
+    }
+
+    knownPathSignatures.add(
+      pathSignature,
+    );
+
+    let hasConflict =
+      false;
+
+    for (
+      let nodeIndex = 0;
+      nodeIndex <
+        path.length - 1;
+      nodeIndex++
+    ) {
+      const currentNode =
+        path[nodeIndex];
+
+      const nextNode =
+        path[nodeIndex + 1];
+
+      const reverseEdgeKey =
+        nodeKey(nextNode) +
+        "->" +
+        nodeKey(currentNode);
+
+      if (
+        directedEdges.has(
+          reverseEdgeKey,
+        )
+      ) {
+        hasConflict =
+          true;
+
+        break;
+      }
+    }
+
+    if (hasConflict) {
+      rejectedPaths.push(
+        path,
+      );
+
+      continue;
+    }
+
+    compatiblePaths.push(
+      path,
+    );
+
+    for (
+      let nodeIndex = 0;
+      nodeIndex <
+        path.length - 1;
+      nodeIndex++
+    ) {
+      const currentNode =
+        path[nodeIndex];
+
+      const nextNode =
+        path[nodeIndex + 1];
+
+      directedEdges.add(
+        nodeKey(currentNode) +
+          "->" +
+          nodeKey(nextNode),
+      );
+    }
+  }
+
+  const ambiguousNodes =
+    new Map<
+      string,
+      FlowNode
+    >();
+
+  for (
+    const rejectedPath of
+      rejectedPaths
+  ) {
+    for (
+      const node of
+        rejectedPath
+    ) {
+      ambiguousNodes.set(
+        nodeKey(node),
+        {
+          modelId:
+            node.modelId,
+
+          localId:
+            node.localId,
+        },
+      );
+    }
+  }
+
+  return {
+    compatiblePaths,
+    rejectedPaths,
+
+    ambiguousNodes: [
+      ...ambiguousNodes.values(),
+    ],
+  };
+}
+
 function applySavedRouteDirectionPaths(
   route: SavedRoute,
   directionPaths: FlowNode[][],
@@ -18876,65 +19801,119 @@ async function applyAndSaveSavedRouteDirection() {
     return;
   }
 
-  const directionPaths =
-    await findSavedRouteDirectionPaths(
-      route,
-      savedRouteDirectionStarts.value,
-      savedRouteDirectionEnds.value,
-    );
+  savedRouteDirectionWarning.value =
+  "";
 
-    const directedEdges =
-    new Set<string>();
+const directionPaths =
+  await findSavedRouteDirectionPaths(
+    route,
+    savedRouteDirectionStarts.value,
+    savedRouteDirectionEnds.value,
+  );
 
-  const conflictingEdges =
-    new Set<string>();
+const expectedCombinationCount =
+  savedRouteDirectionStarts.value
+    .length *
+  savedRouteDirectionEnds.value
+    .length;
 
-  for (const path of directionPaths) {
-    for (
-      let nodeIndex = 0;
-      nodeIndex < path.length - 1;
-      nodeIndex++
-    ) {
-      const currentNode =
-        path[nodeIndex];
+const unconnectedCombinationCount =
+  Math.max(
+    0,
+    expectedCombinationCount -
+      directionPaths.length,
+  );
 
-      const nextNode =
-        path[nodeIndex + 1];
+if (!directionPaths.length) {
+  const message =
+    "Não foi encontrada uma ligação entre os inícios e os fins definidos.";
 
-      const edgeKey =
-        nodeKey(currentNode) +
-        "->" +
-        nodeKey(nextNode);
+  savedRouteDirectionWarning.value =
+    message;
 
-      const reverseEdgeKey =
-        nodeKey(nextNode) +
-        "->" +
-        nodeKey(currentNode);
+  flowMessage.value =
+    message;
 
-      if (
-        directedEdges.has(
-          reverseEdgeKey,
-        )
-      ) {
-        conflictingEdges.add(
-          edgeKey,
-        );
+  window.alert(
+    message,
+  );
 
-        continue;
-      }
+  return;
+}
 
-      directedEdges.add(
-        edgeKey,
-      );
-    }
-  }
+const {
+  compatiblePaths,
+  rejectedPaths,
+  ambiguousNodes,
+} =
+  selectCompatibleDirectionPaths(
+    directionPaths,
+  );
 
-  if (conflictingEdges.size > 0) {
-    flowMessage.value =
-      "Não foi possível guardar o sentido porque alguns ramos usam os mesmos tubos em sentidos opostos. Revê os inícios e os fins definidos.";
+if (!compatiblePaths.length) {
+  const message =
+    "Não foi possível encontrar nenhuma ligação com um sentido compatível.";
 
-    return;
-  }
+  savedRouteDirectionWarning.value =
+    message;
+
+  flowMessage.value =
+    message;
+
+  window.alert(
+    message,
+  );
+
+  return;
+}
+
+const warningParts:
+  string[] = [];
+
+if (rejectedPaths.length > 0) {
+  warningParts.push(
+    rejectedPaths.length +
+      " ligação(ões) ambígua(s) foram ignoradas por usarem tubos em sentidos opostos.",
+  );
+}
+
+if (
+  unconnectedCombinationCount > 0
+) {
+  warningParts.push(
+    unconnectedCombinationCount +
+      " combinação(ões) de início e fim não tinham ligação.",
+  );
+}
+
+if (ambiguousNodes.length > 0) {
+  const ambiguousPipeLabels =
+    ambiguousNodes
+      .slice(0, 8)
+      .map(
+        (node) =>
+          "#" + node.localId,
+      )
+      .join(", ");
+
+  warningParts.push(
+    "Tubos envolvidos em ligações ambíguas: " +
+      ambiguousPipeLabels +
+      (
+        ambiguousNodes.length > 8
+          ? " e mais " +
+            (
+              ambiguousNodes.length -
+              8
+            )
+          : ""
+      ) +
+      ".",
+  );
+}
+
+savedRouteDirectionWarning.value =
+  warningParts.join(" ");
 
   if (!directionPaths.length) {
     flowMessage.value =
@@ -18965,9 +19944,9 @@ async function applyAndSaveSavedRouteDirection() {
   delete route.protectedDirections;
 
   applySavedRouteDirectionPaths(
-    route,
-    directionPaths,
-  );
+  route,
+  compatiblePaths,
+);
 
   for (const node of route.path) {
     const reversedIds =
@@ -19014,9 +19993,47 @@ async function applyAndSaveSavedRouteDirection() {
   saveReversedDirectionsToStorage();
   saveSyncedPipeDirectionsToStorage();
 
-  closeSavedRouteDirectionPanel();
+  await closeSavedRouteDirectionPanel(
+  false,
+);
 
-  await rebuildManualFlowLayer();
+await rebuildManualFlowLayer(
+  false,
+);
+
+highlightedSavedRouteId.value =
+  null;
+
+selectedItems.clear();
+
+selectedCount.value =
+  0;
+
+if (modelHighlighter) {
+  await modelHighlighter.clear(
+    "saved-route-highlight",
+  );
+
+  await modelHighlighter.clear(
+    "select",
+  );
+}
+
+await fragmentManager.core.update(
+  true,
+);
+
+isFlowing.value =
+  false;
+
+isManualFlowAnimationRunning.value =
+  false;
+
+isCentralSimulationRunning.value =
+  false;
+
+isFlowManuallyPaused.value =
+  true;
 
   const startCount =
     route.directionStarts.length;
@@ -19025,19 +20042,35 @@ async function applyAndSaveSavedRouteDirection() {
     route.directionEnds.length;
 
   flowMessage.value =
-    "Sentido guardado com " +
-    startCount +
-    (
-      startCount === 1
-        ? " início e "
-        : " inícios e "
-    ) +
-    endCount +
-    (
-      endCount === 1
-        ? " fim."
-        : " fins."
-    );
+  "Sentido guardado com " +
+  startCount +
+  (
+    startCount === 1
+      ? " início e "
+      : " inícios e "
+  ) +
+  endCount +
+  (
+    endCount === 1
+      ? " fim. "
+      : " fins. "
+  ) +
+  compatiblePaths.length +
+  " ligação(ões) compatível(eis) aplicada(s)." +
+  (
+    rejectedPaths.length > 0
+      ? " " +
+        rejectedPaths.length +
+        " ligação(ões) ambígua(s) foram ignoradas."
+      : ""
+  ) +
+  (
+    unconnectedCombinationCount > 0
+      ? " " +
+        unconnectedCombinationCount +
+        " combinação(ões) não tinham ligação."
+      : ""
+  );
 }
 
 function getRoutePipeCount(route: SavedRoute) {
@@ -19587,36 +20620,58 @@ async function applyPersistentCircuitHighlight(
     return;
   }
 
-  if (
-    !modelHighlighter.styles.has(
-      styleName,
-    )
-  ) {
-    modelHighlighter.styles.set(
-      styleName,
-      {
-        color: new THREE.Color(
+  const uniqueLocalIds =
+    localIds.filter(
+      (
+        localId,
+        index,
+        allLocalIds,
+      ) =>
+        Number.isFinite(
+          localId,
+        ) &&
+        allLocalIds.indexOf(
+          localId,
+        ) === index,
+    );
+
+  if (!uniqueLocalIds.length) {
+    return;
+  }
+
+  modelHighlighter.styles.set(
+    styleName,
+    {
+      color:
+        new THREE.Color(
           color,
         ),
-        opacity: 0.9,
-        transparent: true,
-        renderedFaces:
-          FRAGS.RenderedFaces.TWO,
-      },
-    );
-  }
+
+      opacity:
+        0.9,
+
+      transparent:
+        true,
+
+      renderedFaces:
+        FRAGS.RenderedFaces.TWO,
+    },
+  );
 
   persistentCircuitHighlightStyles.add(
     styleName,
   );
 
   const modelIdMap:
-  Record<string, Set<number>> = {};
+    Record<
+      string,
+      Set<number>
+    > = {};
 
-modelIdMap[modelId] =
-  new Set<number>(
-    localIds,
-  );
+  modelIdMap[modelId] =
+    new Set<number>(
+      uniqueLocalIds,
+    );
 
   await modelHighlighter.highlightByID(
     styleName,
@@ -22972,6 +24027,26 @@ function chunk<T>(items: T[], size: number) {
   background: rgba(143, 211, 255, 0.1);
 }
 
+.saved-route-search {
+  display: grid;
+  gap: 0.4rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.saved-route-search__control {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+}
+
+.saved-route-search__control input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
 .saved-route-group-actions span {
   color: #dbe9f1;
   font-size: 0.72rem;
@@ -24376,5 +25451,20 @@ button:disabled {
   color: #4c4f51;
   cursor: not-allowed;
   opacity: 0.75;
+}
+
+.route-direction-dialog__warning {
+  margin: 0.75rem 0;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid
+    rgba(255, 179, 0, 0.55);
+  border-left: 4px solid #ffb300;
+  border-radius: 0.45rem;
+  background:
+    rgba(255, 179, 0, 0.12);
+  color: #ffe0a3;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.45;
 }
 </style>
