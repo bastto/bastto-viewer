@@ -669,62 +669,6 @@
     Guardar caminhos automáticos
   </button>
 </div>
-
-   <div
-  v-if="hasLoadedModel"
-  class="flow-actions flow-actions--single"
->
-  <button
-    type="button"
-    :disabled="isAutomaticAnalysisRunning"
-    @click="startAutomaticAnalysis"
-  >
-    {{
-      isAutomaticAnalysisRunning
-        ? 'A analisar IFC...'
-        : 'Iniciar análise automática'
-    }}
-  </button>
-</div>
-
-<div
-  v-if="hasAutomaticAnalysisResults"
-  class="automatic-analysis-results"
->
-  <div class="automatic-analysis-result">
-    <span>Tubos e acessórios</span>
-    <strong>{{ automaticAnalysisResults.pipes }}</strong>
-  </div>
-
-  <div class="automatic-analysis-result">
-    <span>Válvulas e controladores</span>
-    <strong>{{ automaticAnalysisResults.valves }}</strong>
-  </div>
-
-  <div class="automatic-analysis-result">
-    <span>Equipamentos</span>
-    <strong>{{ automaticAnalysisResults.equipment }}</strong>
-  </div>
-
-  <div
-    class="automatic-analysis-result automatic-analysis-result--total"
-  >
-    <span>Total identificado</span>
-    <strong>{{ automaticAnalysisResults.total }}</strong>
-  </div>
-</div>
-<div
-  v-if="hasAutomaticAnalysisResults"
-  class="flow-actions flow-actions--single"
->
-  <button
-    type="button"
-    class="flow-button--danger"
-    @click="clearAutomaticAnalysisResults"
-  >
-    Limpar resultados automáticos
-  </button>
-</div>
   </div>
 </section>
 
@@ -3991,8 +3935,6 @@ const selectedTubeRouteInfo =
   ref("");
 const selectedIfcDetailsText = ref("");
 const isIfcDetailsPanelOpen = ref(false);
-const isAutomaticAnalysisRunning = ref(false);
-const hasAutomaticAnalysisResults = ref(false);
 const isSystemScanRunning = ref(false);
 const hasSystemScanResults = ref(false);
 const systemScanResults = reactive({
@@ -4035,12 +3977,6 @@ const automaticDirectionNeighbors =
   >();
 const isSystemTypesListOpen = ref(false);
 const isSystemNamesListOpen = ref(false);
-const automaticAnalysisResults = reactive({
-  pipes: 0,
-  valves: 0,
-  equipment: 0,
-  total: 0,
-});
 const selectedValveDesignation = ref("nenhuma válvula selecionada");
 const pendingValveDesignation = ref("");
 const selectedValveOriginalDesignation = ref("");
@@ -4310,14 +4246,6 @@ selectedSavedRouteIdForEditing.value =
   );
 
   scannedSystemGroups.clear();
-
-  hasAutomaticAnalysisResults.value =
-    false;
-
-  automaticAnalysisResults.pipes = 0;
-  automaticAnalysisResults.valves = 0;
-  automaticAnalysisResults.equipment = 0;
-  automaticAnalysisResults.total = 0;
 
   isFlowing.value = false;
 
@@ -18252,96 +18180,6 @@ function animateFlow() {
   };
 
   tick();
-}
-
-function clearAutomaticAnalysisResults() {
-  hasAutomaticAnalysisResults.value = false;
-  isAutomaticAnalysisRunning.value = false;
-
-  automaticAnalysisResults.pipes = 0;
-  automaticAnalysisResults.valves = 0;
-  automaticAnalysisResults.equipment = 0;
-  automaticAnalysisResults.total = 0;
-
-  flowMessage.value =
-    "Resultados da análise automática limpos. A configuração manual foi mantida.";
-}
-
-async function startAutomaticAnalysis() {
-  if (!loadedModels.size) {
-    flowMessage.value =
-      "Carrega primeiro um ficheiro IFC no painel da esquerda.";
-    return;
-  }
-
-  isAutomaticAnalysisRunning.value = true;
-  hasAutomaticAnalysisResults.value = false;
-
-  automaticAnalysisResults.pipes = 0;
-  automaticAnalysisResults.valves = 0;
-  automaticAnalysisResults.equipment = 0;
-  automaticAnalysisResults.total = 0;
-
-  try {
-    for (const model of loadedModels.values()) {
-      const pipeCategories = await model.getItemsOfCategories([
-        /IFCPIPESEGMENT/i,
-        /IFCFLOWSEGMENT/i,
-        /IFCPIPEFITTING/i,
-        /IFCFLOWFITTING/i,
-      ]);
-
-      const valveCategories = await model.getItemsOfCategories([
-        /IFCVALVE/i,
-        /IFCFLOWCONTROLLER/i,
-      ]);
-
-      const equipmentCategories = await model.getItemsOfCategories([
-        /IFCPUMP/i,
-        /IFCBOILER/i,
-        /IFCTANK/i,
-        /IFCHEATEXCHANGER/i,
-        /IFCFLOWSTORAGEDEVICE/i,
-        /IFCFLOWMOVINGDEVICE/i,
-      ]);
-
-      const pipeIds = new Set(
-        Object.values(pipeCategories).flat(),
-      );
-
-      const valveIds = new Set(
-        Object.values(valveCategories).flat(),
-      );
-
-      const equipmentIds = new Set(
-        Object.values(equipmentCategories).flat(),
-      );
-
-      automaticAnalysisResults.pipes += pipeIds.size;
-      automaticAnalysisResults.valves += valveIds.size;
-      automaticAnalysisResults.equipment += equipmentIds.size;
-    }
-
-    automaticAnalysisResults.total =
-      automaticAnalysisResults.pipes +
-      automaticAnalysisResults.valves +
-      automaticAnalysisResults.equipment;
-
-    hasAutomaticAnalysisResults.value = true;
-
-    flowMessage.value =
-      "Análise automática inicial concluída.";
-  } catch (error) {
-    console.error(
-      "Erro durante a análise automática:",
-      error,
-    );
-
-    flowMessage.value =
-      "Não foi possível concluir a análise automática.";
-  } finally {
-    isAutomaticAnalysisRunning.value = false;
-  }
 }
 
 function getAutomaticCircuitKindFromText(
