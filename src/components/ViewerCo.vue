@@ -4538,6 +4538,12 @@ function shouldColorNode(
   node: FlowNode,
 ) {
     if (
+    highlightedSavedRouteId.value
+  ) {
+    return false;
+  }
+
+    if (
     isValveFocusModeActive.value
   ) {
     return false;
@@ -7975,6 +7981,8 @@ async function restoreFlowVisualsAfterRouteHighlight() {
 }
 
 function stopFlowForSavedRouteHighlight() {
+  flowPreparationRunId++;
+
   isFlowing.value = false;
 
   isCentralSimulationRunning.value = false;
