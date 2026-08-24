@@ -2396,7 +2396,6 @@
 </strong>
 
           <small>
-          Grupo: {{ getSavedRouteGroupName(route) }} ·
             {{ getRouteCircuitDisplayLabel(route) }} ·
 {{ getRoutePipeCount(route) }} tubo(s) ·
 {{ getRouteVisibilityLabel(route) }} ·
@@ -5218,17 +5217,6 @@ function getRoutesForNode(
   return matchingRoutes.sort(compareRoutesForVisualPriority);
 }
 
-function getSimulationRoutesForNode(
-  node: FlowNode,
-  circuit?: PipeCircuit,
-) {
-  return getRoutesForNode(node, {
-    circuit,
-    visibleOnly: true,
-    simulationOnly: true,
-  });
-}
-
 function compareRoutesForVisualPriority(
   firstRoute: SavedRoute,
   secondRoute: SavedRoute,
@@ -5635,8 +5623,6 @@ async function restoreSelectedCircuitColors(
   ) {
     return;
   }
-
-  await clearPersistentCircuitHighlights();
 
   await clearPersistentCircuitHighlights();
 
@@ -6219,122 +6205,6 @@ loadActiveIfcConfiguration();
     isLoading.value = false;
   }
 };
-
-async function analyseLoadedModels() {
-  if (!loadedModels.size) {
-    flowMessage.value = "Carrega primeiro um IFC ou um ficheiro .frag.";
-    return;
-  }
-
-  clearFlowLayer();
-  isLoading.value = true;
-  loadingFileName.value = "pipe analysis";
-  loadingProgress.value = 0;
-
-  try {
-    for (const model of loadedModels.values()) {
-      await analyseModelPipes(model);
-    }
-
-    isFlowing.value = false;
-    flowMessage.value =
-  "Modelo carregado. Define manualmente os circuitos de ida e retorno.";
-    await fragmentManager.core.update(true);
-  } catch (error) {
-    console.error("Pipe analysis failed:", error);
-    flowMessage.value = "Nao foi possivel analisar as tubagens deste modelo.";
-  } finally {
-    isLoading.value = false;
-  }
-}
-
-async function analyseModelPipes(model: FRAGS.FragmentsModel) {
-  const categories = await model.getItemsOfCategories([
-    /IFCFLOWSEGMENT/i,
-    /IFCPIPESEGMENT/i,
-    /IFCPIPEFITTING/i,
-    /IFCFLOWFITTING/i,
-    /IFCFLOWCONTROLLER/i,
-  ]);
-  const localIds = [...new Set(Object.values(categories).flat())];
-  if (!localIds.length) return;
-
-  const chunks = chunk(localIds, 80);
-
-  for (let index = 0; index < chunks.length; index++) {
-    const ids = chunks[index];
-    const data = await model.getItemsData(ids, {
-      attributesDefault: true,
-      relationsDefault: { attributes: true, relations: false },
-    });
-    const boxes = await model.getBoxes(ids);
-
-    const supplyIds: number[] = [];
-const returnIds: number[] = [];
-
-ids.forEach((id, itemIndex) => {
-  const temperature = classifyPipe(data[itemIndex]);
-
-  if (temperature === "supply1") {
-    supplyIds.push(id);
-  } else {
-    returnIds.push(id);
-  }
-
-  const box = boxes[itemIndex];
-
-  if (box) {
-    addPipeParticles(box, temperature);
-  }
-});
-
-    if (supplyIds.length)
-  await model.highlight(
-    supplyIds,
-    createHighlight(0xff3b30, "supply1")
-  );
-
-if (returnIds.length)
-  await model.highlight(
-    returnIds,
-    createHighlight(0xffc107, "return1")
-  );
-
-    pipeStats.supply += supplyIds.length;
-pipeStats.return += returnIds.length;
-    pipeStats.total += ids.length;
-    loadingProgress.value = Math.round(((index + 1) / chunks.length) * 100);
-  }
-}
-
-async function assignSelectedPipes(circuit: PipeCircuit) {
-  if (!selectedCount.value) {
-    flowMessage.value = "Seleciona primeiro um ou mais tubos no modelo.";
-    return;
-  }
-
-  for (const [modelId, ids] of selectedItems) {
-  const targetSet = getAssignmentSet(circuit, modelId);
-
-  for (const id of ids) {
-
-    // remove o tubo de todos os outros circuitos
-    for (const existingCircuit of getAllKnownCircuitKeys()) {
-  getAssignmentSet(existingCircuit, modelId).delete(id);
-}
-
-    targetSet.add(id);
-  }
-}
-
-  updateManualStats();
-  await rebuildManualFlowLayer();
-  flowMessage.value =
-  selectedCount.value +
-  " elemento(s) marcados como " +
-  getCircuitLabel(circuit) +
-  ".";
-}
 
 function isSimulationCycleSelected(
   cycleNumber: number,
@@ -7258,54 +7128,6 @@ addPipeParticles(
 );
     }
   }
-}
-
-async function clearSelectedManualAssignments() {
-  if (!selectedCount.value) {
-    flowMessage.value = "Seleciona primeiro um ou mais elementos para limpar a marca.";
-    return;
-  }
-
-  let clearedCount = 0;
-  const idsByModel = new Map<string, number[]>();
-
-  for (const [modelId, ids] of selectedItems) {
-    for (const localId of ids) {
-
-      for (const circuit of getAllKnownCircuitKeys()) {
-  getAssignmentSet(circuit, modelId).delete(localId);
-}
-
-      if (!idsByModel.has(modelId)) {
-        idsByModel.set(modelId, []);
-      }
-
-      idsByModel.get(modelId)?.push(localId);
-
-      clearedCount++;
-    }
-  }
-
-  for (const [modelId, ids] of idsByModel) {
-    const model = loadedModels.get(modelId);
-
-    if (model && ids.length) {
-      await model.resetHighlight(ids);
-    }
-  }
-  
-  updateManualStats();
-
-  if (countAssignments() > 0 || flowConnections.length > 0) {
-    await rebuildManualFlowLayer();
-  } else {
-    clearFlowVisuals();
-    await fragmentManager.core.update(true);
-  }
-
-  flowMessage.value = clearedCount
-  ? clearedCount + " marca(s) selecionada(s) removida(s)."
-  : "Nenhuma marca selecionada para remover.";
 }
 
 async function clearManualAssignments() {
@@ -9174,98 +8996,6 @@ async function setSavedRouteVisibility(routeId: string, shouldShow: boolean) {
 flowMessage.value = "Caminho \"" + route.name + "\" oculto.";
 }
 
-async function applySavedRoute(route: SavedRoute) {
-  const loadedModelIds = [...loadedModels.keys()];
-
-  if (!loadedModelIds.length) {
-    flowMessage.value = "Carrega primeiro o IFC antes de aplicar o caminho.";
-    return;
-  }
-
-  const fallbackModelId = loadedModelIds[0];
-
-  const adaptedPath = route.path.map((node) => {
-    if (loadedModels.has(node.modelId)) {
-      return node;
-    }
-
-    return {
-      modelId: fallbackModelId,
-      localId: node.localId,
-    };
-  });
-
-  assignPathToTemperature(
-    adaptedPath,
-    route.temperature,
-  );
-
-  flowConnections.splice(0);
-
-  for (let index = 0; index < adaptedPath.length - 1; index++) {
-    flowConnections.push({
-      from: adaptedPath[index],
-      to: adaptedPath[index + 1],
-      temperature: route.temperature,
-    });
-  }
-
-  updateManualStats();
-
-  await rebuildManualFlowLayer();
-
-  flowMessage.value =
-    `Caminho ${route.name} aplicado.`;
-}
-
-async function reverseSavedRoute(routeId: string) {
-  const route = savedRoutes.find(
-    (savedRoute) => savedRoute.id === routeId,
-  );
-
-  if (!route) {
-    return;
-  }
-
-  if (route.locked) {
-    flowMessage.value =
-      "O caminho \"" +
-      route.name +
-      "\" está protegido. Desprotege primeiro para inverter.";
-    return;
-  }
-
-  route.path.reverse();
-
-  const previousDirectionStarts =
-  route.directionStarts;
-
-route.directionStarts =
-  route.directionEnds;
-
-route.directionEnds =
-  previousDirectionStarts;
-
-  for (const node of route.path) {
-    toggleReversedPipeDirection(
-      node.modelId,
-      node.localId,
-    );
-  }
-
-  saveRoutesToStorage();
-  saveReversedDirectionsToStorage();
-
-  if (loadedModels.size) {
-    await applySavedRoute(route);
-  }
-
-  flowMessage.value =
-    "Sentido do caminho \"" +
-    route.name +
-    "\" invertido.";
-}
-
 async function createProtectedRouteDirections(
   route: SavedRoute,
 ) {
@@ -9670,21 +9400,6 @@ async function applyAllSavedRoutes() {
     `${appliedCount} caminho(s) guardado(s) aplicado(s).`;
 }
 
-async function addConnectionsToScene() {
-  for (const connection of flowConnections) {
-  if (isConnectionBlocked(connection)) {
-    continue;
-  }
-
-  const fromCenter = await getNodeCenter(connection.from);
-  const toCenter = await getNodeCenter(connection.to);
-    if (!fromCenter || !toCenter) continue;
-
-    addConnectionParticles(fromCenter, toCenter, connection.temperature);
-    addConnectionLine(fromCenter, toCenter, connection.temperature);
-  }
-}
-
 async function findRouteThroughCheckpoints(checkpoints: FlowNode[]) {
   const route: FlowNode[] = [];
 
@@ -10075,11 +9790,6 @@ const comparisonMessage = [
         : "não"
     ),
 
-  "Grupo: " +
-    getSavedRouteGroupName(
-      comparison.firstRoute,
-    ),
-
   "Válvula associada: " +
     (
       firstRouteHasValveLinks
@@ -10109,11 +9819,6 @@ const comparisonMessage = [
       comparison.secondRoute.locked
         ? "sim"
         : "não"
-    ),
-
-  "Grupo: " +
-    getSavedRouteGroupName(
-      comparison.secondRoute,
     ),
 
   "Válvula associada: " +
@@ -11976,150 +11681,6 @@ function getSingleDiameterValue(value: string) {
   );
 }
 
-function collectExactIfcPropertyValues(
-  data: any,
-  propertyName: string,
-) {
-  const results: {
-    caminho: string;
-    valor: string;
-  }[] = [];
-
-  const visitedObjects = new WeakSet<object>();
-
-  function normalizeText(value: any) {
-    return getAttributeValueText(value)
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, "")
-      .replace(/_/g, "");
-  }
-
-  const targetName = normalizeText(propertyName);
-
-  function extractValue(value: any) {
-    if (value === null || value === undefined) {
-      return "";
-    }
-
-    if (
-      typeof value === "string" ||
-      typeof value === "number" ||
-      typeof value === "boolean"
-    ) {
-      return String(value);
-    }
-
-    const possibleValues = [
-      value.NominalValue,
-      value.nominalValue,
-      value.Value,
-      value.value,
-      value.wrappedValue,
-    ];
-
-    for (const possibleValue of possibleValues) {
-      const text =
-        getAttributeValueText(possibleValue).trim();
-
-      if (text) {
-        return text;
-      }
-    }
-
-    return "";
-  }
-
-  function visit(value: any, path: string[] = []) {
-    if (
-      value === null ||
-      value === undefined ||
-      typeof value !== "object"
-    ) {
-      return;
-    }
-
-    if (visitedObjects.has(value)) {
-      return;
-    }
-
-    visitedObjects.add(value);
-
-    if (Array.isArray(value)) {
-      value.forEach((item, index) => {
-        visit(item, [...path, String(index)]);
-      });
-
-      return;
-    }
-
-    const objectPropertyName = normalizeText(
-      value.Name ?? value.name,
-    );
-
-    if (objectPropertyName === targetName) {
-      const extractedValue = extractValue(value);
-
-      if (extractedValue) {
-        results.push({
-          caminho: path.join("."),
-          valor: extractedValue,
-        });
-      }
-    }
-
-    for (const [key, nestedValue] of Object.entries(value)) {
-      if (normalizeText(key) === targetName) {
-        const extractedValue = extractValue(nestedValue);
-
-        if (extractedValue) {
-          results.push({
-            caminho: [...path, key].join("."),
-            valor: extractedValue,
-          });
-        }
-      }
-
-      visit(nestedValue, [...path, key]);
-    }
-  }
-
-  visit(data);
-
-  return results;
-}
-
-function getSelectedElementSystemName(itemData: any) {
-  const assignments =
-    itemData?.HasAssignments ??
-    itemData?.hasAssignments ??
-    [];
-
-  if (!Array.isArray(assignments)) {
-    return "";
-  }
-
-  for (const assignment of assignments) {
-    const possibleNames = [
-      assignment?.Name,
-      assignment?.name,
-      assignment?.LongName,
-      assignment?.longName,
-    ];
-
-    for (const possibleName of possibleNames) {
-      const systemName =
-        getAttributeValueText(possibleName).trim();
-
-      if (systemName) {
-        return systemName;
-      }
-    }
-  }
-
-  return "";
-}
-
 function findMechanicalSystemName(data: any) {
   function normalizeText(value: any) {
     return getAttributeValueText(value)
@@ -12877,55 +12438,6 @@ function getValveTypeFromIfcState(
   return "normallyOpenValve";
 }
 
-
-function getInverseValveState(elementType: MepElementType) {
-  return getNormalValveState(elementType) === "closed" ? "open" : "closed";
-}
-
-function getSelectedValveElements() {
-  const selectedValves: MepElement[] = [];
-
-  for (const valveNode of getValveNodesForControl()) {
-    const element = mepElements[elementKey(
-      valveNode.modelId,
-      valveNode.localId,
-    )];
-
-    if (!element || !isValveElementType(element.elementType)) {
-      continue;
-    }
-
-    selectedValves.push(element);
-  }
-
-  return selectedValves;
-}
-
-function getSelectedValveInverseButtonLabel() {
-  const selectedValves = getSelectedValveElements();
-
-  if (!selectedValves.length) {
-    return "Inverter estado normal";
-  }
-
-  const firstValve = selectedValves[0];
-  const inverseState = getInverseValveState(firstValve.elementType);
-
-  if (firstValve.elementType === "normallyClosedValve") {
-    return inverseState === "open"
-      ? "Abrir válvula NF"
-      : "Fechar válvula NF";
-  }
-
-  if (firstValve.elementType === "normallyOpenValve") {
-    return inverseState === "closed"
-      ? "Fechar válvula NA"
-      : "Abrir válvula NA";
-  }
-
-  return inverseState === "open" ? "Abrir válvula" : "Fechar válvula";
-}
-
 function isIsolationValve(modelId: string, localId: number) {
   const key = elementKey(modelId, localId);
 
@@ -12985,33 +12497,6 @@ function getHighlightedRouteForValveAssociation() {
   return savedRoutes.find(
     (route) => route.id === highlightedSavedRouteId.value,
   ) ?? null;
-}
-
-function getSelectedValveAssociationStatusLabel() {
-  const valveNode = getValveNodeForControl();
-
-  if (!valveNode) {
-    return "nenhuma válvula selecionada";
-  }
-
-  const valveKey = nodeKey(valveNode);
-
-  if (valveControlledPipeLinks.has(valveKey)) {
-    return "válvula associada";
-  }
-
-  const hasAssociationByLocalId = [...valveControlledPipeLinks.keys()].some(
-    (storedValveKey) => {
-      const [, storedLocalId] = storedValveKey.split(":");
-      return Number(storedLocalId) === valveNode.localId;
-    },
-  );
-
-  if (hasAssociationByLocalId) {
-    return "válvula associada";
-  }
-
-  return "sem associação";
 }
 
 function getSelectedValveControlledRouteLabel() {
@@ -13276,68 +12761,6 @@ async function resetSelectedValveDesignationToOriginal() {
 
   flowMessage.value =
     "Nome original da válvula reposto.";
-}
-
-function isValveAtNormalState(element: MepElement) {
-  return element.state === getNormalValveState(element.elementType);
-}
-
-function isSelectedValveInInverseState() {
-  const selectedValves = getSelectedValveElements();
-
-  if (!selectedValves.length) {
-    return false;
-  }
-
-  return selectedValves.some(
-    (valve) => !isValveAtNormalState(valve),
-  );
-}
-
-function getSelectedValveSwitchLabel() {
-  const selectedValves = getSelectedValveElements();
-
-  if (!selectedValves.length) {
-    return "Alternar válvula";
-  }
-
-  const firstValve = selectedValves[0];
-
-  if (isSelectedValveInInverseState()) {
-    return "Repor estado normal";
-  }
-
-  if (firstValve.elementType === "normallyClosedValve") {
-    return "Abrir válvula NF";
-  }
-
-  if (firstValve.elementType === "normallyOpenValve") {
-    return "Fechar válvula NA";
-  }
-
-  return "Inverter estado normal";
-}
-
-async function toggleSelectedValvesNormalInverseState() {
-  const selectedValves = getSelectedValveElements();
-
-  if (!selectedValves.length) {
-    alert("Seleciona primeiro a válvula que queres alternar.");
-
-    flowMessage.value =
-      "Seleciona primeiro a válvula que queres alternar.";
-
-    return;
-  }
-
-  const shouldResetToNormal = isSelectedValveInInverseState();
-
-  if (shouldResetToNormal) {
-    await resetSelectedValvesToNormal();
-    return;
-  }
-
-  await applyInverseNormalStateToSelectedValves();
 }
 
 function getFirstSelectedValveNode() {
@@ -14651,9 +14074,6 @@ async function setSelectedValvesState(
   let changedCount =
     0;
 
-  const affectedPipeKeys =
-    new Set<string>();
-
   const affectedControlledElements =
   new Map<
     string,
@@ -14722,10 +14142,6 @@ async function setSelectedValvesState(
     nodeKey(
       controlledElement,
     );
-
-  affectedPipeKeys.add(
-    controlledElementKey,
-  );
 
   affectedControlledElements.set(
     controlledElementKey,
@@ -14825,31 +14241,6 @@ async function setSelectedValvesState(
     : changedCount +
       " válvula(s) aberta(s). " +
       "As cores e as setas dos elementos que já não estão bloqueados foram repostas.";
-}
-
-async function applyInverseNormalStateToSelectedValves() {
-  const selectedValves = getSelectedValveElements();
-
-  if (!selectedValves.length) {
-    flowMessage.value =
-      "Seleciona uma válvula no dropdown ou no modelo antes de alternar.";
-
-    return;
-  }
-
-  const targetState = getInverseValveState(selectedValves[0].elementType);
-
-  const hasMixedInverseStates = selectedValves.some(
-    (valve) => getInverseValveState(valve.elementType) !== targetState,
-  );
-
-  if (hasMixedInverseStates) {
-    flowMessage.value =
-      "Seleciona válvulas com o mesmo estado normal para usar esta ação.";
-    return;
-  }
-
-  await setSelectedValvesState(targetState);
 }
 
 function getAdaptedSavedRouteNodes(
@@ -15176,87 +14567,6 @@ if (lockedRouteNames.length) {
 
   flowMessage.value =
     `${changedCount} tubo(s) sincronizado(s) com o sentido do caminho.`;
-}
-
-async function resetSelectedValvesToNormal() {
-  const valveNodes = getValveNodesForControl();
-
-  if (!valveNodes.length) {
-    flowMessage.value = "Seleciona primeiro uma válvula.";
-    return;
-  }
-
-  let changedCount = 0;
-
-  for (const valveNode of valveNodes) {
-    const { modelId, localId } = valveNode;
-    const key = elementKey(modelId, localId);
-    const element = mepElements[key];
-
-    if (!element || !isValveElementType(element.elementType)) {
-      continue;
-    }
-
-    const normalState = getNormalValveState(element.elementType);
-
-    mepElements[key] = {
-      ...element,
-      state: normalState,
-    };
-
-    const valveKey = nodeKey(valveNode);
-    const linkedPipes = getLinkedPipesForValveNode(valveNode);
-
-    restoreValveLinkedPipesToOriginalCircuit(linkedPipes);
-
-    let blockedSet = blockedPipes.get(modelId);
-
-    if (normalState === "closed") {
-      if (!blockedSet) {
-        blockedSet = new Set<number>();
-        blockedPipes.set(modelId, blockedSet);
-      }
-
-      blockedSet.add(localId);
-
-      for (const pipeNode of linkedPipes) {
-        blockPipeForRoute(pipeNode.routeId, pipeNode);
-      }
-
-      valveBlockedPipeLinks.set(valveKey, linkedPipes);
-    } else {
-      blockedSet?.delete(localId);
-
-      if (blockedSet && blockedSet.size === 0) {
-        blockedPipes.delete(modelId);
-      }
-
-      for (const pipeNode of linkedPipes) {
-        unblockPipeForRoute(pipeNode.routeId, pipeNode);
-      }
-
-      valveBlockedPipeLinks.delete(valveKey);
-    }
-
-    changedCount++;
-  }
-
-  if (!changedCount) {
-    flowMessage.value = "Nenhuma válvula válida encontrada para repor.";
-    return;
-  }
-
-  updateBlockedCount();
-  updateManualStats();
-  saveMepElementsToStorage();
-
-  if (countAssignments() > 0 || flowConnections.length > 0) {
-    await rebuildManualFlowLayer();
-  }
-
-  await showSelectedMepElementInfo();
-
-  flowMessage.value = `${changedCount} válvula(s) reposta(s) ao estado normal.`;
 }
 
 async function clearBlockedPipes() {
@@ -16068,13 +15378,6 @@ function updatePendingCycleCircuitColorFromKind() {
   );
 }
 
-function getDefaultCircuitKey(
-  cycleNumber: number,
-  kind: CycleCircuitKind,
-) {
-  return `cycle${cycleNumber}-${kind}-${crypto.randomUUID()}`;
-}
-
 function hasCycleCircuitUsage(circuitKey: PipeCircuit) {
   const hasAssignments =
     [...(manualAssignments[circuitKey]?.values() ?? [])].some(
@@ -16345,16 +15648,6 @@ function getCycleCircuitLegendGroups() {
   return groups;
 }
 
-function getAllCycleCircuitDefinitionsForLegend() {
-  return [...cycleCircuitDefinitions].sort((firstCircuit, secondCircuit) => {
-    if (firstCircuit.cycleNumber !== secondCircuit.cycleNumber) {
-      return firstCircuit.cycleNumber - secondCircuit.cycleNumber;
-    }
-
-    return firstCircuit.name.localeCompare(secondCircuit.name);
-  });
-}
-
 function selectDefaultCircuitForActiveCycle() {
   const activeCircuits = getActiveCycleCircuitDefinitions();
 
@@ -16370,16 +15663,6 @@ function selectDefaultCircuitForActiveCycle() {
   if (!stillValid) {
     selectedCycleCircuitKey.value = activeCircuits[0].key;
   }
-}
-
-function getSelectedCycleCircuitDefinition() {
-  selectDefaultCircuitForActiveCycle();
-
-  return (
-    cycleCircuitDefinitions.find(
-      (circuit) => circuit.key === selectedCycleCircuitKey.value,
-    ) ?? null
-  );
 }
 
 function getNewRouteCycleNumber() {
@@ -16602,17 +15885,6 @@ async function createManualRouteForSelectedCycleCircuit() {
     'Novo circuito "' +
     getNewRouteCircuitDisplayName() +
     '" preparado. Confirma e guarda o caminho.';
-}
-
-function getCycleCircuitDefinitionsByKind(
-  cycleNumber: number,
-  kind: CycleCircuitKind,
-) {
-  return cycleCircuitDefinitions.filter(
-    (circuit) =>
-      circuit.cycleNumber === cycleNumber &&
-      circuit.kind === kind,
-  );
 }
 
 function getDefaultNewRouteCircuitName(
@@ -17597,10 +16869,6 @@ async function highlightSavedManualValvePipes() {
     " tubo(s) controlado(s) realçado(s).";
 }
 
-function toggleValveAssociationDetails() {
-  isValveAssociationDetailsOpen.value = !isValveAssociationDetailsOpen.value;
-}
-
 function saveCycleNames() {
   ensureCycleNames();
   saveCycleNamesToStorage();
@@ -17783,25 +17051,27 @@ function getSavedRouteGroupName(
   route: SavedRoute,
 ) {
   if (
-  route.locked &&
-  route.protectedSnapshot
-) {
-  return route
-    .protectedSnapshot
-    .circuitLabel;
-}
+    route.locked &&
+    route.protectedSnapshot
+  ) {
+    return route
+      .protectedSnapshot
+      .circuitLabel;
+  }
 
   if (
-  route.locked &&
-  route.protectedSnapshot
-) {
-  return route
-    .protectedSnapshot
-    .groupName;
-}
+    route.locked &&
+    route.protectedSnapshot
+  ) {
+    return route
+      .protectedSnapshot
+      .groupName;
+  }
 
   return (
-    getSavedRouteGroup(route.groupId)?.name ??
+    getSavedRouteGroup(
+      route.groupId,
+    )?.name ??
     "Sem grupo"
   );
 }
@@ -19091,70 +18361,6 @@ async function groupSelectedSavedRoutes() {
     " tubo(s) sem duplicados.";
 }
 
-async function removeSelectedRoutesFromGroup() {
-  const selectedRoutes = savedRoutes.filter(
-    (route) =>
-      selectedRouteIdsForGrouping.has(
-        route.id,
-      ) &&
-      route.groupId,
-  );
-
-  if (!selectedRoutes.length) {
-    flowMessage.value =
-      "Seleciona caminhos que pertençam a um grupo.";
-
-    return;
-  }
-
-  for (const route of selectedRoutes) {
-    delete route.groupId;
-    delete route.originalCircuitColor;
-  }
-
-  for (
-    let index =
-      savedRouteGroups.length - 1;
-    index >= 0;
-    index--
-  ) {
-    const group =
-      savedRouteGroups[index];
-
-    const groupStillHasRoutes =
-      savedRoutes.some(
-        (route) =>
-          route.groupId === group.id,
-      );
-
-    if (!groupStillHasRoutes) {
-      savedRouteGroups.splice(
-        index,
-        1,
-      );
-    }
-  }
-
-  circuitMaterialCache.clear();
-
-  saveRouteGroupsToStorage();
-  saveRoutesToStorage();
-
-  clearRouteGroupingSelection();
-
-  if (
-    countAssignments() > 0 ||
-    flowConnections.length > 0
-  ) {
-    await rebuildManualFlowLayer();
-  }
-
-  flowMessage.value =
-    selectedRoutes.length +
-    " caminho(s) retirado(s) do grupo. " +
-    "As cores anteriores foram repostas.";
-}
-
 function getSelectedSavedRouteForDirection() {
   if (!selectedSavedRouteDirectionId.value) {
     return null;
@@ -20088,13 +19294,6 @@ if (ambiguousNodes.length > 0) {
 savedRouteDirectionWarning.value =
   warningParts.join(" ");
 
-  if (!directionPaths.length) {
-    flowMessage.value =
-      "Não foi encontrada uma ligação entre os inícios e os fins definidos.";
-
-    return;
-  }
-
   route.directionStarts =
     savedRouteDirectionStarts.value.map(
       (node) => ({
@@ -20273,10 +19472,6 @@ function getValveLabelForBlockedRoute(route: SavedRoute) {
   return hasAssociatedValve ? "bloqueado por válvula" : "";
 }
 
-function getRouteBlockedLabel(route: SavedRoute) {
-  return isSavedRouteBlocked(route) ? "bloqueado" : "ativo";
-}
-
 function getRouteCircuitDisplayLabel(route: SavedRoute) {
   return capitalizeFirstLetter(getCircuitLabel(route.temperature));
 }
@@ -20342,32 +19537,6 @@ function restoreValveLinkedPipesToOriginalCircuit(
     }
 
     assignNodeToOnlyOneCircuit(pipeNode, pipeNode.temperature);
-  }
-}
-
-function applyValveSwitchToLinkedPipes(
-  linkedPipes: ValveControlledPipeLink[],
-) {
-  for (const pipeNode of linkedPipes) {
-    if (isNodeSharedWithOtherVisibleRoute(pipeNode.routeId, pipeNode)) {
-      continue;
-    }
-
-    const switchMode = pipeNode.switchMode ?? "none";
-
-    if (switchMode === "none") {
-      assignNodeToOnlyOneCircuit(pipeNode, pipeNode.temperature);
-      continue;
-    }
-
-    const targetTemperature =
-      pipeNode.targetTemperature ??
-      getTargetCircuitForValveSwitch(
-        pipeNode.temperature,
-        switchMode,
-      );
-
-    assignNodeToOnlyOneCircuit(pipeNode, targetTemperature);
   }
 }
 
@@ -20685,66 +19854,6 @@ async function getNodeCenter(node: FlowNode) {
   const center = new THREE.Vector3();
   box.getCenter(center);
   return center;
-}
-
-function addConnectionParticles(start: any, end: any, temperature: PipeCircuit) {
-
-  const direction = end.clone().sub(start);
-  const length = Math.max(direction.length(), 0.1);
-  direction.normalize();
-
-  const radius = 0.055;
-  const geometry = new THREE.ConeGeometry(radius * 1.3, radius * 2.8, 10);
-  const material = getCircuitMaterial(temperature);
-  const particleCount = Math.max(2, Math.round(length / 0.65));
-
-  for (let i = 0; i < particleCount; i++) {
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.renderOrder = 30;
-    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
-    mesh.position.copy(start);
-    flowGroup.add(mesh);
-
-    pipeParticles.push({
-      mesh,
-      start,
-      end,
-      offset: i / particleCount,
-      length,
-    });
-  }
-}
-
-function addConnectionLine(start: any, end: any, temperature: PipeCircuit) {
-  const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-
-  const material = new THREE.LineBasicMaterial({
-  color: getCircuitColor(temperature),
-  transparent: true,
-  opacity: 0.35,
-  depthTest: false,
-});
-  const line = new THREE.Line(geometry, material);
-  line.renderOrder = 15;
-  flowGroup.add(line);
-  staticFlowObjects.push({ object: line });
-}
-
-function classifyPipe(data: FRAGS.ItemData | undefined): PipeCircuit {
-  const text = flattenItemText(data).toLowerCase();
-
-  const hotTerms = [
-    "quente",
-    "hot",
-    "aqs",
-    "acs",
-    "dhw",
-    "heating",
-  ];
-
-  const hasHot = hotTerms.some((term) => text.includes(term));
-
-  return hasHot ? "supply1" : "return1";
 }
 
 function flattenItemText(value: unknown): string {
@@ -22285,35 +21394,6 @@ async function applySimulationCycleFilter() {
     ".";
 }
 
-async function showAllSimulationCycles() {
-  if (!loadedModels.size) {
-    flowMessage.value =
-      "Carrega primeiro um ficheiro IFC.";
-
-    return;
-  }
-
-  if (
-    highlightedSavedRouteId.value &&
-    modelHighlighter
-  ) {
-    await modelHighlighter.clear(
-      "saved-route-highlight",
-    );
-
-    highlightedSavedRouteId.value = null;
-  }
-
-  isCycleViewFilterActive.value = false;
-
-  selectAllSimulationCycles();
-
-  await rebuildManualFlowLayer();
-
-  flowMessage.value =
-    "Todos os ciclos estão visíveis.";
-}
-
 function toggleResetPanelMinimized() {
   isResetPanelMinimized.value =
     !isResetPanelMinimized.value;
@@ -22322,75 +21402,6 @@ function toggleResetPanelMinimized() {
 function toggleSimulationControlPanelMinimized() {
   isSimulationControlPanelMinimized.value =
     !isSimulationControlPanelMinimized.value;
-}
-
-function getAllAssignedPipeNodes() {
-  const nodes: FlowNode[] = [];
-
-  for (const assignmentMap of Object.values(manualAssignments)) {
-    for (const [modelId, ids] of assignmentMap) {
-      for (const localId of ids) {
-        nodes.push({
-          modelId,
-          localId,
-        });
-      }
-    }
-  }
-
-  return nodes;
-}
-
-async function findClosestAssignedPipeToNode(node: FlowNode) {
-  const nodeCenter = await getNodeCenter(node);
-
-  if (!nodeCenter) {
-    return null;
-  }
-
-  let closestNode: FlowNode | null = null;
-  let closestDistance = Number.POSITIVE_INFINITY;
-
-  for (const candidate of getAllAssignedPipeNodes()) {
-    if (isSameNode(candidate, node)) {
-      continue;
-    }
-
-    const candidateCenter = await getNodeCenter(candidate);
-
-    if (!candidateCenter) {
-      continue;
-    }
-
-    const distance = nodeCenter.distanceTo(candidateCenter);
-
-    if (distance < closestDistance) {
-      closestDistance = distance;
-      closestNode = candidate;
-    }
-  }
-
-  return closestNode;
-}
-
-function getPointToSegmentDistance(point: any, segmentStart: any, segmentEnd: any) {
-  const segment = segmentEnd.clone().sub(segmentStart);
-  const pointVector = point.clone().sub(segmentStart);
-
-  const segmentLengthSquared = segment.lengthSq();
-
-  if (segmentLengthSquared === 0) {
-    return point.distanceTo(segmentStart);
-  }
-
-  const t = Math.max(
-    0,
-    Math.min(1, pointVector.dot(segment) / segmentLengthSquared),
-  );
-
-  const projectedPoint = segmentStart.clone().add(segment.multiplyScalar(t));
-
-  return point.distanceTo(projectedPoint);
 }
 
 function findDownstreamPipesFromNode(startNode: FlowNode) {
@@ -22427,72 +21438,6 @@ function findDownstreamPipesFromNode(startNode: FlowNode) {
     temperature: highlightedRoute.temperature,
     routeId: highlightedRoute.id,
   }));
-}
-
-async function findDownstreamPipesAfterValve(valveNode: FlowNode) {
-  const valveCenter = await getNodeCenter(valveNode);
-
-  if (!valveCenter || !flowConnections.length) {
-    return [];
-  }
-
-  let closestConnectionIndex = -1;
-  let closestDistance = Number.POSITIVE_INFINITY;
-
-  for (let index = 0; index < flowConnections.length; index++) {
-    const connection = flowConnections[index];
-
-    const fromCenter = await getNodeCenter(connection.from);
-    const toCenter = await getNodeCenter(connection.to);
-
-    if (!fromCenter || !toCenter) {
-      continue;
-    }
-
-    const distance = getPointToSegmentDistance(
-      valveCenter,
-      fromCenter,
-      toCenter,
-    );
-
-    if (distance < closestDistance) {
-      closestDistance = distance;
-      closestConnectionIndex = index;
-    }
-  }
-
-  if (closestConnectionIndex === -1) {
-    return [];
-  }
-
-  const firstConnection = flowConnections[closestConnectionIndex];
-  const downstreamNodes: FlowNode[] = [];
-
-  downstreamNodes.push(firstConnection.from);
-  downstreamNodes.push(firstConnection.to);
-
-  let expectedFrom = firstConnection.to;
-
-  for (
-    let index = closestConnectionIndex + 1;
-    index < flowConnections.length;
-    index++
-  ) {
-    const connection = flowConnections[index];
-
-    if (connection.temperature !== firstConnection.temperature) {
-      continue;
-    }
-
-    if (!isSameNode(connection.from, expectedFrom)) {
-      break;
-    }
-
-    downstreamNodes.push(connection.to);
-    expectedFrom = connection.to;
-  }
-
-  return downstreamNodes;
 }
 
 function routeBlockedPipeKey(routeId: string, node: FlowNode) {
@@ -22600,123 +21545,6 @@ function shouldHidePipeForCircuit(
 
 function isPipeBlocked(modelId: string, localId: number) {
   return blockedPipes.get(modelId)?.has(localId) ?? false;
-}
-
-function isConnectionBlocked(connection: FlowConnection) {
-  return false;
-}
-
-function getBlockedNodesInCurrentPath() {
-  const blockedNodes: FlowNode[] = [];
-
-  if (flowConnections.length) {
-    for (const connection of flowConnections) {
-      if (isPipeBlocked(connection.from.modelId, connection.from.localId)) {
-        blockedNodes.push(connection.from);
-      }
-
-      if (isPipeBlocked(connection.to.modelId, connection.to.localId)) {
-        blockedNodes.push(connection.to);
-      }
-    }
-  } else {
-    for (const [modelId, ids] of blockedPipes) {
-      for (const localId of ids) {
-        blockedNodes.push({ modelId, localId });
-      }
-    }
-  }
-
-  return blockedNodes;
-}
-
-function hasDefinedPumpOrHeatPump() {
-  return Object.values(mepElements).some(
-    (element) => element.elementType === "booster",
-  );
-}
-
-async function startCentralSimulation() {
-  if (!countAssignments()) {
-
-    flowMessage.value =
-  "Não é possível simular: marca primeiro tubos num circuito.";
-    return;
-  }
-
-  const blockedNodes = getBlockedNodesInCurrentPath();
-
-if (blockedNodes.length) {
-  flowMessage.value =
-    "Simulação iniciada com válvula(s)/tubo(s) bloqueado(s). O fluxo não passa nesses elementos.";
-}
-
-  await rebuildManualFlowLayer();
-
-  if (!pipeParticles.length) {
-    flowMessage.value =
-      "Não é possível simular: não existem setas de fluxo criadas.";
-    isCentralSimulationRunning.value = false;
-    isFlowing.value = false;
-    return;
-  }
-
-  isFlowManuallyPaused.value = false;
-isCentralSimulationRunning.value = true;
-isFlowing.value = true;
-
-  if (!hasDefinedPumpOrHeatPump()) {
-    flowMessage.value =
-      "Simulação iniciada. Aviso: ainda não foi definido nenhum booster.";
-    return;
-  }
-
-  flowMessage.value = "Simulação da central iniciada.";
-}
-
-function stopCentralSimulation() {
-  isCentralSimulationRunning.value = false;
-  isFlowing.value = false;
-  isFlowManuallyPaused.value = true;
-  flowMessage.value = "Simulação da central parada.";
-}
-
-async function toggleCentralSimulation() {
-  if (isCentralSimulationRunning.value) {
-    stopCentralSimulation();
-    return;
-  }
-
-  await startCentralSimulation();
-}
-
-
-async function blockSelectedPipes() {
-  if (!selectedCount.value) {
-    flowMessage.value = "Seleciona primeiro um ou mais elementos para bloquear.";
-    return;
-  }
-
-  for (const [modelId, ids] of selectedItems) {
-    let blockedSet = blockedPipes.get(modelId);
-
-    if (!blockedSet) {
-      blockedSet = new Set<number>();
-      blockedPipes.set(modelId, blockedSet);
-    }
-
-    for (const localId of ids) {
-      blockedSet.add(localId);
-    }
-  }
-
-  blockedCount.value = [...blockedPipes.values()].reduce(
-    (total, ids) => total + ids.size,
-    0,
-  );
-
-  flowMessage.value = `${selectedCount.value} elemento(s) bloqueado(s).`;
-  await rebuildManualFlowLayer();
 }
 
 async function updateFlowAnimationWithoutStarting() {
@@ -22985,10 +21813,6 @@ function getSyncedDirectionSet(modelId: string) {
   return ids;
 }
 
-function isPipeDirectionSynced(modelId: string, localId: number) {
-  return syncedPipeDirections.get(modelId)?.has(localId) ?? false;
-}
-
 function toggleReversedPipeDirection(modelId: string, localId: number) {
   const reversedSet = getReversedDirectionSet(modelId);
 
@@ -23001,18 +21825,6 @@ function toggleReversedPipeDirection(modelId: string, localId: number) {
   if (reversedSet.size === 0) {
     reversedPipeDirections.delete(modelId);
   }
-}
-
-function toggleSyncedPipesForPath(path: FlowNode[]) {
-  for (const node of path) {
-    if (!isPipeDirectionSynced(node.modelId, node.localId)) {
-      continue;
-    }
-
-    toggleReversedPipeDirection(node.modelId, node.localId);
-  }
-
-  saveReversedDirectionsToStorage();
 }
 
 function getReversedDirectionSet(modelId: string) {
@@ -23099,13 +21911,6 @@ function countAssignments() {
   );
 }
 
-function chunk<T>(items: T[], size: number) {
-  const result: T[][] = [];
-  for (let index = 0; index < items.length; index += size) {
-    result.push(items.slice(index, index + size));
-  }
-  return result;
-}
 </script>
 
 <style scoped>
