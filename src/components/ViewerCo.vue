@@ -5337,13 +5337,6 @@ function shouldColorNode(
 function isManualValveControlledPipeBlocked(
   node: FlowNode,
 ) {
-  if (
-  isNodeInProtectedRoute(
-    node,
-  )
-) {
-  return false;
-}
 
   const targetPipeKey =
     nodeKey(node);
@@ -10797,30 +10790,48 @@ removeActiveIfcStorageItem(
     `${elements.length} definição(ões) de elemento apagada(s).`;
 }
 
-function getAttributeValueText(value: any): string {
-  if (value === null || value === undefined) {
+function getAttributeValueText(
+  value: any,
+): string {
+  if (
+    value === null ||
+    value === undefined
+  ) {
     return "";
   }
 
-  if (typeof value === "string" || typeof value === "number") {
+  if (
+    typeof value === "string" ||
+    typeof value === "number"
+  ) {
     return String(value);
   }
 
-  if (typeof value === "object") {
+  if (
+    typeof value === "object"
+  ) {
     if ("value" in value) {
-      return getAttributeValueText(value.value);
+      return getAttributeValueText(
+        value.value,
+      );
     }
 
     if ("Value" in value) {
-      return getAttributeValueText(value.Value);
+      return getAttributeValueText(
+        value.Value,
+      );
     }
 
     if ("name" in value) {
-      return getAttributeValueText(value.name);
+      return getAttributeValueText(
+        value.name,
+      );
     }
 
     if ("Name" in value) {
-      return getAttributeValueText(value.Name);
+      return getAttributeValueText(
+        value.Name,
+      );
     }
   }
 
@@ -14573,6 +14584,57 @@ restoreValveLinkedPipesToOriginalCircuit(linkedPipes);
     "Associação da válvula removida.";
 }
 
+async function clearManualValveControlledElementColors(
+  controlledElements:
+    ManualValveControlledPipe[],
+) {
+  const idsByModel =
+    new Map<string, Set<number>>();
+
+  for (
+    const controlledElement of
+      controlledElements
+  ) {
+    const modelIds =
+      idsByModel.get(
+        controlledElement.modelId,
+      ) ??
+      new Set<number>();
+
+    modelIds.add(
+      controlledElement.localId,
+    );
+
+    idsByModel.set(
+      controlledElement.modelId,
+      modelIds,
+    );
+  }
+
+  for (
+    const [modelId, localIds] of
+      idsByModel
+  ) {
+    const model =
+      loadedModels.get(modelId);
+
+    if (
+      !model ||
+      localIds.size === 0
+    ) {
+      continue;
+    }
+
+    await model.resetHighlight(
+      [...localIds],
+    );
+  }
+
+  await fragmentManager.core.update(
+    true,
+  );
+}
+
 async function setSelectedValvesState(
   state: "open" | "closed",
 ) {
@@ -14591,6 +14653,12 @@ async function setSelectedValvesState(
 
   const affectedPipeKeys =
     new Set<string>();
+
+  const affectedControlledElements =
+  new Map<
+    string,
+    ManualValveControlledPipe
+  >();
 
   for (
     const valveNode of valveNodes
@@ -14647,13 +14715,29 @@ async function setSelectedValvesState(
       ) ?? [];
 
     for (
-      const controlledPipe of
-        controlledPipes
-    ) {
-      affectedPipeKeys.add(
-        nodeKey(controlledPipe),
-      );
-    }
+  const controlledElement of
+    controlledPipes
+) {
+  const controlledElementKey =
+    nodeKey(
+      controlledElement,
+    );
+
+  affectedPipeKeys.add(
+    controlledElementKey,
+  );
+
+  affectedControlledElements.set(
+    controlledElementKey,
+    {
+      modelId:
+        controlledElement.modelId,
+
+      localId:
+        controlledElement.localId,
+    },
+  );
+}
 
     changedCount++;
   }
@@ -14706,6 +14790,18 @@ async function setSelectedValvesState(
     true;
 
   if (
+  state === "closed" &&
+  affectedControlledElements.size > 0
+) {
+  await clearManualValveControlledElementColors(
+    [
+      ...affectedControlledElements
+        .values(),
+    ],
+  );
+}
+
+  if (
     countAssignments() > 0 ||
     flowConnections.length > 0
   ) {
@@ -14721,14 +14817,14 @@ async function setSelectedValvesState(
   await showSelectedMepElementInfo();
 
   flowMessage.value =
-    state === "closed"
-      ? changedCount +
-        " válvula(s) fechada(s). " +
-        affectedPipeKeys.size +
-        " tubo(s) controlado(s) ficaram sem setas."
-      : changedCount +
-        " válvula(s) aberta(s). " +
-        "As setas que já não estão bloqueadas foram repostas.";
+  state === "closed"
+    ? changedCount +
+      " válvula(s) fechada(s). " +
+      affectedControlledElements.size +
+      " elemento(s) controlado(s) ficaram sem cor e sem setas."
+    : changedCount +
+      " válvula(s) aberta(s). " +
+      "As cores e as setas dos elementos que já não estão bloqueados foram repostas.";
 }
 
 async function applyInverseNormalStateToSelectedValves() {
