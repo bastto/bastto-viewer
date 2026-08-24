@@ -2469,15 +2469,6 @@
 </button>
 
         <button
-          v-if="!route.locked"
-          type="button"
-          class="saved-route-action--reverse"
-          @click="reverseSavedRoute(route.id)"
-        >
-          Inverter
-        </button>
-
-        <button
   v-if="!route.locked"
   type="button"
   class="saved-route-action--direction"
@@ -3270,6 +3261,55 @@
       </dd>
     </div>
   </dl>
+
+  <div class="flow-section-title">
+  Realçar válvulas por tipo
+</div>
+
+<div
+  class="
+    flow-actions
+    flow-actions--secondary
+  "
+>
+  <button
+    type="button"
+    @click="
+      highlightMepElementsByType(
+        'normallyOpenValve'
+      )
+    "
+  >
+    Realçar válvulas NA
+  </button>
+
+  <button
+    type="button"
+    @click="
+      highlightMepElementsByType(
+        'normallyClosedValve'
+      )
+    "
+  >
+    Realçar válvulas NF
+  </button>
+</div>
+
+<div
+  class="
+    flow-actions
+    flow-actions--single
+  "
+>
+  <button
+    type="button"
+    @click="
+      clearValveTypeHighlight
+    "
+  >
+    Limpar realce
+  </button>
+</div>
 </div>
 
     <div
@@ -12713,6 +12753,43 @@ async function highlightMepElementsByType(elementType: MepElementType) {
   flowMessage.value = highlightedCount
     ? `${highlightedCount} elemento(s) realçado(s) como ${getElementTypeLabel(elementType)}.`
     : `Não existem elementos definidos como ${getElementTypeLabel(elementType)}.`;
+}
+
+async function clearValveTypeHighlight() {
+  for (
+    const model of
+      loadedModels.values()
+  ) {
+    await model.resetHighlight();
+  }
+
+  if (
+    countAssignments() > 0 ||
+    flowConnections.length > 0
+  ) {
+    await rebuildManualFlowLayer(
+      false,
+    );
+  } else {
+    await fragmentManager.core.update(
+      true,
+    );
+  }
+
+  isFlowing.value =
+    false;
+
+  isManualFlowAnimationRunning.value =
+    false;
+
+  isCentralSimulationRunning.value =
+    false;
+
+  isFlowManuallyPaused.value =
+    true;
+
+  flowMessage.value =
+    "Realce das válvulas removido.";
 }
 
 function isValveElementType(
