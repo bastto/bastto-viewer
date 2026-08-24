@@ -2842,7 +2842,7 @@
 
 <p>
   <strong>
-    Tubos controlados:
+    Elementos controlados:
   </strong>
 
   {{
@@ -2906,7 +2906,7 @@
   class="connection-note"
 >
   Escolhe uma válvula no campo acima para
-  consultar ou definir os tubos controlados.
+  consultar ou definir os elementos controlados.
 </p>
 
 <div
@@ -2921,9 +2921,9 @@
       workflow-help-note
     "
   >
-    Define manualmente os tubos cujas
-    setas devem desaparecer quando a
-    válvula estiver fechada.
+    Define manualmente os elementos cuja
+cor e setas devem desaparecer quando
+a válvula estiver fechada.
   </p>
 
   <div
@@ -2934,7 +2934,7 @@
 
     <p>
       <strong>
-        Tubos controlados:
+        Elementos controlados
       </strong>
 
       {{
@@ -2974,7 +2974,7 @@
       startManualValvePipeDefinition
     "
   >
-    Definir tubos controlados
+    Definir elementos controlados
   </button>
 
   <button
@@ -2988,7 +2988,7 @@
       highlightSavedManualValvePipes
     "
   >
-    Realçar tubos controlados
+    Realçar elementos controlados
   </button>
 
   <button
@@ -3015,7 +3015,7 @@
   >
     <p class="manual-route-status">
       Modo ativo: seleciona no modelo os
-      tubos controlados por esta válvula.
+elementos controlados por esta válvula.
     </p>
 
     <p class="connection-note">
@@ -5928,7 +5928,7 @@ function resetAllManualConfiguration() {
         "• grupos, uniões e proteções;\n" +
         "• classificações dos elementos;\n" +
         "• válvulas, estados e associações;\n" +
-        "• tubos controlados pelas válvulas;\n" +
+        "• elementos controlados pelas válvulas;\n" +
         "• exclusões e configurações de visualização.\n\n" +
         "O ficheiro IFC original não será apagado.\n\n" +
         "Esta ação não pode ser anulada.\n\n" +
@@ -16356,14 +16356,6 @@ function getSelectedPipeNodesForManualValve() {
   continue;
 }
 
-      if (
-        !pipeTypeFlowNodes.has(
-          nodeKey(node),
-        )
-      ) {
-        continue;
-      }
-
       selectedPipes.push({
         modelId,
         localId,
@@ -16544,7 +16536,7 @@ function startManualValvePipeDefinition() {
     false;
 
   flowMessage.value =
-    "Modo de definição dos tubos controlados ativo. Seleciona os tubos no modelo.";
+    "Modo de definição dos elementos controlados ativo. Seleciona os elementos no modelo.";
 }
 
 async function cancelManualValvePipeDefinition() {
@@ -16575,7 +16567,7 @@ async function cancelManualValvePipeDefinition() {
   await clearManualValvePipeDraftHighlight();
 
   flowMessage.value =
-    "Definição dos tubos controlados cancelada.";
+    "Definição dos elementos controlados cancelada.";
 }
 
 function addSelectedPipesToManualValveDraft() {
@@ -16739,7 +16731,7 @@ async function saveManualValvePipeDefinition() {
     !manualValvePipeDraft.value.length
   ) {
     window.alert(
-      "Adiciona pelo menos um tubo antes de guardar a definição.",
+      "Adiciona pelo menos um elemento antes de guardar a definição.",
     );
 
     return;
@@ -16770,7 +16762,7 @@ async function saveManualValvePipeDefinition() {
 
   flowMessage.value =
     manualValvePipeDraft.value.length +
-    " tubo(s) guardado(s) para a válvula selecionada.";
+    " elemento(s) guardado(s) para a válvula selecionada.";
 }
 
 async function removeManualValvePipeDefinition() {
@@ -16799,7 +16791,7 @@ async function removeManualValvePipeDefinition() {
 
   const confirmed =
     window.confirm(
-      "Queres remover todos os tubos controlados pela válvula selecionada?",
+      "Queres remover todos os elementos controlados pela válvula selecionada?",
     );
 
   if (!confirmed) {
@@ -16846,8 +16838,7 @@ async function highlightSavedManualValvePipes() {
 
   if (!savedPipes.length) {
     flowMessage.value =
-      "Esta válvula ainda não tem tubos controlados guardados.";
-
+      "Esta válvula ainda não tem elementos controlados guardados.";
     return;
   }
 
