@@ -449,7 +449,7 @@
   {{ isIfcPanelCollapsed ? '›' : '‹' }}
 </button>
     <div
-  v-if="hasLoadedModel && cycleCircuitDefinitions.length"
+  v-if="hasLoadedModel && savedRoutes.length"
   class="global-color-legend"
   :class="{ 'global-color-legend--ifc-collapsed': isIfcPanelCollapsed }"
 >
@@ -536,7 +536,13 @@
 </p>
 
 <div
-  v-if="hasLoadedModel"
+  v-if="
+    hasLoadedModel &&
+    (
+      !hasSystemScanResults ||
+      savedRoutes.length
+    )
+  "
   class="flow-actions flow-actions--single"
 >
   <button
@@ -646,7 +652,9 @@
 <div
   v-if="
     hasSystemScanResults &&
-    systemScanResults.systemNames.length
+    systemScanResults.systemNames.length &&
+    !automaticOrderedCircuitNodes.size &&
+    !savedRoutes.length
   "
   class="flow-actions flow-actions--single"
 >
@@ -1813,9 +1821,13 @@
   Limpar seleção
 </button>
 
-<button
+  <button
   type="button"
-  class="flow-button--danger"
+  :class="[
+    selectedRouteIdsForGrouping.size > 0
+      ? 'flow-button--danger'
+      : ''
+  ]"
   :disabled="
     selectedRouteIdsForGrouping.size < 1
   "
@@ -1889,15 +1901,54 @@
 </div>
 
       <div class="saved-route-select saved-route-select--details">
-  <span class="saved-route-text">
-  <span
-  class="saved-route-group-color"
-  :style="{
-    backgroundColor:
-      getSavedRouteGroupColor(route)
-  }"
-></span>
-          <strong>
+    <span class="saved-route-text">
+
+  <div class="saved-route-color-control">
+    <span
+      class="saved-route-group-color"
+      :style="{
+        backgroundColor:
+          getSavedRouteGroupColor(route)
+      }"
+    ></span>
+
+    <button
+      v-if="
+        !route.groupId &&
+        !route.locked &&
+        route.customColor
+      "
+      type="button"
+      class="saved-route-color-icon saved-route-color-icon--reset"
+      title="Repor cor"
+      @click.stop="
+        resetIndividualRouteColor(
+          route
+        )
+      "
+    >
+      ↶
+    </button>
+
+    <button
+      v-else-if="
+        !route.groupId &&
+        !route.locked
+      "
+      type="button"
+      class="saved-route-color-icon"
+      title="Alterar cor"
+      @click.stop="
+        openIndividualRouteColorDialog(
+          route
+        )
+      "
+    >
+      🎨
+    </button>
+  </div>
+
+  <strong>
   <span
     v-if="route.locked"
     class="route-lock-icon"
@@ -1917,11 +1968,25 @@
   </span>
 
   {{ route.name }}
+
+<button
+  v-if="!route.locked"
+  type="button"
+  class="saved-route-rename-icon"
+  title="Renomear"
+  @click.stop="
+    renameSavedRoute(
+      route.id
+    )
+  "
+>
+  ✎
+</button>
+
 </strong>
 
           <small>
-            {{ getRouteCircuitDisplayLabel(route) }} ·
-{{ getRoutePipeCount(route) }} tubo(s) ·
+            {{ getRoutePipeCount(route) }} tubo(s) ·
 {{ getRouteVisibilityLabel(route) }} ·
 {{ getRouteProtectionLabel(route) }}
 
@@ -2004,23 +2069,15 @@
   v-if="!route.locked"
   type="button"
   class="saved-route-action--sync"
+  :disabled="selectedCount === 0"
   @click="
     syncSelectedPipesForSavedRoute(
       route
     )
   "
 >
-  Sincronizar sentido
+  Sincronizar setas selecionadas
 </button>
-
-        <button
-          v-if="!route.locked"
-          type="button"
-          class="saved-route-action--rename"
-          @click="renameSavedRoute(route.id)"
-        >
-          Renomear
-        </button>
 
         <button
   v-if="
@@ -2032,46 +2089,6 @@
   @click="openRouteGroupColorDialog(route)"
 >
   Alterar cor do grupo
-</button>
-
-<button
-  v-if="
-    !route.groupId &&
-    !route.locked
-  "
-  type="button"
-  class="saved-route-action--color"
-  @click="
-    openIndividualRouteColorDialog(
-      route
-    )
-  "
->
-  Alterar cor
-</button>
-
-<button
-  v-if="
-    !route.groupId &&
-    !route.locked
-  "
-  type="button"
-  class="saved-route-action--reset-color"
-  :disabled="
-    !route.customColor
-  "
-  :title="
-    route.customColor
-      ? 'Repor a cor original do caminho'
-      : 'A cor deste caminho não foi alterada'
-  "
-  @click="
-    resetIndividualRouteColor(
-      route
-    )
-  "
->
-  Repor cor
 </button>
 
         <button
@@ -6791,6 +6808,8 @@ function saveAutomaticRoutes() {
   }
 
   saveRoutesToStorage();
+
+  automaticOrderedCircuitNodes.clear();
 
   flowMessage.value =
     savedCount +
@@ -20048,6 +20067,40 @@ function countAssignments() {
   font-weight: 700;
 }
 
+.saved-route-color-control {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.saved-route-color-icon,
+.saved-route-rename-icon {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font-size: 0.75rem;
+  line-height: 1;
+  color: #cfe8ff;
+}
+
+.saved-route-color-icon:hover,
+.saved-route-rename-icon:hover {
+  color: #ffffff;
+}
+
+.saved-route-color-icon--reset {
+  color: #ffd27d;
+}
+
+.saved-route-text strong {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
 .manual-route-mode-button {
   min-height: 44px;
   border: 0;
@@ -20709,7 +20762,7 @@ function countAssignments() {
   display: inline-block;
   width: 11px;
   height: 11px;
-  margin-right: 6px;
+  margin-right: 0;
   border: 1px solid rgba(
     255,
     255,
@@ -21300,11 +21353,9 @@ function countAssignments() {
     repeat(3, minmax(0, 1fr));
 
   grid-template-areas:
-    "highlight visibility simulation"
-    "direction sync reverse"
-    "rename color protect"
-    "arrows reset-color undo-merge"
-    "delete delete delete";
+  "highlight visibility direction"
+  "sync arrows undo-merge"
+  "simulation protect delete";
 
   gap: 0.45rem;
   width: 100%;
