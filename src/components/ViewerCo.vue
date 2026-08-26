@@ -2171,48 +2171,6 @@
   </div>
 </div>
 
-    <div class="flow-section-title flow-section-title--button">
-  <span>Estatísticas dos caminhos</span>
-
-  <button
-    type="button"
-    class="section-collapse-button"
-    @click="isPathStatsPanelOpen = !isPathStatsPanelOpen"
-  >
-    {{ isPathStatsPanelOpen ? '−' : '+' }}
-  </button>
-</div>
-
-    <dl
-  v-if="isPathStatsPanelOpen"
-  class="flow-stats"
->
-  <template
-  v-for="circuit in getActiveCycleCircuitDefinitions()"
-  :key="`stats-active-circuit-${circuit.key}`"
->
-  <div>
-    <dt>{{ circuit.name }}</dt>
-    <dd>{{ getPipeStat(circuit.key) }}</dd>
-  </div>
-</template>
-
-  <div>
-    <dt>Total</dt>
-    <dd>{{ pipeStats.total }}</dd>
-  </div>
-
-  <div>
-    <dt>Lig.</dt>
-    <dd>{{ flowConnections.length }}</dd>
-  </div>
-
-  <div>
-    <dt>Bloq.</dt>
-    <dd>{{ blockedCount }}</dd>
-  </div>
-</dl>
-
 <p
   v-if="isPathStatsPanelOpen"
   class="flow-note"
@@ -2722,11 +2680,11 @@ elementos controlados por esta válvula.
   </p>
 
   <div
-    class="
-      flow-actions
-      flow-actions--secondary
-    "
-  >
+  class="
+    flow-actions
+    flow-actions--valve-highlight
+  "
+>
     <button
       type="button"
       :disabled="
@@ -2776,31 +2734,26 @@ elementos controlados por esta válvula.
     </button>
   </div>
 
-  <dl class="flow-stats">
-    <div>
-      <dt>Válvulas NA</dt>
+<p
+  class="connection-note"
+  style="margin-top: 12px;"
+>
+  Válvulas NA:
+  {{
+    countMepElementsByType(
+      'normallyOpenValve'
+    )
+  }}
+</p>
 
-      <dd>
-        {{
-          countMepElementsByType(
-            'normallyOpenValve'
-          )
-        }}
-      </dd>
-    </div>
-
-    <div>
-      <dt>Válvulas NF</dt>
-
-      <dd>
-        {{
-          countMepElementsByType(
-            'normallyClosedValve'
-          )
-        }}
-      </dd>
-    </div>
-  </dl>
+<p class="connection-note">
+  Válvulas NF:
+  {{
+    countMepElementsByType(
+      'normallyClosedValve'
+    )
+  }}
+</p>
 
   <div class="flow-section-title">
   Realçar válvulas por tipo
@@ -2809,7 +2762,7 @@ elementos controlados por esta válvula.
 <div
   class="
     flow-actions
-    flow-actions--secondary
+    flow-actions--valve-highlight
   "
 >
   <button
@@ -2927,7 +2880,7 @@ elementos controlados por esta válvula.
     </div>
 
     <div
-  class="flow-actions flow-actions--secondary"
+  class="flow-actions flow-actions--valve-highlight"
 >
   <button
     type="button"
@@ -2968,7 +2921,7 @@ elementos controlados por esta válvula.
     </p>
 
     <div
-      class="flow-actions flow-actions--secondary"
+      class="flow-actions flow-actions--valve-highlight"
     >
       <button
         type="button"
@@ -2996,7 +2949,7 @@ elementos controlados por esta válvula.
     </div>
 
 <div
-  class="flow-actions flow-actions--secondary"
+  class="flow-actions flow-actions--valve-highlight"
 >
   <button
     type="button"
@@ -3028,16 +2981,11 @@ elementos controlados por esta válvula.
 </div>
 
 <p class="connection-note">
-  Abre ou fecha manualmente as válvulas
-  selecionadas. A indicação NA/NF é apenas
-  informativa.
+ Abre ou fecha manualmente as válvulas selecionadas. NA/NF é apenas informação. 
 </p>
 
 <div
-  class="
-    flow-actions
-    flow-actions--secondary
-  "
+  class="flow-actions flow-actions--valve-highlight"
 >
   <button
     type="button"
@@ -3098,7 +3046,7 @@ elementos controlados por esta válvula.
     />
   </label>
 
-  <div class="flow-actions flow-actions--secondary">
+  <div class="flow-actions flow-actions--valve-highlight">
     <button type="button" @click="saveSelectedValveDesignation">
       Guardar nome
     </button>
@@ -3112,9 +3060,13 @@ elementos controlados por esta válvula.
     </button>
   </div>
 
-  <p class="connection-note">
-    Se deixares o campo vazio e guardares, a válvula volta ao nome original.
-  </p>
+  <p
+  class="connection-note"
+  style="margin-top: 10px;"
+>
+  Se deixares o campo vazio e guardares,
+  a válvula volta ao nome original.
+</p>
 </div>
 </div>
       </section>
@@ -3332,11 +3284,11 @@ elementos controlados por esta válvula.
   </div>
 
   <div
-    class="
-      flow-actions
-      flow-actions--secondary
-    "
-  >
+  class="
+    flow-actions
+    flow-actions--valve-highlight
+  "
+>
     <button
       type="button"
       @click="
@@ -3433,11 +3385,11 @@ elementos controlados por esta válvula.
   "
 >
   <div
-    class="
-      flow-actions
-      flow-actions--secondary
-    "
-  >
+  class="
+    flow-actions
+    flow-actions--valve-highlight
+  "
+>
     <button
       type="button"
       :disabled="
@@ -3563,66 +3515,6 @@ elementos controlados por esta válvula.
       Bloqueios ativos: {{ blockedCount }}
     </p>
 
-    <template v-if="hasLoadedModel">
-  <div class="flow-section-title flow-section-title--button">
-    <span>Resumo da central</span>
-
-    <button
-      type="button"
-      class="section-collapse-button"
-      @click="toggleCentralSummary"
-    >
-      {{ isCentralSummaryOpen ? '−' : '+' }}
-    </button>
-  </div>
-
-  <div v-if="isCentralSummaryOpen" class="central-summary"> 
-  <div class="central-summary__item">
-    <span>Ciclos</span>
-    <strong>{{ waterCycleCount }}</strong>
-  </div>
-
-  <div class="central-summary__item">
-    <span>Válvulas</span>
-    <strong>{{ countValveElements() }}</strong>
-  </div>
-
-  <div class="central-summary__item">
-  <span>Válvulas NA</span>
-
-  <strong>
-    {{
-      countMepElementsByType(
-        'normallyOpenValve'
-      )
-    }}
-  </strong>
-</div>
-
-<div class="central-summary__item">
-  <span>Válvulas NF</span>
-
-  <strong>
-    {{
-      countMepElementsByType(
-        'normallyClosedValve'
-      )
-    }}
-  </strong>
-</div>
-
-  <div class="central-summary__item">
-    <span>Percursos guardados</span>
-    <strong>{{ savedRoutes.length }}</strong>
-  </div>
-
-  <div class="central-summary__item">
-    <span>Percursos protegidos</span>
-    <strong>{{ countLockedSavedRoutes() }}</strong>
-  </div>
-  </div>
-</template>
-
     <p class="flow-note">
       {{ flowMessage }}
     </p>
@@ -3631,7 +3523,7 @@ elementos controlados por esta válvula.
   </div>
 </div>
 
-  <a
+<a
   href="https://github.com/bastto"
   target="_blank"
   rel="noopener noreferrer"
@@ -3639,7 +3531,7 @@ elementos controlados por esta válvula.
 >
   /src/assets/bastto-logo.svg
 </a>
-  </template>
+</template>
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, reactive, ref } from "vue";
@@ -3926,7 +3818,6 @@ const isCycleNamesPanelOpen = ref(false);
 const isSavedRoutesPanelOpen = ref(true);
 const savedRouteSearchText =
   ref("");
-const isPathStatsPanelOpen = ref(false);
 const highlightedSavedRouteId = ref<string | null>(null);
 const isApplyingSavedRouteHighlight = ref(false);
 const isSavedRouteDirectionPanelOpen =
@@ -19907,6 +19798,10 @@ function countAssignments() {
   grid-template-columns: 1fr;
 }
 
+.flow-actions--valve-highlight {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .flow-actions button {
   min-width: 0;
   min-height: 36px;
@@ -19955,6 +19850,11 @@ function countAssignments() {
 
 .flow-button--danger:hover {
   background: #ffc9c9 !important;
+}
+
+.flow-button--danger:disabled {
+  background: #6f7376 !important;
+  color: #4c4f51 !important;
 }
 
 .flow-slider {
@@ -20282,33 +20182,11 @@ function countAssignments() {
   margin-top: 8px;
 }
 
-.central-summary {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+.central-summary-text {
   margin-top: 12px;
-}
-
-.central-summary__item {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-  padding: 9px 10px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.central-summary__item span {
-  color: #b8c9d3;
-  font-size: 0.68rem;
-  font-weight: 800;
-  line-height: 1.2;
-}
-
-.central-summary__item strong {
   color: #f7fbff;
-  font-size: 1rem;
-  font-weight: 900;
+  font-size: 0.9rem;
+  font-weight: 800;
 }
 
 .saved-route-item--highlighted {
