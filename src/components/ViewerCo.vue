@@ -1711,9 +1711,9 @@
 </div>
 
  <div v-if="hasLoadedModel && savedRoutes.length" class="saved-routes">
-  <div class="saved-routes-header">
+  <div class="flow-section-title flow-section-title--button">
   <span>
-    Percursos guardados: {{ savedRoutes.length }}
+    Caminhos guardados: {{ savedRoutes.length }}
   </span>
 
   <button
