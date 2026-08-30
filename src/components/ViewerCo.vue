@@ -14,7 +14,7 @@
   class="selected-tube-route-banner"
 >
   <span class="selected-tube-route-banner__label">
-    Percurso do elemento selecionado
+    Circuito do elemento selecionado
   </span>
 
   <strong>
@@ -33,15 +33,15 @@
   {{
     editingRouteGroupId
       ? 'Edição de grupo'
-      : 'União de percursos'
+      : 'União de circuitos'
   }}
 </p>
 
        <h2>
   {{
     editingRouteGroupId
-      ? 'Editar grupo de percursos'
-      : 'Unir percursos'
+      ? 'Editar grupo de circuitos'
+      : 'Unir circuitos'
   }}
 </h2>
 
@@ -61,7 +61,7 @@
   {{
     editingRouteGroupId
       ? 'Nome do grupo'
-      : 'Nome do novo percurso'
+      : 'Nome do novo circuito'
   }}
 </span>
 
@@ -75,8 +75,8 @@
       <span>
   {{
     editingRouteGroupId
-      ? 'Cor comum dos caminhos'
-      : 'Cor do novo percurso'
+      ? 'Cor comum dos circuitos'
+      : 'Cor do novo circuito'
   }}
 </span>
 
@@ -97,8 +97,8 @@
         <strong>
   {{
     editingRouteGroupId
-      ? 'Esta será a cor dos caminhos.'
-      : 'Esta será a cor do novo percurso.'
+      ? 'Esta será a cor dos circuitos.'
+      : 'Esta será a cor do novo circuito.'
   }}
 </strong>
       </div>
@@ -106,15 +106,15 @@
 
     <p class="connection-note">
   <template v-if="editingRouteGroupId">
-    A nova cor será aplicada a todos os caminhos
-    deste grupo. Ao retirar um caminho do grupo,
+    A nova cor será aplicada a todos os circuitos
+    deste grupo. Ao retirar um circuito do grupo,
     a respetiva cor original será reposta.
   </template>
 
   <template v-else>
   Serão unidos
   {{ selectedRouteIdsForGrouping.size }}
-  percursos num único percurso. Os tubos
+  circuitos num único circuito. Os tubos
   repetidos serão incluídos apenas uma vez.
   Poderás desfazer a união posteriormente.
 </template>
@@ -136,7 +136,7 @@
   {{
   editingRouteGroupId
     ? 'Guardar alterações'
-    : 'Unir percursos'
+    : 'Unir circuitos'
 }}
 </button>
     </div>
@@ -154,7 +154,7 @@
           Cor individual
         </p>
 
-        <h2>Alterar cor do percurso</h2>
+        <h2>Alterar cor do circuito</h2>
       </div>
 
       <button
@@ -167,7 +167,7 @@
     </div>
 
     <label class="route-group-dialog__field">
-      <span>Nova cor do caminho</span>
+      <span>Nova cor do circuito</span>
 
       <div class="route-group-color-control">
         <input
@@ -185,7 +185,7 @@
 
         <strong>
           Esta cor será aplicada apenas
-          a este caminho.
+          a este circuito.
         </strong>
       </div>
     </label>
@@ -225,7 +225,7 @@
           Orientação do fluxo
         </p>
 
-        <h2>Definir sentido do percurso</h2>
+        <h2>Definir sentido do circuito</h2>
       </div>
 
       <button
@@ -238,7 +238,7 @@
     </div>
 
     <div class="route-direction-dialog__route">
-      <span>Percurso selecionado</span>
+      <span>circuito selecionado</span>
 
       <strong>
         {{
@@ -270,7 +270,7 @@
     1
   </span>
 
-  <strong>Inícios do fluxo</strong>
+  <strong>Pontos de início do fluxo</strong>
 
   <div
     v-if="savedRouteDirectionStarts.length"
@@ -321,7 +321,7 @@
     2
   </span>
 
-  <strong>Fins do fluxo</strong>
+  <strong>Pontos de fim do fluxo</strong>
 
   <div
     v-if="savedRouteDirectionEnds.length"
@@ -522,7 +522,7 @@
 "
   class="automatic-analysis-status automatic-analysis-status--ready"
 >
-  ✓ {{ savedRoutes.length }} caminho(s) guardado(s)
+  ✓ {{ savedRoutes.length }} circuito(s) guardado(s)
   aplicado(s) automaticamente. Não é necessário repetir
   o scan se estás a usar o mesmo IFC.
 </p>
@@ -531,7 +531,7 @@
   v-else
   class="automatic-analysis-status automatic-analysis-status--ready"
 >
-  IFC carregado. Ainda não existem caminhos guardados
+  IFC carregado. Ainda não existem circuitos guardados
   para aplicar.
 </p>
 
@@ -662,7 +662,7 @@
     type="button"
     @click="createAutomaticCircuitsFromSystemNames"
   >
-    Criar caminhos a partir dos System Names
+    Criar circuitos a partir dos System Names
   </button>
 </div>
 
@@ -674,7 +674,7 @@
     type="button"
     @click="saveAutomaticRoutes"
   >
-    Guardar caminhos automáticos
+    Guardar circuitos automáticos
   </button>
 </div>
   </div>
@@ -898,170 +898,6 @@
     </button>
   </div>
 </div>
-
-<div class="flow-section-title">
-  1. Escolher ciclo e circuito
-</div>
-
-<label class="flow-cycle-config">
-  <span>Ciclo onde vou trabalhar</span>
-  <select
-    v-model.number="activeCycleNumber"
-    @change="selectDefaultCircuitForActiveCycle"
-  >
-    <option
-      v-for="cycleNumber in waterCycleCount"
-      :key="`active-cycle-${cycleNumber}`"
-      :value="cycleNumber"
-    >
-      {{ getCycleDisplayName(cycleNumber) }}
-    </option>
-  </select>
-</label>
-
-<p
-  v-if="!getActiveCycleCircuitDefinitions().length"
-  class="connection-note workflow-help-note"
->
-  Este ciclo ainda não tem circuitos. Cria um circuito em baixo para começar.
-</p>
-
-<div class="flow-section-title flow-section-title--button">
-  <span>Definições dos circuitos deste ciclo</span>
-  <button
-    type="button"
-    class="section-collapse-button"
-    @click="toggleCycleCircuitPanel"
-  >
-    {{ isCycleCircuitPanelOpen ? '−' : '+' }}
-  </button>
-</div>
-
-<div v-if="isCycleCircuitPanelOpen" class="cycle-circuit-panel">
-  <label class="flow-cycle-config">
-    <span>Tipo de circuito</span>
-    <select
-  v-model="pendingCycleCircuitKind"
-  @change="updatePendingCycleCircuitColorFromKind"
->
-  <option value="hotSupply">Ida quente</option>
-<option value="coldSupply">Ida fria</option>
-<option value="hotReturn">Retorno quente</option>
-<option value="coldReturn">Retorno frio</option>
-<option value="extra">Extra</option>
-</select>
-  </label>
-
-  <label class="flow-cycle-config">
-    <span>Nome do circuito</span>
-    <input
-  v-model="pendingCycleCircuitName"
-  type="text"
-  placeholder="Ex: Nome do circuito"
-/>
-  </label>
-
-  <label class="flow-cycle-config">
-    <span>Cor</span>
-    <input
-      v-model="pendingCycleCircuitColor"
-      type="color"
-    />
-  </label>
-
-  <div class="flow-actions flow-actions--single">
-    <button type="button" @click="createCycleCircuitDefinition">
-  Criar e selecionar circuito
-</button>
-
-    <button type="button" @click="saveCycleCircuitDefinitionChanges">
-      Guardar alterações
-    </button>
-  </div>
-
-  <p
-  v-if="!getActiveCycleCircuitDefinitions().length"
-  class="connection-note workflow-help-note"
->
-  Este ciclo ainda não tem circuitos. Cria um circuito para começar.
-</p>
-
-  <div class="cycle-circuit-list">
-    <div
-      v-for="circuit in getActiveCycleCircuitDefinitions()"
-      :key="circuit.key"
-      :class="[
-  'cycle-circuit-item',
-  'cycle-circuit-item--simple',
-  circuit.locked ? 'cycle-circuit-item--locked' : ''
-]"
-    >
-      <span
-        class="cycle-color-dot"
-        :style="{ backgroundColor: circuit.color }"
-      ></span>
-
-      <div class="cycle-circuit-name-wrapper">
-  <span
-    v-if="circuit.locked"
-    class="cycle-circuit-lock-icon"
-    title="Caminho protegido"
-  >
-    🔒
-  </span>
-
-  <input
-    v-model="circuit.name"
-    type="text"
-    :disabled="circuit.locked"
-  />
-</div>
-
-      <button
-  type="button"
-  :class="[
-    'cycle-circuit-use-button',
-    selectedCycleCircuitKey === circuit.key
-      ? 'cycle-circuit-use-button--active'
-      : ''
-  ]"
-  @click="selectedCycleCircuitKey = circuit.key"
->
-  {{ selectedCycleCircuitKey === circuit.key ? 'Selecionado' : 'Usar' }}
-</button>
-
-<button
-  type="button"
-  :class="[
-    'cycle-circuit-lock-button',
-    circuit.locked ? 'cycle-circuit-lock-button--active' : ''
-  ]"
-  @click="toggleCycleCircuitLock(circuit.key)"
->
-  {{ circuit.locked ? 'Desproteger' : 'Proteger' }}
-</button>
-
-     <button
-  v-if="isCycleCircuitColorChanged(circuit) && !circuit.locked"
-  type="button"
-  class="saved-route-action--reset-color"
-  @click="resetCycleCircuitColor(circuit.key)"
->
-  Repor cor
-</button>
-
-      <button
-  v-if="!circuit.locked"
-  type="button"
-  class="flow-button--danger"
-  @click="deleteCycleCircuitDefinition(circuit.key)"
->
-  Apagar
-</button>
-    </div>
-  </div>
-</div>
-
 </div>
 
 <div
@@ -1171,7 +1007,7 @@
   "
 >
   <span>
-    Editar caminho existente
+    Editar circuito existente
   </span>
 
   <button
@@ -1194,7 +1030,7 @@
 
 <label class="flow-cycle-config">
   <span>
-    Caminho a editar
+    Circuito a editar
   </span>
 
   <select
@@ -1206,7 +1042,7 @@
   "
 >
     <option value="">
-      Selecionar caminho...
+      Selecionar circuito...
     </option>
 
     <option
@@ -1235,7 +1071,7 @@
 
 <div class="route-edit-help">
   <p class="route-edit-help__title">
-    Como editar o caminho
+    Como editar o circuito
   </p>
 
   <ol class="route-edit-help__steps">
@@ -1251,7 +1087,7 @@
 
   <p class="route-edit-help__warning">
     Ao adicionar tubos, será necessário definir
-    novamente o sentido do caminho.
+    novamente o sentido do circuito.
   </p>
 </div>
 <div
@@ -1267,7 +1103,7 @@
       addSelectedPipesToEditedRoute
     "
   >
-    Adicionar tubos selecionados ao caminho
+    Adicionar tubos selecionados ao circuito
   </button>
 
   <button
@@ -1280,7 +1116,7 @@
       removeSelectedPipesFromEditedRoute
     "
   >
-    Retirar tubos selecionados do caminho
+    Retirar tubos selecionados do circuito
   </button>
 </div>
 </div>
@@ -1292,7 +1128,7 @@
   "
 >
   <span>
-    Criar novo caminho
+    Criar novo circuito
   </span>
 
   <button
@@ -1313,7 +1149,7 @@
 
 <div v-if="isCreateRouteSectionOpen">
   <div class="flow-section-title">
-    1. Ciclo do caminho
+    1. Ciclo de destino
   </div>
 
   <label class="flow-cycle-config">
@@ -1424,7 +1260,7 @@
     "
     class="connection-note"
   >
-    O caminho será criado fora dos ciclos.
+    O circuito será criado fora dos ciclos.
     Podes atribuí-lo posteriormente.
   </p>
 
@@ -1471,7 +1307,7 @@
       routeCreationMethod ===
         'automatic'
         ? 'Define o início e o fim. O programa encontra automaticamente os tubos entre ambos.'
-        : 'Seleciona manualmente cada tubo pela ordem do caminho.'
+        : 'Seleciona manualmente cada tubo pela ordem pretendida para o circuito.'
     }}
   </p>
 
@@ -1530,7 +1366,7 @@
       createAutoRouteForSelectedCycleCircuit
     "
   >
-    Criar caminho
+    Criar circuito
   </button>
 </div>
   </div>
@@ -1573,8 +1409,7 @@
       "
       class="manual-route-status"
     >
-      Seleção ativa: clica nos tubos
-      pela ordem do caminho.
+      Seleção ativa: clica nos tubos pela ordem pretendida para o circuito.
     </p>
 
     <div
@@ -1656,7 +1491,7 @@
       createManualRouteForSelectedCycleCircuit
     "
   >
-    Criar caminho
+    Criar circuito
   </button>
 </div>
   </div>
@@ -1688,7 +1523,7 @@
         saveCurrentRoute
       "
     >
-      Guardar caminho
+      Guardar circuito
     </button>
 
     <button
@@ -1698,7 +1533,7 @@
         discardCurrentRoute
       "
     >
-      Descartar caminho atual
+      Descartar circuito atual
     </button>
   </div>
 
@@ -1713,7 +1548,7 @@
  <div v-if="hasLoadedModel && savedRoutes.length" class="saved-routes">
   <div class="flow-section-title flow-section-title--button">
   <span>
-    Caminhos guardados: {{ savedRoutes.length }}
+    Circuitos guardados: {{ savedRoutes.length }}
   </span>
 
   <button
@@ -1732,14 +1567,14 @@
 
 <label class="saved-route-search">
   <span>
-    Procurar percurso
+    Procurar circuito
   </span>
 
   <div class="saved-route-search__control">
     <input
       v-model="savedRouteSearchText"
       type="search"
-      placeholder="Escreve o nome do percurso..."
+      placeholder="Escreve o nome do circuito..."
     />
   </div>
 </label>
@@ -1751,7 +1586,7 @@
   {{ getFilteredSavedRoutes().length }}
   de
   {{ savedRoutes.length }}
-  percurso(s) encontrado(s)
+  circuito(s) encontrado(s)
 </p>
 
   <span>
@@ -1796,7 +1631,7 @@
     compareSelectedSavedRoutes
   "
 >
-  Comparar percursos
+  Comparar circuitos
 </button>
 
   <button
@@ -1806,7 +1641,7 @@
   "
   @click="openRouteGroupingDialog"
 >
-  Unir percursos selecionados
+  Unir circuitos selecionados
 </button>
 
   <button
@@ -1835,7 +1670,7 @@
     deleteSelectedSavedRoutes
   "
 >
-  Apagar percursos selecionados
+  Apagar circuitos selecionados
 </button>
 </div>
 
@@ -1848,7 +1683,7 @@
   "
   class="saved-route-search__empty"
 >
-  Não foi encontrado nenhum percurso com esse nome.
+  Não foi encontrado nenhum circuito com esse nome.
 </p>
 
   <div
@@ -1895,8 +1730,8 @@
       )
     "
     class="saved-route-simulation-status"
-    title="Percurso incluído na simulação"
-    aria-label="Percurso incluído na simulação"
+    title="circuito incluído na simulação"
+    aria-label="circuito incluído na simulação"
   ></span>
 </div>
 
@@ -1960,7 +1795,7 @@
     v-if="isSavedRouteBlocked(route)"
     class="route-partial-block-icon"
     :title="
-      'Este percurso contém tubos bloqueados por válvulas. ' +
+      'Este circuito contém tubos bloqueados por válvulas. ' +
       getValveLabelForBlockedRoute(route)
     "
   >
@@ -2139,8 +1974,8 @@
   "
   :title="
     route.mergeBackup
-      ? 'Recuperar os caminhos anteriores à união'
-      : 'Este caminho não foi criado através de uma união'
+      ? 'Recuperar os circuitos anteriores à união'
+      : 'Este circuito não foi criado através de uma união'
   "
   @click="
     undoSavedRouteMerge(
@@ -3126,7 +2961,7 @@ elementos controlados por esta válvula.
     </strong>
 
     <p>
-      Mantém os caminhos, ciclos e circuitos.
+      Mantém os circuitos e ciclos.
       Remove sentidos corrigidos, cores
       personalizadas, uniões, proteções,
       associações e restantes alterações
@@ -3163,8 +2998,8 @@ elementos controlados por esta válvula.
 
     <p>
       Apaga todos os dados guardados para o
-      IFC atual, incluindo caminhos, ciclos,
-      circuitos, válvulas e configurações.
+      IFC atual, incluindo circuitos, ciclos,
+     válvulas e configurações.
       O ficheiro IFC original não será apagado.
     </p>
 
@@ -3504,7 +3339,7 @@ elementos controlados por esta válvula.
 </div>
 
     <p class="connection-note">
-  Percursos guardados: {{ savedRoutes.length }}
+  Circuitos guardados: {{ savedRoutes.length }}
 </p>
 
     <p class="connection-note">
@@ -4257,7 +4092,7 @@ const isRouteGroupDialogOpen = ref(false);
 const editingRouteGroupId =
   ref<string | null>(null);
 const pendingRouteGroupName = ref(
-  "Novo grupo de caminhos",
+  "Novo grupo de circuitos",
 );
 const pendingRouteGroupColor = ref(
   "#ff8c00",
@@ -4939,12 +4774,12 @@ function resetManualChangesOnly() {
       "Queres repor apenas as alterações manuais?\n\n" +
         "Serão repostos:\n" +
         "• sentidos definidos, sincronizados ou invertidos;\n" +
-        "• proteção, união e agrupamento de caminhos;\n" +
+        "• proteção, união e agrupamento de circuitos;\n" +
         "• cores personalizadas;\n" +
-        "• caminhos ocultados e setas ocultadas;\n" +
+        "• circuitos ocultados e setas ocultadas;\n" +
         "• nomes e estados manuais das válvulas;\n" +
-        "• associações entre válvulas e caminhos.\n\n" +
-        "Os caminhos guardados, ciclos e circuitos serão mantidos.\n\n" +
+        "• associações entre válvulas e circuitos.\n\n" +
+        "Os circuitos guardados e os ciclos serão mantidos.\n\n" +
         "Esta ação não pode ser anulada.",
     );
 
@@ -5008,7 +4843,7 @@ function resetManualChangesOnly() {
       );
     } catch (error) {
       console.error(
-        "Erro ao repor os caminhos guardados:",
+        "Erro ao repor os circuitos guardados:",
         error,
       );
     }
@@ -5085,7 +4920,7 @@ function resetManualChangesOnly() {
 
   window.alert(
     "As alterações manuais foram repostas.\n\n" +
-      "Os caminhos, ciclos e circuitos foram mantidos.\n\n" +
+      "Os circuitos e ciclos foram mantidos.\n\n" +
       "A aplicação será reiniciada.",
   );
 
@@ -5097,7 +4932,7 @@ function resetAllManualConfiguration() {
     window.confirm(
       "ATENÇÃO: esta ação vai apagar tudo o que está guardado para o IFC atual.\n\n" +
         "Serão apagados:\n" +
-        "• caminhos guardados;\n" +
+        "• circuitos guardados;\n" +
         "• ciclos e circuitos;\n" +
         "• nomes e cores;\n" +
         "• sentidos e correções;\n" +
@@ -5513,7 +5348,7 @@ async function resetAllCircuitHighlights() {
     }
   }
 
-  // Elementos existentes nos caminhos guardados.
+  // Elementos existentes nos circuitos guardados.
   for (const route of savedRoutes) {
     for (const node of route.path) {
       addNode(
@@ -6351,13 +6186,13 @@ function startManualRouteRecording() {
   manualRouteNodes.splice(0);
   isManualRouteRecording.value = true;
   flowMessage.value =
-    "Modo manual ativo. Seleciona os tubos pela ordem do percurso.";
+    "Modo manual ativo. Seleciona os tubos pela ordem pretendida para o circuito.";
 }
 
 function cancelManualRouteRecording() {
   manualRouteNodes.splice(0);
   isManualRouteRecording.value = false;
-  flowMessage.value = "Caminho manual cancelado.";
+  flowMessage.value = "Circuito manual cancelado.";
 }
 
 function toggleManualRouteRecording() {
@@ -6405,7 +6240,7 @@ function addSelectedNodeToManualRoute() {
 
 async function removeLastManualRouteNode() {
   if (manualRouteNodes.length === 0) {
-    flowMessage.value = "Não há tubos para remover do caminho manual.";
+    flowMessage.value = "Não há tubos para remover do circuito manual.";
     return;
   }
 
@@ -6426,7 +6261,7 @@ async function removeLastManualRouteNode() {
   }
 
   flowMessage.value =
-    "Último tubo removido do caminho manual. Total: " +
+    "Último tubo removido do circuito manual. Total: " +
     manualRouteNodes.length +
     ".";
 }
@@ -6468,7 +6303,7 @@ function setRouteStart() {
 
   routeStart = node;
   routeStartLabel.value = formatNodeLabel(node);
-  flowMessage.value = "Início definido. Agora seleciona o tubo final e clica em 2. Definir fim.";
+  flowMessage.value = "Início definido. Agora seleciona o tubo final e clica em Definir fim.";
 }
 
 function setRouteEnd() {
@@ -6483,7 +6318,7 @@ function setRouteEnd() {
   routeEnd = node;
   routeEndLabel.value = formatNodeLabel(node);
   flowMessage.value =
-  "Fim definido. Agora clica em 3. Criar caminho automático.";
+  "Fim definido. Agora clica em Criar circuito.";
 }
 
 async function createManualRouteFromSelection(temperature: PipeCircuit) {
@@ -6491,7 +6326,7 @@ async function createManualRouteFromSelection(temperature: PipeCircuit) {
 
   if (manualRouteNodes.length < 2) {
     flowMessage.value =
-      "Seleciona pelo menos dois tubos pela ordem do caminho manual.";
+      "Seleciona pelo menos dois tubos pela ordem do circuito manual.";
     return;
   }
 
@@ -6519,7 +6354,7 @@ async function createManualRouteFromSelection(temperature: PipeCircuit) {
   isManualRouteRecording.value = false;
 
   flowMessage.value =
-    "Caminho manual " +
+    "Circuito manual " +
     getCircuitLabel(temperature) +
     " criado com " +
     path.length +
@@ -6529,7 +6364,7 @@ async function createManualRouteFromSelection(temperature: PipeCircuit) {
 async function createAutoRoute(temperature: PipeCircuit) {
   discardRouteMessage.value = "";
   if (!routeStart || !routeEnd) {
-    flowMessage.value = "Define primeiro o inicio e o fim do caminho.";
+    flowMessage.value = "Define primeiro o início e o fim do circuito.";
     return;
   }
 
@@ -6537,12 +6372,12 @@ async function createAutoRoute(temperature: PipeCircuit) {
     routeStart.modelId === routeEnd.modelId &&
     routeStart.localId === routeEnd.localId
   ) {
-    flowMessage.value = "O inicio e o fim precisam de ser pontos diferentes.";
+    flowMessage.value = "O início e o fim precisam de ser pontos diferentes.";
     return;
   }
 
   if (routeStart.modelId !== routeEnd.modelId) {
-    flowMessage.value = "O caminho automatico ainda so funciona dentro do mesmo modelo.";
+    flowMessage.value = "O circuito automático ainda so funciona dentro do mesmo modelo.";
     return;
   }
 
@@ -6555,7 +6390,7 @@ async function createAutoRoute(temperature: PipeCircuit) {
     const path = await findRouteThroughCheckpoints(checkpoints);
 
     if (!path.length) {
-      flowMessage.value = "Nao encontrei um caminho continuo entre o inicio e o fim.";
+      flowMessage.value = "Não encontrei um circuito continuo entre o início e o fim.";
       return;
     }
 
@@ -6576,14 +6411,14 @@ for (let index = 0; index < path.length - 1; index++) {
     updateManualStats();
     await rebuildManualFlowLayer();
     flowMessage.value =
-  "Caminho manual " +
+  "Circuito manual " +
   getCircuitLabel(temperature) +
   " criado com " +
   path.length +
   " tubo(s).";
   } catch (error) {
     console.error("Automatic route failed:", error);
-    flowMessage.value = "Nao foi possivel calcular o caminho automatico.";
+    flowMessage.value = "Não foi possível calcular o circuito automático.";
   } finally {
     isLoading.value = false;
   }
@@ -6606,7 +6441,7 @@ function assignPathToTemperature(
 function saveAutomaticRoutes() {
   if (!automaticOrderedCircuitNodes.size) {
     flowMessage.value =
-      "Cria primeiro os caminhos automáticos.";
+      "Cria primeiro os circuitos automáticos.";
 
     return;
   }
@@ -6679,7 +6514,7 @@ function saveAutomaticRoutes() {
 
       name:
         circuit.name +
-        " - Caminho " +
+        " - circuito " +
         routeNumber,
 
       temperature: circuitKey,
@@ -6704,14 +6539,14 @@ function saveAutomaticRoutes() {
 
   flowMessage.value =
     savedCount +
-    " caminho(s) automático(s) guardado(s). " +
+    " circuito(s) automático(s) guardado(s). " +
     existingCount +
-    " caminho(s) existente(s) mantido(s) com a respetiva configuração.";
+    " circuito(s) existente(s) mantido(s) com a respetiva configuração.";
 }
 
 function saveCurrentRoute() {
   if (!currentRouteConnections.length) {
-    flowMessage.value = "Cria primeiro um caminho antes de o guardar.";
+    flowMessage.value = "Cria primeiro um circuito antes de o guardar.";
     return;
   }
 
@@ -6729,7 +6564,7 @@ function saveCurrentRoute() {
     id: crypto.randomUUID(),
     name:
       capitalizeFirstLetter(circuitLabel) +
-      " - Caminho " +
+      " - circuito " +
       routeNumber,
     temperature,
     path,
@@ -6738,13 +6573,13 @@ function saveCurrentRoute() {
   saveRoutesToStorage();
 
   discardRouteMessage.value = "";
-  flowMessage.value = "Caminho guardado com sucesso.";
+  flowMessage.value = "Circuito guardado com sucesso.";
 }
 
 async function discardCurrentRoute() {
   if (!currentRouteConnections.length && !manualRouteNodes.length) {
-  discardRouteMessage.value = "Não existe caminho atual para descartar.";
-  flowMessage.value = "Não existe caminho atual para descartar.";
+  discardRouteMessage.value = "Não existe circuito atual para descartar.";
+  flowMessage.value = "Não existe circuito atual para descartar.";
   return;
 }
 
@@ -6797,10 +6632,10 @@ async function discardCurrentRoute() {
   }
 
   discardRouteMessage.value =
-  "Caminho atual descartado. Caminhos guardados mantidos.";
+  "Circuito atual descartado. Circuitos guardados mantidos.";
 
 flowMessage.value =
-  "Caminho atual descartado. Caminhos guardados mantidos.";
+  "Circuito atual descartado. Circuitos guardados mantidos.";
 }
 
 async function undoSavedRouteMerge(
@@ -6814,7 +6649,7 @@ async function undoSavedRouteMerge(
 
   if (mergedRouteIndex === -1) {
     flowMessage.value =
-      "Não foi possível encontrar o percurso unido.";
+      "Não foi possível encontrar o circuito unido.";
 
     return;
   }
@@ -6827,14 +6662,14 @@ async function undoSavedRouteMerge(
 
   if (!mergeBackup) {
     flowMessage.value =
-      "Este percurso não foi criado através de uma união.";
+      "Este circuito não foi criado através de uma união.";
 
     return;
   }
 
   if (mergedRoute.locked) {
     flowMessage.value =
-      'O percurso "' +
+      'O circuito "' +
       mergedRoute.name +
       '" está protegido. Desprotege primeiro.';
 
@@ -6844,16 +6679,16 @@ async function undoSavedRouteMerge(
   const shouldUndo =
     window.confirm(
       "Tens a certeza de que queres desfazer esta união?\n\n" +
-      'O percurso unido "' +
+      'O circuito unido "' +
       mergedRoute.name +
       '" será eliminado e serão recuperados ' +
       mergeBackup.sourceRoutes.length +
-      " percursos anteriores.",
+      " circuitos anteriores.",
     );
 
   if (!shouldUndo) {
     flowMessage.value =
-      "A reposição dos percursos anteriores foi cancelada.";
+      "A reposição dos circuitos anteriores foi cancelada.";
 
     return;
   }
@@ -7036,7 +6871,7 @@ async function undoSavedRouteMerge(
     mergedRoute.name +
     '" foi desfeita. Foram recuperados ' +
     mergeBackup.sourceRoutes.length +
-    " percursos anteriores.";
+    " circuitos anteriores.";
 }
 
 async function finishEditedRouteChange() {
@@ -7097,14 +6932,14 @@ async function addSelectedPipesToEditedRoute() {
 
   if (!route) {
     flowMessage.value =
-      "Seleciona primeiro o caminho que queres editar.";
+      "Seleciona primeiro o circuito que queres editar.";
 
     return;
   }
 
   if (route.locked) {
     flowMessage.value =
-      'O caminho "' +
+      'O circuito "' +
       route.name +
       '" está protegido. Desprotege primeiro.';
 
@@ -7168,7 +7003,7 @@ async function addSelectedPipesToEditedRoute() {
 
   if (!nodesToAdd.length) {
     flowMessage.value =
-      "Todos os tubos selecionados já pertencem ao caminho.";
+      "Todos os tubos selecionados já pertencem ao circuito.";
 
     return;
   }
@@ -7177,7 +7012,7 @@ async function addSelectedPipesToEditedRoute() {
     window.confirm(
       "Queres adicionar " +
         nodesToAdd.length +
-        ' tubo(s) ao caminho "' +
+        ' tubo(s) ao circuito "' +
         route.name +
         '"?\n\n' +
         "O sentido atual será apagado e terás de o definir novamente.",
@@ -7304,7 +7139,7 @@ await finishEditedRouteChange();
 
 flowMessage.value =
     nodesToAdd.length +
-    ' tubo(s) adicionado(s) ao caminho "' +
+    ' tubo(s) adicionado(s) ao circuito "' +
     route.name +
     '". Define novamente o sentido antes de proteger ou simular.';
 }
@@ -7320,14 +7155,14 @@ async function removeSelectedPipesFromEditedRoute() {
 
   if (!route) {
     flowMessage.value =
-      "Seleciona primeiro o caminho que queres editar.";
+      "Seleciona primeiro o circuito que queres editar.";
 
     return;
   }
 
   if (route.locked) {
     flowMessage.value =
-      'O caminho "' +
+      'O circuito "' +
       route.name +
       '" está protegido. Desprotege primeiro.';
 
@@ -7390,7 +7225,7 @@ async function removeSelectedPipesFromEditedRoute() {
 
   if (!indexesToRemove.size) {
     flowMessage.value =
-      "Nenhum dos tubos selecionados pertence ao caminho escolhido.";
+      "Nenhum dos tubos selecionados pertence ao circuito escolhido.";
 
     return;
   }
@@ -7402,8 +7237,8 @@ async function removeSelectedPipesFromEditedRoute() {
   ) {
     window.alert(
       "Não é possível retirar estes tubos.\n\n" +
-      "O caminho ficaria com menos de dois tubos. " +
-      "Se já não precisares do caminho, utiliza Apagar.",
+      "O circuito ficaria com menos de dois tubos. " +
+      "Se já não precisares do circuito, utiliza Apagar.",
     );
 
     return;
@@ -7446,15 +7281,15 @@ async function removeSelectedPipesFromEditedRoute() {
   const confirmationMessage =
     "Queres retirar " +
     indexesToRemove.size +
-    ' tubo(s) do caminho "' +
+    ' tubo(s) do circuito "' +
     route.name +
     '"?\n\n' +
     "Os tubos não serão apagados do IFC. " +
-    "Deixarão apenas de pertencer a este caminho." +
+    "Deixarão apenas de pertencer a este circuito." +
     (
       removesDirectionNode
         ? "\n\nAtenção: a seleção inclui tubos usados como início ou fim. " +
-          "O sentido definido neste caminho será removido."
+          "O sentido definido neste circuito será removido."
         : ""
     );
 
@@ -7636,7 +7471,7 @@ async function removeSelectedPipesFromEditedRoute() {
 
 flowMessage.value =
     indexesToRemove.size +
-    ' tubo(s) retirado(s) do caminho "' +
+    ' tubo(s) retirado(s) do circuito "' +
     route.name +
     '".';
 }
@@ -7659,7 +7494,7 @@ async function deleteSavedRoute(
 
   if (route.locked) {
     flowMessage.value =
-      'O caminho "' +
+      'O circuito "' +
       route.name +
       '" está protegido. Desprotege primeiro para apagar.';
 
@@ -7667,20 +7502,20 @@ async function deleteSavedRoute(
   }
 
 let deleteConfirmationMessage =
-  'Queres mesmo apagar o caminho "' +
+  'Queres mesmo apagar o circuito "' +
   route.name +
   '"?\n\n' +
   "Esta ação é irreversível.";
 
 if (route.mergeBackup) {
   deleteConfirmationMessage =
-    'O caminho "' +
+    'O circuito "' +
     route.name +
     '" foi criado através de uma união.\n\n' +
     "Se o apagares, o histórico necessário para " +
-    "recuperar os caminhos anteriores também será eliminado.\n\n" +
+    "recuperar os circuitos anteriores também será eliminado.\n\n" +
     'Para os recuperar, cancela e usa "Desfazer união".\n\n' +
-    "Queres mesmo apagar este caminho?";
+    "Queres mesmo apagar este circuito?";
 }
 
 if (!skipConfirmation) {
@@ -7691,7 +7526,7 @@ if (!skipConfirmation) {
 
   if (!shouldDeleteRoute) {
     flowMessage.value =
-      'A eliminação do caminho "' +
+      'A eliminação do circuito "' +
       route.name +
       '" foi cancelada.';
 
@@ -7843,9 +7678,9 @@ if (!skipFinalRebuild) {
 }
 
   flowMessage.value =
-    'O caminho "' +
+    'O circuito "' +
     route.name +
-    '" foi apagado. Os tubos pertencentes a outros caminhos foram mantidos.';
+    '" foi apagado. Os tubos pertencentes a outros circuitos foram mantidos.';
 }
 
 async function resetRoutePathHighlight(route: SavedRoute) {
@@ -8077,7 +7912,7 @@ async function toggleSavedRouteHighlight(
     !modelHighlighter
   ) {
     flowMessage.value =
-      "Carrega primeiro o IFC antes de realçar um caminho.";
+      "Carrega primeiro o IFC antes de realçar um circuito.";
     return;
   }
 
@@ -8099,7 +7934,7 @@ async function toggleSavedRouteHighlight(
       await restoreFlowVisualsAfterRouteHighlight();
 
       flowMessage.value =
-        "Realce do caminho \"" +
+        "Realce do circuito \"" +
         route.name +
         "\" removido.";
     } finally {
@@ -8139,7 +7974,7 @@ await clearFlowVisualsForRouteHighlight();
     await fragmentManager.core.update(true);
 
     flowMessage.value =
-      "Caminho \"" +
+      "circuito \"" +
       route.name +
       "\" realçado.";
   } finally {
@@ -8169,11 +8004,11 @@ async function setSavedRouteVisibility(routeId: string, shouldShow: boolean) {
   }
 
   if (shouldShow) {
-  flowMessage.value = "Caminho \"" + route.name + "\" visível.";
+  flowMessage.value = "circuito \"" + route.name + "\" visível.";
   return;
 }
 
-flowMessage.value = "Caminho \"" + route.name + "\" oculto.";
+flowMessage.value = "circuito \"" + route.name + "\" oculto.";
 }
 
 async function createProtectedRouteDirections(
@@ -8401,7 +8236,7 @@ async function toggleSavedRouteProtection(
     saveRoutesToStorage();
 
     flowMessage.value =
-      'Caminho "' +
+      'circuito "' +
       route.name +
       '" desprotegido. Já pode ser alterado.';
 
@@ -8413,7 +8248,7 @@ async function toggleSavedRouteProtection(
       .needsDirectionRedefinition
   ) {
     window.alert(
-      "Não é possível proteger este caminho.\n\n" +
+      "Não é possível proteger este circuito.\n\n" +
         "O sentido tem de ser definido novamente antes da proteção.",
     );
 
@@ -8429,7 +8264,7 @@ async function toggleSavedRouteProtection(
     !protectedDirections.length
   ) {
     window.alert(
-      "Não foi possível proteger este caminho.\n\n" +
+      "Não foi possível proteger este circuito.\n\n" +
         "Não existem sentidos válidos para congelar.",
     );
 
@@ -8444,10 +8279,10 @@ async function toggleSavedRouteProtection(
 
   if (conflict) {
     window.alert(
-      "Não foi possível proteger este caminho.\n\n" +
+      "Não foi possível proteger este circuito.\n\n" +
         "O tubo #" +
         conflict.node.localId +
-        " tem um sentido oposto no caminho protegido \"" +
+        " tem um sentido oposto no circuito protegido \"" +
         conflict.otherRoute.name +
         "\".",
     );
@@ -8490,9 +8325,9 @@ async function toggleSavedRouteProtection(
   saveRoutesToStorage();
 
   flowMessage.value =
-    'Caminho "' +
+    'circuito "' +
     route.name +
-    '" completamente protegido. O percurso ficará congelado até ser desprotegido.';
+    '" completamente protegido. O circuito ficará congelado até ser desprotegido.';
 }
 
 function renameSavedRoute(routeId: string) {
@@ -8504,12 +8339,12 @@ function renameSavedRoute(routeId: string) {
 
   if (route.locked) {
   flowMessage.value =
-    `O caminho "${route.name}" está protegido. Desprotege primeiro para renomear.`;
+    `O circuito "${route.name}" está protegido. Desprotege primeiro para renomear.`;
   return;
 }
 
   const newName = prompt(
-    "Novo nome do caminho:",
+    "Novo nome do circuito:",
     route.name,
   );
 
@@ -8524,7 +8359,7 @@ function renameSavedRoute(routeId: string) {
   saveRoutesToStorage();
 
   flowMessage.value =
-    `Caminho renomeado para "${trimmedName}".`;
+    `circuito renomeado para "${trimmedName}".`;
 }
 
 async function applyAllSavedRoutes() {
@@ -8577,7 +8412,7 @@ async function applyAllSavedRoutes() {
   await rebuildManualFlowLayer();
 
   flowMessage.value =
-    `${appliedCount} caminho(s) guardado(s) aplicado(s).`;
+    `${appliedCount} circuito(s) guardado(s) aplicado(s).`;
 }
 
 async function findRouteThroughCheckpoints(checkpoints: FlowNode[]) {
@@ -8859,7 +8694,7 @@ function compareSelectedSavedRoutes() {
 
   if (selectedRoutes.length !== 2) {
     flowMessage.value =
-      "Seleciona exatamente dois percursos para comparar.";
+      "Seleciona exatamente dois circuitos para comparar.";
 
     return;
   }
@@ -8917,7 +8752,7 @@ const secondRouteHasDirection =
 const comparisonMessage = [
   comparison.exactDuplicate
     ? "DUPLICADOS EXATOS"
-    : "PERCURSOS DIFERENTES",
+    : "CIRCUITOS DIFERENTES",
 
   "",
 
@@ -9015,8 +8850,8 @@ const comparisonMessage = [
 
   flowMessage.value =
     comparison.exactDuplicate
-      ? "Os dois percursos selecionados são duplicados exatos."
-      : "Os percursos foram comparados e têm diferenças.";
+      ? "Os dois circuitos selecionados são duplicados exatos."
+      : "Os circuitos foram comparados e têm diferenças.";
 }
 
 function nodeKey(node: FlowNode) {
@@ -9066,7 +8901,7 @@ function loadRouteGroupsFromStorage() {
     );
   } catch (error) {
     console.error(
-      "Erro ao carregar grupos de caminhos:",
+      "Erro ao carregar grupos de circuitos:",
       error,
     );
   }
@@ -9099,7 +8934,7 @@ function loadRoutesFromStorage() {
     savedRoutes.push(...parsed);
   } catch (error) {
     console.error(
-      "Erro ao carregar caminhos guardados:",
+      "Erro ao carregar circuitos guardados:",
       error,
     );
   }
@@ -10429,7 +10264,7 @@ async function selectValveDesignationFromDropdown() {
   "";
 
   flowMessage.value =
-    "Válvula selecionada no dropdown e destacada no modelo.";
+    "Válvula selecionada na lista e destacada no modelo.";
 }
 
 function getValveNodeForDesignationEditing() {
@@ -10542,7 +10377,7 @@ function collectRevitFamilyAndTypeValues(data: any) {
 
     results.candidatosEncontrados.push({
       categoria: category,
-      caminho: pathText,
+      circuito: pathText,
       campo: fieldName,
       valor: simpleValue,
     });
@@ -12274,7 +12109,7 @@ async function syncSelectedPipesForSavedRoute(
 ) {
   if (route.locked) {
     flowMessage.value =
-      'O percurso "' +
+      'O circuito "' +
       route.name +
       '" está protegido. Desprotege primeiro.';
 
@@ -12283,7 +12118,7 @@ async function syncSelectedPipesForSavedRoute(
 
   if (!selectedCount.value) {
     flowMessage.value =
-      "Seleciona primeiro um ou mais tubos desse percurso.";
+      "Seleciona primeiro um ou mais tubos desse circuito.";
 
     return;
   }
@@ -12341,7 +12176,7 @@ async function syncSelectedPipesForSavedRoute(
   if (!changedCount) {
     flowMessage.value =
       ignoredCount > 0
-        ? "Os tubos selecionados não pertencem a este percurso."
+        ? "Os tubos selecionados não pertencem a este circuito."
         : "Nenhum tubo foi sincronizado.";
 
     return;
@@ -12384,7 +12219,7 @@ async function syncSelectedPipesForSavedRoute(
 
   flowMessage.value =
     changedCount +
-    " tubo(s) sincronizado(s) no percurso " +
+    " tubo(s) sincronizado(s) no circuito " +
     '"' +
     route.name +
     '".' +
@@ -12392,7 +12227,7 @@ async function syncSelectedPipesForSavedRoute(
       ignoredCount > 0
         ? " " +
           ignoredCount +
-          " elemento(s) ignorado(s) por não pertencerem ao percurso."
+          " elemento(s) ignorado(s) por não pertencerem ao circuito."
         : ""
     );
 }
@@ -12409,9 +12244,9 @@ async function reverseSelectedPipesDirection() {
 if (lockedRouteNames.length) {
   flowMessage.value =
     `Não é possível sincronizar/inverter o sentido. ` +
-    `A seleção contém tubo(s) de caminho(s) protegido(s): ` +
+    `A seleção contém tubo(s) de circuito(s) protegido(s): ` +
     lockedRouteNames.join(", ") +
-    `. Desprotege primeiro o caminho.`;
+    `. Desprotege primeiro o circuito.`;
 
   return;
 }
@@ -12446,7 +12281,7 @@ if (lockedRouteNames.length) {
   }
 
   flowMessage.value =
-    `${changedCount} tubo(s) sincronizado(s) com o sentido do caminho.`;
+    `${changedCount} tubo(s) sincronizado(s) com o sentido do circuito.`;
 }
 
 async function clearBlockedPipes() {
@@ -13676,7 +13511,7 @@ async function selectRouteCreationMethod(
   if (hasCurrentWork) {
     const shouldChange =
       window.confirm(
-        "Já começaste a preparar um caminho.\n\n" +
+        "Já começaste a preparar um circuito.\n\n" +
           "Ao mudar o método de criação, o trabalho atual será descartado.\n\n" +
           "Queres continuar?",
       );
@@ -13737,7 +13572,7 @@ async function createAutoRouteForSelectedCycleCircuit() {
   flowMessage.value =
     'Novo circuito "' +
     getNewRouteCircuitDisplayName() +
-    '" preparado. Confirma e guarda o caminho.';
+    '" preparado. Confirma e guarda o circuito.';
 }
 
 async function createManualRouteForSelectedCycleCircuit() {
@@ -13764,7 +13599,7 @@ async function createManualRouteForSelectedCycleCircuit() {
   flowMessage.value =
     'Novo circuito "' +
     getNewRouteCircuitDisplayName() +
-    '" preparado. Confirma e guarda o caminho.';
+    '" preparado. Confirma e guarda o circuito.';
 }
 
 function getDefaultNewRouteCircuitName(
@@ -13902,7 +13737,7 @@ async function deleteCycleCircuitDefinition(circuitKey: PipeCircuit) {
 
   if (circuit.locked) {
   flowMessage.value =
-    "O caminho \"" +
+    "O circuito \"" +
     circuit.name +
     "\" está protegido. Desprotege primeiro para apagar.";
   return;
@@ -13925,16 +13760,16 @@ async function deleteCycleCircuitDefinition(circuitKey: PipeCircuit) {
 
   const shouldDelete = confirm(
     hasUsage
-      ? "O caminho \"" +
+      ? "O circuito \"" +
           circuit.name +
-          "\" tem marcações, ligações ou caminhos guardados. Queres apagar mesmo assim?"
-      : "Tens a certeza que queres apagar o caminho \"" +
+          "\" tem marcações, ligações ou circuitos guardados. Queres apagar mesmo assim?"
+      : "Tens a certeza que queres apagar o circuito \"" +
           circuit.name +
           "\"?",
   );
 
   if (!shouldDelete) {
-    flowMessage.value = "Remoção do caminho cancelada.";
+    flowMessage.value = "Remoção do circuito cancelada.";
     return;
   }
 
@@ -13977,7 +13812,7 @@ async function deleteCycleCircuitDefinition(circuitKey: PipeCircuit) {
   }
 
   flowMessage.value =
-    "Caminho \"" +
+    "circuito \"" +
     circuit.name +
     "\" apagado.";
 }
@@ -13990,7 +13825,7 @@ async function saveCycleCircuitDefinitionChanges() {
     await rebuildManualFlowLayer();
   }
 
-  flowMessage.value = "Nomes e cores dos caminhos do ciclo guardados.";
+  flowMessage.value = "Nomes e cores dos circuitos do ciclo guardados.";
 }
 
 function getCycleCircuitDefaultColor(circuit: CycleCircuitDefinition) {
@@ -14017,8 +13852,8 @@ function toggleCycleCircuitLock(circuitKey: PipeCircuit) {
   saveCycleCircuitDefinitionsToStorage();
 
   flowMessage.value = circuit.locked
-    ? "Caminho \"" + circuit.name + "\" protegido."
-    : "Caminho \"" + circuit.name + "\" desprotegido.";
+    ? "circuito \"" + circuit.name + "\" protegido."
+    : "circuito \"" + circuit.name + "\" desprotegido.";
 }
 
 function resetCycleCircuitColor(circuitKey: PipeCircuit) {
@@ -14837,7 +14672,7 @@ async function applyWaterCycleCount() {
 
     if (hasAssignmentsToRemove || hasRoutesToRemove) {
       const shouldContinue = confirm(
-        `Existem marcações ou caminhos nos ciclos que vão ser removidos. ` +
+        `Existem marcações ou circuitos nos ciclos que vão ser removidos. ` +
           `Deseja continuar e apagar esses dados?`,
       );
 
@@ -15015,7 +14850,7 @@ async function toggleRouteForSimulation(
 ) {
     if (highlightedSavedRouteId.value) {
     flowMessage.value =
-      "Limpa primeiro o realce do caminho antes de iniciar outra simulação.";
+      "Limpa primeiro o realce do circuito antes de iniciar outra simulação.";
 
     return;
   }
@@ -15035,12 +14870,12 @@ if (
   route.needsDirectionRedefinition
 ) {
   window.alert(
-    "Não é possível simular este caminho.\n\n" +
+    "Não é possível simular este circuito.\n\n" +
       "Foram adicionados tubos e o sentido tem de ser definido novamente.",
   );
 
   flowMessage.value =
-    'Define novamente o sentido do caminho "' +
+    'Define novamente o sentido do circuito "' +
     route.name +
     '" antes de o simular.';
 
@@ -15089,14 +14924,14 @@ if (
     await rebuildManualFlowLayer();
 
     flowMessage.value =
-      "Nenhum caminho está selecionado para simulação. " +
+      "Nenhum circuito está selecionado para simulação. " +
       "Clica no botão da simulação geral para simular todos.";
 
     return;
   }
 
   flowMessage.value =
-    "A preparar os caminhos selecionados.";
+    "A preparar os circuitos selecionados.";
 
   await rebuildManualFlowLayer();
 
@@ -15106,7 +14941,7 @@ if (
     !isFlowAnimationReady.value
   ) {
     flowMessage.value =
-      "Não foi possível iniciar a simulação dos caminhos selecionados.";
+      "Não foi possível iniciar a simulação dos circuitos selecionados.";
 
     return;
   }
@@ -15123,7 +14958,7 @@ if (
 
   flowMessage.value =
     selectedRouteIdsForSimulation.size +
-    " caminho(s) em simulação.";
+    " circuito(s) em simulação.";
 }
 
 function isRouteSelectedForSimulation(
@@ -15155,7 +14990,7 @@ function toggleRouteSelectionForGrouping(
     );
 
     flowMessage.value =
-      "Os caminhos protegidos não podem participar em operações em lote.";
+      "Os circuitos protegidos não podem participar em operações em lote.";
 
     return;
   }
@@ -15200,7 +15035,7 @@ async function deleteSelectedSavedRoutes() {
 
   if (!selectedRoutes.length) {
     flowMessage.value =
-      "Seleciona primeiro pelo menos um percurso.";
+      "Seleciona primeiro pelo menos um circuito.";
 
     return;
   }
@@ -15221,13 +15056,13 @@ async function deleteSelectedSavedRoutes() {
         .join("\n");
 
     window.alert(
-      "Não é possível apagar a seleção porque contém percursos protegidos.\n\n" +
+      "Não é possível apagar a seleção porque contém circuitos protegidos.\n\n" +
         lockedRouteNames +
-        "\n\nDesprotege estes percursos antes de tentar novamente.",
+        "\n\nDesprotege estes circuitos antes de tentar novamente.",
     );
 
     flowMessage.value =
-      "A eliminação foi bloqueada porque existem percursos protegidos.";
+      "A eliminação foi bloqueada porque existem circuitos protegidos.";
 
     return;
   }
@@ -15249,13 +15084,13 @@ async function deleteSelectedSavedRoutes() {
   const confirmationMessage =
     "Queres apagar os " +
     selectedRoutes.length +
-    " percursos selecionados?\n\n" +
+    " circuitos selecionados?\n\n" +
     routeNames +
     "\n\n" +
     (
       mergedRouteCount > 0
         ? mergedRouteCount +
-          " percurso(s) resultam de uma união. " +
+          " circuito(s) resultam de uma união. " +
           "O histórico necessário para Desfazer união também será apagado.\n\n"
         : ""
     ) +
@@ -15268,7 +15103,7 @@ async function deleteSelectedSavedRoutes() {
 
   if (!confirmed) {
     flowMessage.value =
-      "A eliminação dos percursos selecionados foi cancelada.";
+      "A eliminação dos circuitos selecionados foi cancelada.";
 
     return;
   }
@@ -15342,7 +15177,7 @@ async function deleteSelectedSavedRoutes() {
 
   flowMessage.value =
     routeIdsToDelete.length +
-    " percurso(s) selecionado(s) foram apagados.";
+    " circuito(s) selecionado(s) foram apagados.";
 }
 
 async function moveSelectedSavedRoutesToCycle() {
@@ -15353,7 +15188,7 @@ async function moveSelectedSavedRoutesToCycle() {
 
   if (!selectedRoutes.length) {
     flowMessage.value =
-      "Seleciona primeiro pelo menos um caminho guardado.";
+      "Seleciona primeiro pelo menos um circuito guardado.";
     return;
   }
 
@@ -15373,16 +15208,16 @@ if (lockedRoutes.length > 0) {
       .join("\n");
 
   window.alert(
-    "Não é possível mover caminhos protegidos para outro ciclo.\n\n" +
+    "Não é possível mover circuitos protegidos para outro ciclo.\n\n" +
       "Desprotege primeiro:\n" +
       lockedRouteNames,
   );
 
   flowMessage.value =
     lockedRoutes.length === 1
-      ? "O caminho selecionado está protegido."
+      ? "O circuito selecionado está protegido."
       : lockedRoutes.length +
-        " caminhos selecionados estão protegidos.";
+        " circuitos selecionados estão protegidos.";
 
   return;
 }
@@ -15516,12 +15351,12 @@ if (lockedRoutes.length > 0) {
   flowMessage.value =
     movedCount > 0
       ? movedCount +
-        " caminho(s) movido(s) para " +
+        " circuito(s) movido(s) para " +
         getCycleDisplayName(
           targetCycleNumber,
         ) +
         "."
-      : "Os caminhos selecionados já pertencem ao ciclo escolhido.";
+      : "Os circuitos selecionados já pertencem ao ciclo escolhido.";
 }
 
 function openIndividualRouteColorDialog(
@@ -15529,14 +15364,14 @@ function openIndividualRouteColorDialog(
 ) {
   if (route.groupId) {
     flowMessage.value =
-      "Este caminho pertence a um grupo. Altera a cor do grupo.";
+      "Este circuito pertence a um grupo. Altera a cor do grupo.";
 
     return;
   }
 
   if (route.locked) {
     flowMessage.value =
-      "O caminho \"" +
+      "O circuito \"" +
       route.name +
       "\" está protegido. Desprotege primeiro para alterar a cor.";
 
@@ -15570,21 +15405,21 @@ async function saveIndividualRouteColor() {
 
   if (!route) {
     flowMessage.value =
-      "Não foi possível encontrar o caminho.";
+      "Não foi possível encontrar o circuito.";
 
     return;
   }
 
   if (route.groupId) {
     flowMessage.value =
-      "Este caminho pertence a um grupo.";
+      "Este circuito pertence a um grupo.";
 
     return;
   }
 
   if (route.locked) {
     flowMessage.value =
-      "Desprotege primeiro o caminho.";
+      "Desprotege primeiro o circuito.";
 
     return;
   }
@@ -15623,7 +15458,7 @@ async function saveIndividualRouteColor() {
   }
 
   flowMessage.value =
-    "A cor do caminho \"" +
+    "A cor do circuito \"" +
     route.name +
     "\" foi alterada.";
 }
@@ -15633,14 +15468,14 @@ async function resetIndividualRouteColor(
 ) {
   if (route.groupId) {
     flowMessage.value =
-      "Retira primeiro o caminho do grupo para repor a cor individual.";
+      "Retira primeiro o circuito do grupo para repor a cor individual.";
 
     return;
   }
 
   if (route.locked) {
     flowMessage.value =
-      "O caminho está protegido. Desprotege primeiro para repor a cor.";
+      "O circuito está protegido. Desprotege primeiro para repor a cor.";
 
     return;
   }
@@ -15659,7 +15494,7 @@ async function resetIndividualRouteColor(
   }
 
   flowMessage.value =
-    "A cor original do caminho \"" +
+    "A cor original do circuito \"" +
     route.name +
     "\" foi reposta.";
 }
@@ -15672,7 +15507,7 @@ function openRouteGroupColorDialog(
 
   if (!group) {
     flowMessage.value =
-      "Este caminho não pertence a nenhum grupo.";
+      "Este circuito não pertence a nenhum grupo.";
 
     return;
   }
@@ -15702,14 +15537,14 @@ function openRouteGroupingDialog() {
 
   if (selectedRoutes.length < 2) {
     flowMessage.value =
-      "Seleciona pelo menos dois caminhos para agrupar.";
+      "Seleciona pelo menos dois circuitos para agrupar.";
     return;
   }
 
   const firstRoute = selectedRoutes[0];
 
   pendingRouteGroupName.value =
-    "Novo grupo de caminhos";
+    "Novo grupo de circuitos";
 
   pendingRouteGroupColor.value =
     getSavedRouteGroupColor(firstRoute);
@@ -15804,7 +15639,7 @@ async function groupSelectedSavedRoutes() {
 
   if (selectedRoutes.length < 2) {
     flowMessage.value =
-      "Seleciona pelo menos dois percursos para unir.";
+      "Seleciona pelo menos dois circuitos para unir.";
 
     return;
   }
@@ -15816,7 +15651,7 @@ async function groupSelectedSavedRoutes() {
 
   if (lockedRoutes.length > 0) {
   const lockedRoutesMessage =
-    "Não é possível unir percursos protegidos.\n\n" +
+    "Não é possível unir circuitos protegidos.\n\n" +
     "Desprotege primeiro:\n" +
     lockedRoutes
       .map((route) => route.name)
@@ -15851,7 +15686,7 @@ async function groupSelectedSavedRoutes() {
 
   if (!mergedRouteName) {
     flowMessage.value =
-      "Indica um nome para o novo percurso.";
+      "Indica um nome para o novo circuito.";
 
     return;
   }
@@ -15895,7 +15730,7 @@ async function groupSelectedSavedRoutes() {
 
   if (mergedPath.length < 2) {
     flowMessage.value =
-      "Não existem tubos suficientes para criar o percurso unido.";
+      "Não existem tubos suficientes para criar o circuito unido.";
 
     return;
   }
@@ -16225,9 +16060,9 @@ async function groupSelectedSavedRoutes() {
 
   flowMessage.value =
     selectedRoutes.length +
-    ' percursos unidos em "' +
+    ' circuitos unidos em "' +
     mergedRouteName +
-    '". O novo percurso contém ' +
+    '". O novo circuito contém ' +
     mergedPath.length +
     " tubo(s) sem duplicados.";
 }
@@ -16251,7 +16086,7 @@ async function openSavedRouteDirectionPanel(
 ) {
   if (route.locked) {
     flowMessage.value =
-      "O caminho \"" +
+      "O circuito \"" +
       route.name +
       "\" está protegido. Desprotege primeiro para alterar o sentido.";
 
@@ -16316,7 +16151,7 @@ hasFlowPreparationError.value =
     await enforceActiveSavedRouteHighlight();
 
     flowMessage.value =
-      "Seleciona os tubos de início e de fim do caminho.";
+      "Seleciona os tubos de início e de fim do circuito.";
   } finally {
     isApplyingSavedRouteHighlight.value =
       false;
@@ -16425,7 +16260,7 @@ function getSelectedDirectionNodeFromRoute() {
 
   if (!route) {
     flowMessage.value =
-      "Seleciona primeiro um caminho guardado.";
+      "Seleciona primeiro um circuito guardado.";
 
     return null;
   }
@@ -16447,7 +16282,7 @@ function getSelectedDirectionNodeFromRoute() {
 
   if (!belongsToRoute) {
     flowMessage.value =
-      "O elemento selecionado não pertence ao caminho \"" +
+      "O elemento selecionado não pertence ao circuito \"" +
       route.name +
       "\".";
 
@@ -17006,7 +16841,7 @@ function applySavedRouteDirectionPaths(
 
   if (rejectedReverseEdges.size > 0) {
     console.warn(
-      "Foram ignoradas ligações com sentidos contraditórios no percurso:",
+      "Foram ignoradas ligações com sentidos contraditórios no circuito:",
       route.name,
       [...rejectedReverseEdges],
     );
@@ -17019,14 +16854,14 @@ async function applyAndSaveSavedRouteDirection() {
 
   if (!route) {
     flowMessage.value =
-      "Não foi possível encontrar o caminho selecionado.";
+      "Não foi possível encontrar o circuito selecionado.";
 
     return;
   }
 
   if (route.locked) {
     flowMessage.value =
-      "Desprotege o caminho antes de alterar o sentido.";
+      "Desprotege o circuito antes de alterar o sentido.";
 
     return;
   }
@@ -18459,13 +18294,13 @@ await rebuildManualFlowLayer();
 
   flowMessage.value =
     createdCount +
-    " caminho(s) criado(s). " +
+    " circuito(s) criado(s). " +
     existingCount +
     " já existiam. " +
     assignedPipeCount +
     " tubo(s) associados. " +
     unidentifiedCount +
-    " caminho(s) precisam de revisão manual.";
+    " circuito(s) precisam de revisão manual.";
 }
 
 function isIgnoredAutomaticPathElement(data: any) {
@@ -19191,7 +19026,7 @@ function updateSelectedTubeRouteInfo() {
     routesWithSelectedNode.length === 0
   ) {
     selectedTubeRouteInfo.value =
-      "O elemento selecionado não pertence a nenhum percurso guardado.";
+      "O elemento selecionado não pertence a nenhum circuito guardado.";
 
     return;
   }
@@ -19209,7 +19044,7 @@ function updateSelectedTubeRouteInfo() {
     routeNames.length === 1
       ? routeNames[0]
       : routeNames.length +
-        " percursos: " +
+        " circuitos: " +
         routeNames.join(" · ");
 }
 
@@ -19322,7 +19157,7 @@ async function updateFlowAnimationWithoutStarting() {
 async function toggleFlow() {
     if (highlightedSavedRouteId.value) {
     flowMessage.value =
-      "Limpa primeiro o realce do caminho antes de iniciar a simulação.";
+      "Remove o realce do circuito antes de iniciar a simulação.";
 
     return;
   }
